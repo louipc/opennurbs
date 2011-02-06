@@ -10,18 +10,28 @@
 //				
 ////////////////////////////////////////////////////////////////
 
+// uncomment the "ON_DLL_IMPORTS" define to use opennurbs as a Windows DLL
+//#define ON_DLL_IMPORTS
 #include "../opennurbs.h"
+#include "../examples_linking_pragmas.h"
+
 #include "../opennurbs_gl.h"
-#include "../opennurbs_staticlib_linking_pragmas.h"
 
 #if defined(ON_COMPILER_MSC)
 
+if ( _MSC_VER != 1400 )
 // Tested compilers:
-//   Microsoft Developer Studio 6.0
 //   Microsoft Visual Studio 2005
-//   Support for other Windows compilers is not available.
+//   Support for other compilers is not available.
+#error The OpenGL example is not supported on this compiler.
+// NOTE:
+//   Visual Studio 2005 / 8.0 was the last version of Visual
+//   studio to install the libraries and header files for
+//   Open GL auxillary functions.
+#endif
 
 #include <GL/GLaux.h>   // Open GL auxillary functions
+
 #define ON_EXAMPLE_GL_USE_GLAUX
 
 #elif defined(ON_COMPILER_XCODE)
@@ -213,11 +223,11 @@ void MY_GL_CALLBACK myGLUT_SpecialKeyEvent( int ch, int x, int y );    // for au
 // If you are using Apple's Xcode and you get a compile error
 // on the typedef below, then try using the commented out typedef.
 //
-// Apple's Xcode 2.4 likes this typedef with the (...)
-//typedef void (CALLBACK* RHINO_GL_NURBS_ERROR)(...);
+// Apple's Xcode 2.4 likes this typedef witht the (...)
+typedef void (CALLBACK* RHINO_GL_NURBS_ERROR)(...);
 //
-// Apple's Xcode 3.2 likes this typedef without the ()
-typedef void (CALLBACK* RHINO_GL_NURBS_ERROR)();
+// Apple's Xcode 3.2 likes this typedef witht the (...)
+//typedef void (CALLBACK* RHINO_GL_NURBS_ERROR)();
 #endif
 
 }

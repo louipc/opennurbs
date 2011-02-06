@@ -27,20 +27,12 @@
 #if defined(NDEBUG)
 
 // release x64 libs
-#if defined(ON_PURIFY_BUILD)
-#pragma comment(lib, "./zlib/x64/ReleasePurify/zlibx64.lib")
-#else
-#pragma comment(lib, "./zlib/x64/Release/zlibx64.lib")
-#endif
+#pragma comment(lib, "./zlib/x64/Release/zlib.lib")
 
 #else // _DEBUG
 
 // debug  x64 libs
-#if defined(ON_PURIFY_BUILD)
-#pragma comment(lib, "./zlib/x64/DebugPurify/zlibx64_d.lib")
-#else
-#pragma comment(lib, "./zlib/x64/Debug/zlibx64_d.lib")
-#endif
+#pragma comment(lib, "./zlib/x64/Debug/zlib.lib")
 
 #endif // if NDEBUG else _DEBUG
 
@@ -51,20 +43,12 @@
 #if defined(NDEBUG)
 
 // release 32 bit WIndows libs
-#if defined(ON_PURIFY_BUILD)
-#pragma comment(lib, "./zlib/ReleasePurify/zlib.lib")
-#else
 #pragma comment(lib, "./zlib/Release/zlib.lib")
-#endif
 
 #else // _DEBUG
 
 // debug 32 bit WIndows libs
-#if defined(ON_PURIFY_BUILD)
-#pragma comment(lib, "./zlib/DebugPurify/zlib_d.lib")
-#else
-#pragma comment(lib, "./zlib/Debug/zlib_d.lib")
-#endif
+#pragma comment(lib, "./zlib/Debug/zlib.lib")
 
 #endif // if NDEBUG else _DEBUG
 

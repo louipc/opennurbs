@@ -445,9 +445,16 @@ public:
         of the angle between two tangent vectors 
         is <= cos_angle_tolerance, then a G1 discontinuity is reported.
     curvature_tolerance - [in] (default = ON_SQRT_EPSILON) Used only when
-        c is ON::G2_continuous.  If K0 and K1 are curvatures evaluated
-        from above and below and |K0 - K1| > curvature_tolerance,
-        then a curvature discontinuity is reported.
+        c is ON::G2_continuous or ON::Gsmooth_continuous.  
+        ON::G2_continuous:
+          If K0 and K1 are curvatures evaluated
+          from above and below and |K0 - K1| > curvature_tolerance,
+          then a curvature discontinuity is reported.
+        ON::Gsmooth_continuous:
+          If K0 and K1 are curvatures evaluated from above and below
+          and the angle between K0 and K1 is at least twice angle tolerance
+          or ||K0| - |K1|| > (max(|K0|,|K1|) > curvature_tolerance,
+          then a curvature discontinuity is reported.
   Returns:
     true if a discontinuity was found on the interior of the interval (t0,t1).
   Remarks:
@@ -460,7 +467,7 @@ public:
                   double* t,
                   int* hint=NULL,
                   int* dtype=NULL,
-                  double cos_angle_tolerance=0.99984769515639123915701155881391,
+                  double cos_angle_tolerance=ON_DEFAULT_ANGLE_TOLERANCE_COSINE,
                   double curvature_tolerance=ON_SQRT_EPSILON
                   ) const;
 
@@ -482,9 +489,16 @@ public:
         of the angle between two tangent vectors 
         is <= cos_angle_tolerance, then a G1 discontinuity is reported.
     curvature_tolerance - [in] (default = ON_SQRT_EPSILON) Used only when
-        c is ON::G2_continuous.  If K0 and K1 are curvatures evaluated
-        from above and below and |K0 - K1| > curvature_tolerance,
-        then a curvature discontinuity is reported.
+        c is ON::G2_continuous or ON::Gsmooth_continuous.  
+        ON::G2_continuous:
+          If K0 and K1 are curvatures evaluated
+          from above and below and |K0 - K1| > curvature_tolerance,
+          then a curvature discontinuity is reported.
+        ON::Gsmooth_continuous:
+          If K0 and K1 are curvatures evaluated from above and below
+          and the angle between K0 and K1 is at least twice angle tolerance
+          or ||K0| - |K1|| > (max(|K0|,|K1|) > curvature_tolerance,
+          then a curvature discontinuity is reported.
   Returns:
     true if the curve has at least the c type continuity at the parameter t.
   Remarks:
@@ -497,7 +511,7 @@ public:
     double point_tolerance=ON_ZERO_TOLERANCE,
     double d1_tolerance=ON_ZERO_TOLERANCE,
     double d2_tolerance=ON_ZERO_TOLERANCE,
-    double cos_angle_tolerance=0.99984769515639123915701155881391,
+    double cos_angle_tolerance=ON_DEFAULT_ANGLE_TOLERANCE_COSINE,
     double curvature_tolerance=ON_SQRT_EPSILON
     ) const;
 
@@ -598,6 +612,32 @@ public:
           ) const;
 
   /*
+  Parameters:
+    span_index - [in]
+      (0 <= span_index <= m_cv_count-m_order)
+    min_length -[in]
+      minimum length of a linear span
+    tolerance -[in]
+      distance tolerance to use when checking control points
+      between the span ends
+  Returns 
+    true if the span is a non-degenrate line.  This means:
+    - dimension = 2 or 3
+    - There are full multiplicity knots at each end of the span.
+    - The length of the the line segment from the span's initial 
+      control point to the span's final control point is 
+      >= min_length.
+    - The distance from the line segment to the interior control points
+      is <= tolerance and the projections of these points onto
+      the line increases monotonically.
+  */
+  bool SpanIsLinear( 
+    int span_index, 
+    double min_length,
+    double tolerance
+    ) const;
+
+  /*
   Description:
     Looks for segments that are shorter than tolerance
     that can be removed. If bRemoveShortSegments is true,
@@ -671,9 +711,9 @@ public:
   // would split crv at the parametric midpoint, put the left side in crv,
   // and return the right side in right_side.
   ON_BOOL32 Split(
-      double,    // t = curve parameter to split curve at
-      ON_Curve*&, // left portion returned here (must be an ON_NurbsCurve)
-      ON_Curve*&  // right portion returned here (must be an ON_NurbsCurve)
+      double split_param,    // t = curve parameter to split curve at
+      ON_Curve*& left_result, // left portion returned here (must be an ON_NurbsCurve)
+      ON_Curve*& right_result // right portion returned here (must be an ON_NurbsCurve)
     ) const;
 
   // Description:
@@ -688,9 +728,9 @@ public:
                    //            curve's parameterization and the NURBS
                    //            parameterization may not match to the 
                    //            desired accuracy.
-        ON_NurbsCurve&,
-        double = 0.0,
-        const ON_Interval* = NULL     // OPTIONAL subdomain of curve
+        ON_NurbsCurve& nurbsform,
+        double tolerance = 0.0,
+        const ON_Interval* subdomain = NULL     // OPTIONAL subdomain of curve
         ) const;
 
   // Description:
@@ -710,15 +750,15 @@ public:
   // Description:
   //   virtual ON_Curve::GetCurveParameterFromNurbFormParameter override
   ON_BOOL32 GetCurveParameterFromNurbFormParameter(
-        double, // nurbs_t
-        double* // curve_t
+        double  nurbs_t,
+        double* curve_t
         ) const;
 
   // Description:
   //   virtual ON_Curve::GetNurbFormParameterFromCurveParameter override
   ON_BOOL32 GetNurbFormParameterFromCurveParameter(
-        double, // curve_t
-        double* // nurbs_t
+        double  curve_t,
+        double* nurbs_t
         ) const;
 
 public:

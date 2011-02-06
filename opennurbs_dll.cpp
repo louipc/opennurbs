@@ -20,7 +20,7 @@
 
 #if defined(ON_OS_WINDOWS) && defined(ON_DLL_EXPORTS)
 
-ON_BOOL32 APIENTRY DllMain( HANDLE hModule, 
+BOOL APIENTRY DllMain( HANDLE hModule, 
                        DWORD  ul_reason_for_call, 
                        LPVOID lpReserved
 					 )
@@ -40,21 +40,24 @@ ON_BOOL32 APIENTRY DllMain( HANDLE hModule,
                                  // uses OpenNURBS has a unique mark.
     break;
 
-  case DLL_THREAD_ATTACH:
-    ::OutputDebugStringA("OpenNURBS DllMain() ul_reason_for_call = DLL_THREAD_ATTACH\n");
-    break;
+  // 16 August 2010 Dale Lear:
+  //   These generate too much noise in the output window
+  //
+  //case DLL_THREAD_ATTACH:
+  //  ::OutputDebugStringA("OpenNURBS DllMain() ul_reason_for_call = DLL_THREAD_ATTACH\n");
+  //  break;
 
-  case DLL_THREAD_DETACH:
-    ::OutputDebugStringA("OpenNURBS DllMain() ul_reason_for_call = DLL_THREAD_DETACH\n");
-    break;
+  //case DLL_THREAD_DETACH:
+  //  ::OutputDebugStringA("OpenNURBS DllMain() ul_reason_for_call = DLL_THREAD_DETACH\n");
+  //  break;
 
-  case DLL_PROCESS_DETACH:
-    ::OutputDebugStringA("OpenNURBS DllMain() ul_reason_for_call = DLL_PROCESS_DETACH\n");
-    break;
+  //case DLL_PROCESS_DETACH:
+  //  ::OutputDebugStringA("OpenNURBS DllMain() ul_reason_for_call = DLL_PROCESS_DETACH\n");
+  //  break;
 
-  default:
-    ::OutputDebugStringA("OpenNURBS DllMain() ul_reason_for_call = ?\n");
-    break;
+  //default:
+  //  ::OutputDebugStringA("OpenNURBS DllMain() ul_reason_for_call = ?\n");
+  //  break;
   }
 
   return true;

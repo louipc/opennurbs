@@ -1696,7 +1696,7 @@ float& ON_2fPoint::operator[](int i)
 
 double ON_2fPoint::DistanceTo( const ON_2fPoint& p ) const
 {
-  return (p - *this).Length();
+  return ON_Length2d(p.x-x,p.y-y);
 }
 
 int ON_2fPoint::MaximumCoordinateIndex() const
@@ -2135,7 +2135,7 @@ float& ON_3fPoint::operator[](int i)
 
 double ON_3fPoint::DistanceTo( const ON_3fPoint& p ) const
 {
-  return (p - *this).Length();
+  return ON_Length3d(p.x-x,p.y-y,p.z-z);
 }
 
 int ON_3fPoint::MaximumCoordinateIndex() const
@@ -2907,32 +2907,7 @@ double ON_2fVector::LengthSquared() const
 
 double ON_2fVector::Length() const
 {
-  double len;
-  double fx = fabs(x);
-  double fy = fabs(y);
-  if ( fy > fx ) {
-    len = fx; fx = fy; fy = len;
-  }
-
-  // 15 September 2003 Dale Lear
-  //     For small denormalized doubles (positive but smaller
-  //     than DBL_MIN), some compilers/FPUs set 1.0/fx to +INF.
-  //     Without the ON_DBL_MIN test we end up with
-  //     microscopic vectors that have infinte length!
-  //
-  //     Since this code starts with floats, none of this
-  //     should be necessary, but it doesn't hurt anything.
-  if ( fx > ON_DBL_MIN )
-  {
-    len = 1.0/fx;
-    fy *= len;
-    len = fx*sqrt(1.0 + fy*fy);
-  }
-  else if ( fx > 0.0 && ON_IS_FINITE(fx) )
-    len = fx;
-  else
-    len = 0.0;
-  return len;
+  return ON_Length2d((double)x,(double)y);
 }
 
 void ON_2fVector::Zero()
@@ -3432,37 +3407,7 @@ double ON_3fVector::LengthSquared() const
 
 double ON_3fVector::Length() const
 {
-  double len;
-  double fx = fabs(x);
-  double fy = fabs(y);
-  double fz = fabs(z);
-  if ( fy >= fx && fy >= fz ) {
-    len = fx; fx = fy; fy = len;
-  }
-  else if ( fz >= fx && fz >= fy ) {
-    len = fx; fx = fz; fz = len;
-  }
-
-  // 15 September 2003 Dale Lear
-  //     For small denormalized doubles (positive but smaller
-  //     than DBL_MIN), some compilers/FPUs set 1.0/fx to +INF.
-  //     Without the ON_DBL_MIN test we end up with
-  //     microscopic vectors that have infinte length!
-  //
-  //     Since this code starts with floats, none of this
-  //     should be necessary, but it doesn't hurt anything.
-  if ( fx > ON_DBL_MIN )
-  {
-    len = 1.0/fx;
-    fy *= len;
-    fz *= len;
-    len = fx*sqrt(1.0 + fy*fy + fz*fz);
-  }
-  else if ( fx > 0.0 && ON_IS_FINITE(fx) )
-    len = fx;
-  else
-    len = 0.0;
-  return len;
+  return ON_Length3d((double)x,(double)y,(double)z);
 }
 
 void ON_3fVector::Zero()
@@ -3959,7 +3904,7 @@ double& ON_2dPoint::operator[](int i)
 
 double ON_2dPoint::DistanceTo( const ON_2dPoint& p ) const
 {
-  return (p - *this).Length();
+  return ON_Length2d(p.x-x,p.y-y);
 }
 
 int ON_2dPoint::MaximumCoordinateIndex() const
@@ -4419,7 +4364,7 @@ double& ON_3dPoint::operator[](int i)
 
 double ON_3dPoint::DistanceTo( const ON_3dPoint& p ) const
 {
-  return (p - *this).Length();
+  return ON_Length3d(p.x-x,p.y-y,p.z-z);
 }
 
 int ON_3dPoint::MaximumCoordinateIndex() const
@@ -5226,13 +5171,13 @@ double ON_2dVector::LengthSquared() const
   return (x*x + y*y);
 }
 
-double ON_2dVector::Length() const
+double ON_Length2d( double x, double y )
 {
   double len;
-  double fx = fabs(x);
-  double fy = fabs(y);
-  if ( fy > fx ) {
-    len = fx; fx = fy; fy = len;
+  x = fabs(x);
+  y = fabs(y);
+  if ( y > x ) {
+    len = x; x = y; y = len;
   }
  
   // 15 September 2003 Dale Lear
@@ -5243,18 +5188,23 @@ double ON_2dVector::Length() const
   //
   //     This code is absolutely necessary.  It is a critical
   //     part of the bug fix for RR 11217.
-  if ( fx > ON_DBL_MIN )
+  if ( x > ON_DBL_MIN )
   {
-    len = 1.0/fx;
-    fy *= len;
-    len = fx*sqrt(1.0 + fy*fy);
+    len = 1.0/x;
+    y *= len;
+    len = x*sqrt(1.0 + y*y);
   }
-  else if ( fx > 0.0 && ON_IS_FINITE(fx) )
-    len = fx;
+  else if ( x > 0.0 && ON_IS_FINITE(x) )
+    len = x;
   else
     len = 0.0;
 
   return len;
+}
+
+double ON_2dVector::Length() const
+{
+  return ON_Length2d(x,y);
 }
 
 double ON_2dVector::WedgeProduct(const ON_2dVector& B) const{
@@ -5799,40 +5749,45 @@ double ON_3dVector::LengthSquared() const
   return (x*x + y*y + z*z);
 }
 
-double ON_3dVector::Length() const
+double ON_Length3d(double x, double y, double z)
 {
   double len;
-  double fx = fabs(x);
-  double fy = fabs(y);
-  double fz = fabs(z);
-  if ( fy >= fx && fy >= fz ) {
-    len = fx; fx = fy; fy = len;
+  x = fabs(x);
+  y = fabs(y);
+  z = fabs(z);
+  if ( y >= x && y >= z ) {
+    len = x; x = y; y = len;
   }
-  else if ( fz >= fx && fz >= fy ) {
-    len = fx; fx = fz; fz = len;
+  else if ( z >= x && z >= y ) {
+    len = x; x = z; z = len;
   }
 
   // 15 September 2003 Dale Lear
   //     For small denormalized doubles (positive but smaller
-  //     than DBL_MIN), some compilers/FPUs set 1.0/fx to +INF.
+  //     than DBL_MIN), some compilers/FPUs set 1.0/x to +INF.
   //     Without the ON_DBL_MIN test we end up with
   //     microscopic vectors that have infinte length!
   //
   //     This code is absolutely necessary.  It is a critical
   //     part of the bug fix for RR 11217.
-  if ( fx > ON_DBL_MIN ) 
+  if ( x > ON_DBL_MIN ) 
   {
-    len = 1.0/fx;
-    fy *= len;
-    fz *= len;
-    len = fx*sqrt(1.0 + fy*fy + fz*fz);
+    len = 1.0/x;
+    y *= len;
+    z *= len;
+    len = x*sqrt(1.0 + y*y + z*z);
   }
-  else if ( fx > 0.0 && ON_IS_FINITE(fx) )
-    len = fx;
+  else if ( x > 0.0 && ON_IS_FINITE(x) )
+    len = x;
   else
     len = 0.0;
 
   return len;
+}
+
+double ON_3dVector::Length() const
+{
+  return ON_Length3d(x,y,z);
 }
 
 void ON_3dVector::Zero()
@@ -6176,6 +6131,96 @@ double ON_PlaneEquation::ValueAt(double xx, double yy, double zz) const
 {
   return (x*xx + y*yy + z*zz + d);
 }
+
+double* ON_PlaneEquation::ValueAt(
+      int Pcount,
+      const ON_3fPoint* P,
+      double* value,
+      double value_range[2]
+      ) const
+{
+  if ( Pcount <= 0 || 0 == P )
+    return 0;
+
+  int i;
+  double s;
+  const double* e = &x;
+
+  if ( 0 == value )
+    value =  (double*)onmalloc(Pcount * sizeof(*value) );
+  if ( 0 == value )
+    return 0;
+
+  if ( 0 != value_range )
+  {
+    value[0] = s = e[0]*((double)P[0].x) + e[1]*((double)P[0].y) + e[2]*((double)P[0].z) + e[3];
+    value_range[0] = s;
+    value_range[1] = s;
+    for ( i = 1; i < Pcount; i++ )
+    {
+      value[i] = s = e[0]*((double)P[i].x) + e[1]*((double)P[i].y) + e[2]*((double)P[i].z) + e[3];
+      if ( s < value_range[0] )
+        value_range[0] = s;
+      else if ( s > value_range[1] )
+        value_range[1] = s;
+    }
+  }
+  else
+  {
+    for ( i = 0; i < Pcount; i++ )
+    {
+      value[i] = e[0]*((double)P[i].x) + e[1]*((double)P[i].y) + e[2]*((double)P[i].z) + e[3];
+    }
+  }
+
+  return value;
+}
+
+double* ON_PlaneEquation::ValueAt(
+      int Pcount,
+      const ON_3dPoint* P,
+      double* value,
+      double value_range[2]
+      ) const
+{
+  if ( Pcount <= 0 || 0 == P )
+    return 0;
+
+  int i;
+  double s;
+  const double* e = &x;
+
+  if ( 0 == value )
+    value =  (double*)onmalloc(Pcount * sizeof(*value) );
+  if ( 0 == value )
+    return 0;
+
+  if ( 0 != value_range )
+  {
+    value[0] = s = e[0]*(P[0].x) + e[1]*(P[0].y) + e[2]*(P[0].z) + e[3];
+    value_range[0] = s;
+    value_range[1] = s;
+    for ( i = 1; i < Pcount; i++ )
+    {
+      value[i] = s = e[0]*(P[i].x) + e[1]*(P[i].y) + e[2]*(P[i].z) + e[3];
+      if ( s < value_range[0] )
+        value_range[0] = s;
+      else if ( s > value_range[1] )
+        value_range[1] = s;
+    }
+  }
+  else
+  {
+    for ( i = 0; i < Pcount; i++ )
+    {
+      value[i] = e[0]*(P[i].x) + e[1]*(P[i].y) + e[2]*(P[i].z) + e[3];
+    }
+  }
+
+  return value;
+}
+
+
 
 ON_3dPoint ON_PlaneEquation::ClosestPointTo( ON_3dPoint P ) const
 {

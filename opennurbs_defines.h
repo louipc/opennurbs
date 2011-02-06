@@ -60,6 +60,27 @@
 //
 */
 
+#if defined(OPENNURBS_EXPORTS)
+// OPENNURBS_EXPORTS is Microsoft's prefered defined for building an opennurbs DLL.
+#if !defined(ON_DLL_EXPORTS)
+#define ON_DLL_EXPORTS
+#endif
+#if !defined(ON_COMPILING_OPENNURBS)
+#define ON_COMPILING_OPENNURBS
+#endif
+#endif
+
+#if defined(OPENNURBS_IMPORTS)
+// OPENNURBS_EXPORTS is Microsoft's prefered defined for linking with an opennurbs DLL.
+#if !defined(ON_DLL_IMPORTS)
+#define ON_DLL_IMPORTS
+#endif
+#endif
+
+#if defined(ON_DLL_EXPORTS) && defined(ON_DLL_IMPORTS)
+#error At most one of ON_DLL_EXPORTS and ON_DLL_IMPORTS can be defined.
+#endif
+
 /* export/import */
 #if defined(ON_DLL_EXPORTS)
 
@@ -237,8 +258,20 @@ ON_END_EXTERNC
 */
 #define ON_ZERO_TOLERANCE 1.0e-12
 
+
+/*
+// The default test for deciding if a curvature value should be
+// treated as zero is 
+// length(curvature) <= ON_ZERO_CURVATURE_TOLERANCE.
+// ON_ZERO_CURVATURE_TOLERANCE must be set so that
+// ON_ZERO_CURVATURE_TOLERANCE >= sqrt(3)*ON_ZERO_TOLERANCE
+// so that K.IsTiny() = true implies |K| <= ON_ZERO_CURVATURE_TOLERANCE
+*/
+#define ON_ZERO_CURVATURE_TOLERANCE 1.0e-8
+
 /* default value for angle tolerances = 1 degree */
 #define ON_DEFAULT_ANGLE_TOLERANCE (ON_PI/180.0)
+#define ON_DEFAULT_ANGLE_TOLERANCE_COSINE 0.99984769515639123915701155881391
 #define ON_MINIMUM_ANGLE_TOLERANCE (ON_DEFAULT_ANGLE_TOLERANCE/10.0)
 
 // pair of integer indices.  This
@@ -265,6 +298,21 @@ struct tagON_3dex
 };
 
 typedef struct tagON_3dex ON_3dex;
+
+
+// quadruplet of integer indices.  This
+// is intentionally a struct/typedef
+// rather than a class so that it
+// can be used in other structs.
+struct tagON_4dex
+{
+  int i;
+  int j;
+  int k;
+  int l;
+};
+
+typedef struct tagON_4dex ON_4dex;
 
 union ON_U
 {
@@ -569,6 +617,7 @@ public:
     G2_locus_continuous = 10, // locus continuous unit tangent and curvature
 
     Cinfinity_continuous = 11, // analytic discontinuity
+    Gsmooth_continuous = 12    // aesthetic discontinuity
   };
 
   /*
@@ -584,6 +633,15 @@ public:
     flavored values.
   */
   static continuity ParametricContinuity(int);
+
+  /*
+  Description:
+    Convert int to ON::continuity enum value and
+    convert the higher order flavored values to 
+    the corresponding C1 or G1 values needed to
+    test piecewise linear curves.
+  */
+  static continuity PolylineContinuity(int);
 
   //// curve_style ///////////////////////////////////////////////////////////////
   enum curve_style 
@@ -1057,16 +1115,35 @@ public:
     brep_face          =   3,
     brep_trim          =   4,
     brep_loop          =   5,
+
     mesh_vertex        =  11,
     meshtop_vertex     =  12,
     meshtop_edge       =  13,
     mesh_face          =  14,
+
     idef_part          =  21,
+
     polycurve_segment  =  31,
+
     pointcloud_point   =  41,
+
     group_member       =  51,
-    extrusion_bottom_profile = 61,
-    extrusion_top_profile    = 62,
+
+
+    extrusion_bottom_profile = 61, // 3d bottom profile curves
+                                   //   index identifies profile component
+    extrusion_top_profile    = 62, // 3d top profile curves
+                                   //   index identifies profile component
+    extrusion_wall_edge      = 63, // 3d wall edge curve
+                                   //   index/2: identifies profile component
+                                   //   index%2: 0 = start, 1 = end
+    extrusion_wall_surface   = 64, // side wall surfaces
+                                   //   index: identifies profile component
+    extrusion_cap_surface    = 65, // bottom and top cap surfaces
+                                   //   index: 0 = bottom, 1 = top
+    extrusion_path           = 66, // extrusion path (axis line)
+                                   //   index -1 = entire path, 0 = start point, 1 = endpoint
+
     dim_linear_point   = 100,
     dim_radial_point   = 101,
     dim_angular_point  = 102,
@@ -1148,7 +1225,6 @@ public:
   */
   bool IsBrepComponentIndex() const;
 
-
   /*
   Returns:
     True if m_type = idef_part and m_index >= 0.
@@ -1173,6 +1249,20 @@ public:
     and m_index >= 0.
   */
   bool IsExtrusionProfileComponentIndex() const;
+
+  /*
+  Returns:
+    True if m_type = extrusion_path and -1 <= m_index <= 1.
+  */
+  bool IsExtrusionPathComponentIndex() const;
+
+  /*
+  Returns:
+    True if m_type = extrusion_bottom_profile, extrusion_top_profile,
+    extrusion_wall_edge, extrusion_wall_surface, extrusion_cap_surface
+    or extrusion_path and m_index is reasonable.
+  */
+  bool IsExtrusionComponentIndex() const;
 
   /*
   Returns:
@@ -1205,10 +1295,14 @@ public:
     mesh_face          ON_Mesh.m_F[] array index
     idef_part          ON_InstanceDefinition.m_object_uuid[] array index
     polycurve_segment  ON_PolyCurve::m_segment[] array index
-    extrusion_bottom_profile 
-    extrusion_top_profile 
-                       Use ON_Extrusion::Bottom/TopProfile(index)
-                       to get a 3d profile curve.
+
+    extrusion_bottom_profile  Use ON_Extrusion::Profile3d() to get 3d profile curve
+    extrusion_top_profile     Use ON_Extrusion::Profile3d() to get 3d profile curve
+    extrusion_wall_edge       Use ON_Extrusion::WallEdge() to get 3d line curve
+    extrusion_wall_surface    Use ON_Extrusion::WallSurface() to get 3d wall surface
+    extrusion_cap_surface      0 = bottom cap, 1 = top cap
+    extrusion_path            -1 = entire path, 0 = start of path, 1 = end of path
+
     dim_linear_point   ON_LinearDimension2::POINT_INDEX
     dim_radial_point   ON_RadialDimension2::POINT_INDEX
     dim_angular_point  ON_AngularDimension2::POINT_INDEX

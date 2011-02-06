@@ -3,29 +3,36 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 45;
+	objectVersion = 42;
 	objects = {
 
 /* Begin PBXBuildFile section */
-		1D190925114AC86B00AE6841 /* example_gl.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1D190924114AC86B00AE6841 /* example_gl.cpp */; };
-		1D190927114AC88000AE6841 /* opennurbs_gl.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1D190926114AC88000AE6841 /* opennurbs_gl.cpp */; };
-		1D190932114AC89700AE6841 /* libopennurbs.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 1D190931114AC89400AE6841 /* libopennurbs.a */; };
-		1DB5B103114AF400001B9C64 /* GLUT.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1DB5B102114AF400001B9C64 /* GLUT.framework */; };
-		1DB5B107114AF40C001B9C64 /* OpenGL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1DB5B106114AF40C001B9C64 /* OpenGL.framework */; };
+		364B974D0C56727100EBCE03 /* example_gl.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 364B974C0C56727100EBCE03 /* example_gl.cpp */; };
+		364B974F0C56728E00EBCE03 /* opennurbs_gl.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 364B974E0C56728E00EBCE03 /* opennurbs_gl.cpp */; };
+		364B975B0C5672C200EBCE03 /* libopennurbs.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 364B97580C5672A800EBCE03 /* libopennurbs.a */; };
+		364B975E0C5674D200EBCE03 /* OpenGL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 364B975D0C5674D200EBCE03 /* OpenGL.framework */; };
+		364B97620C5674EB00EBCE03 /* GLUT.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 364B97610C5674EB00EBCE03 /* GLUT.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		1D190930114AC89400AE6841 /* PBXContainerItemProxy */ = {
+		364B97570C5672A800EBCE03 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 1D190929114AC89400AE6841 /* opennurbs.xcodeproj */;
+			containerPortal = 364B97500C5672A800EBCE03 /* opennurbs.xcodeproj */;
 			proxyType = 2;
 			remoteGlobalIDString = D2AAC046055464E500DB518D;
+			remoteInfo = opennurbs;
+		};
+		364B97590C5672BB00EBCE03 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 364B97500C5672A800EBCE03 /* opennurbs.xcodeproj */;
+			proxyType = 1;
+			remoteGlobalIDString = D2AAC045055464E500DB518D;
 			remoteInfo = opennurbs;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		8DD76FAF0486AB0100D96B5E /* CopyFiles */ = {
+		8DD76F690486A84900D96B5E /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 8;
 			dstPath = /usr/share/man/man1/;
@@ -37,22 +44,22 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		1D190924114AC86B00AE6841 /* example_gl.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = example_gl.cpp; sourceTree = "<group>"; };
-		1D190926114AC88000AE6841 /* opennurbs_gl.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = opennurbs_gl.cpp; path = ../opennurbs_gl.cpp; sourceTree = SOURCE_ROOT; };
-		1D190929114AC89400AE6841 /* opennurbs.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = opennurbs.xcodeproj; path = ../opennurbs.xcodeproj; sourceTree = SOURCE_ROOT; };
-		1DB5B102114AF400001B9C64 /* GLUT.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GLUT.framework; path = System/Library/Frameworks/GLUT.framework; sourceTree = SDKROOT; };
-		1DB5B106114AF40C001B9C64 /* OpenGL.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenGL.framework; path = System/Library/Frameworks/OpenGL.framework; sourceTree = SDKROOT; };
-		8DD76FB20486AB0100D96B5E /* example_gl */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = example_gl; sourceTree = BUILT_PRODUCTS_DIR; };
+		364B974C0C56727100EBCE03 /* example_gl.cpp */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.cpp.cpp; path = example_gl.cpp; sourceTree = "<group>"; };
+		364B974E0C56728E00EBCE03 /* opennurbs_gl.cpp */ = {isa = PBXFileReference; fileEncoding = 30; lastKnownFileType = sourcecode.cpp.cpp; name = opennurbs_gl.cpp; path = ../opennurbs_gl.cpp; sourceTree = SOURCE_ROOT; };
+		364B97500C5672A800EBCE03 /* opennurbs.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = opennurbs.xcodeproj; path = ../opennurbs.xcodeproj; sourceTree = SOURCE_ROOT; };
+		364B975D0C5674D200EBCE03 /* OpenGL.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = OpenGL.framework; path = /System/Library/Frameworks/OpenGL.framework; sourceTree = "<absolute>"; };
+		364B97610C5674EB00EBCE03 /* GLUT.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = GLUT.framework; path = /System/Library/Frameworks/GLUT.framework; sourceTree = "<absolute>"; };
+		8DD76F6C0486A84900D96B5E /* example_gl */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = example_gl; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		8DD76FAD0486AB0100D96B5E /* Frameworks */ = {
+		8DD76F660486A84900D96B5E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1D190932114AC89700AE6841 /* libopennurbs.a in Frameworks */,
-				1DB5B103114AF400001B9C64 /* GLUT.framework in Frameworks */,
-				1DB5B107114AF40C001B9C64 /* OpenGL.framework in Frameworks */,
+				364B975B0C5672C200EBCE03 /* libopennurbs.a in Frameworks */,
+				364B975E0C5674D200EBCE03 /* OpenGL.framework in Frameworks */,
+				364B97620C5674EB00EBCE03 /* GLUT.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -62,12 +69,11 @@
 		08FB7794FE84155DC02AAC07 /* example_gl */ = {
 			isa = PBXGroup;
 			children = (
-				1D190929114AC89400AE6841 /* opennurbs.xcodeproj */,
+				364B97610C5674EB00EBCE03 /* GLUT.framework */,
+				364B975D0C5674D200EBCE03 /* OpenGL.framework */,
 				08FB7795FE84155DC02AAC07 /* Source */,
-				C6A0FF2B0290797F04C91782 /* Documentation */,
+				364B97500C5672A800EBCE03 /* opennurbs.xcodeproj */,
 				1AB674ADFE9D54B511CA2CBB /* Products */,
-				1DB5B102114AF400001B9C64 /* GLUT.framework */,
-				1DB5B106114AF40C001B9C64 /* OpenGL.framework */,
 			);
 			name = example_gl;
 			sourceTree = "<group>";
@@ -75,8 +81,8 @@
 		08FB7795FE84155DC02AAC07 /* Source */ = {
 			isa = PBXGroup;
 			children = (
-				1D190926114AC88000AE6841 /* opennurbs_gl.cpp */,
-				1D190924114AC86B00AE6841 /* example_gl.cpp */,
+				364B974E0C56728E00EBCE03 /* opennurbs_gl.cpp */,
+				364B974C0C56727100EBCE03 /* example_gl.cpp */,
 			);
 			name = Source;
 			sourceTree = "<group>";
@@ -84,45 +90,39 @@
 		1AB674ADFE9D54B511CA2CBB /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				8DD76FB20486AB0100D96B5E /* example_gl */,
+				8DD76F6C0486A84900D96B5E /* example_gl */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		1D19092A114AC89400AE6841 /* Products */ = {
+		364B97510C5672A800EBCE03 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				1D190931114AC89400AE6841 /* libopennurbs.a */,
+				364B97580C5672A800EBCE03 /* libopennurbs.a */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		C6A0FF2B0290797F04C91782 /* Documentation */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Documentation;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		8DD76FA90486AB0100D96B5E /* example_gl */ = {
+		8DD76F620486A84900D96B5E /* example_gl */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 1DEB928508733DD80010E9CD /* Build configuration list for PBXNativeTarget "example_gl" */;
+			buildConfigurationList = 1DEB923108733DC60010E9CD /* Build configuration list for PBXNativeTarget "example_gl" */;
 			buildPhases = (
-				8DD76FAB0486AB0100D96B5E /* Sources */,
-				8DD76FAD0486AB0100D96B5E /* Frameworks */,
-				8DD76FAF0486AB0100D96B5E /* CopyFiles */,
+				8DD76F640486A84900D96B5E /* Sources */,
+				8DD76F660486A84900D96B5E /* Frameworks */,
+				8DD76F690486A84900D96B5E /* CopyFiles */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				364B975A0C5672BB00EBCE03 /* PBXTargetDependency */,
 			);
 			name = example_gl;
 			productInstallPath = "$(HOME)/bin";
 			productName = example_gl;
-			productReference = 8DD76FB20486AB0100D96B5E /* example_gl */;
+			productReference = 8DD76F6C0486A84900D96B5E /* example_gl */;
 			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
@@ -130,115 +130,118 @@
 /* Begin PBXProject section */
 		08FB7793FE84155DC02AAC07 /* Project object */ = {
 			isa = PBXProject;
-			buildConfigurationList = 1DEB928908733DD80010E9CD /* Build configuration list for PBXProject "example_gl" */;
-			compatibilityVersion = "Xcode 3.1";
+			buildConfigurationList = 1DEB923508733DC60010E9CD /* Build configuration list for PBXProject "example_gl" */;
 			hasScannedForEncodings = 1;
 			mainGroup = 08FB7794FE84155DC02AAC07 /* example_gl */;
 			projectDirPath = "";
 			projectReferences = (
 				{
-					ProductGroup = 1D19092A114AC89400AE6841 /* Products */;
-					ProjectRef = 1D190929114AC89400AE6841 /* opennurbs.xcodeproj */;
+					ProductGroup = 364B97510C5672A800EBCE03 /* Products */;
+					ProjectRef = 364B97500C5672A800EBCE03 /* opennurbs.xcodeproj */;
 				},
 			);
-			projectRoot = "";
 			targets = (
-				8DD76FA90486AB0100D96B5E /* example_gl */,
+				8DD76F620486A84900D96B5E /* example_gl */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXReferenceProxy section */
-		1D190931114AC89400AE6841 /* libopennurbs.a */ = {
+		364B97580C5672A800EBCE03 /* libopennurbs.a */ = {
 			isa = PBXReferenceProxy;
 			fileType = archive.ar;
 			path = libopennurbs.a;
-			remoteRef = 1D190930114AC89400AE6841 /* PBXContainerItemProxy */;
+			remoteRef = 364B97570C5672A800EBCE03 /* PBXContainerItemProxy */;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
 /* End PBXReferenceProxy section */
 
 /* Begin PBXSourcesBuildPhase section */
-		8DD76FAB0486AB0100D96B5E /* Sources */ = {
+		8DD76F640486A84900D96B5E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1D190925114AC86B00AE6841 /* example_gl.cpp in Sources */,
-				1D190927114AC88000AE6841 /* opennurbs_gl.cpp in Sources */,
+				364B974D0C56727100EBCE03 /* example_gl.cpp in Sources */,
+				364B974F0C56728E00EBCE03 /* opennurbs_gl.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		364B975A0C5672BB00EBCE03 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = opennurbs;
+			targetProxy = 364B97590C5672BB00EBCE03 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
-		1DEB928608733DD80010E9CD /* Debug */ = {
+		1DEB923208733DC60010E9CD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
 				COPY_PHASE_STRIP = NO;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_ENABLE_FIX_AND_CONTINUE = YES;
 				GCC_MODEL_TUNING = G5;
 				GCC_OPTIMIZATION_LEVEL = 0;
-				INSTALL_PATH = /usr/local/bin;
+				INSTALL_PATH = "$(HOME)/bin";
 				PRODUCT_NAME = example_gl;
+				ZERO_LINK = YES;
 			};
 			name = Debug;
 		};
-		1DEB928708733DD80010E9CD /* Release */ = {
+		1DEB923308733DC60010E9CD /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ARCHS = (
+					ppc,
+					i386,
+				);
+				GCC_GENERATE_DEBUGGING_SYMBOLS = NO;
 				GCC_MODEL_TUNING = G5;
-				INSTALL_PATH = /usr/local/bin;
+				INSTALL_PATH = "$(HOME)/bin";
 				PRODUCT_NAME = example_gl;
 			};
 			name = Release;
 		};
-		1DEB928A08733DD80010E9CD /* Debug */ = {
+		1DEB923608733DC60010E9CD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
-				GCC_C_LANGUAGE_STANDARD = gnu99;
-				GCC_OPTIMIZATION_LEVEL = 0;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				ONLY_ACTIVE_ARCH = YES;
 				PREBINDING = NO;
-				SDKROOT = macosx10.6;
+				SDKROOT = /Developer/SDKs/MacOSX10.4u.sdk;
 			};
 			name = Debug;
 		};
-		1DEB928B08733DD80010E9CD /* Release */ = {
+		1DEB923708733DC60010E9CD /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD_32_64_BIT)";
-				GCC_C_LANGUAGE_STANDARD = gnu99;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				PREBINDING = NO;
-				SDKROOT = macosx10.6;
+				SDKROOT = /Developer/SDKs/MacOSX10.4u.sdk;
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		1DEB928508733DD80010E9CD /* Build configuration list for PBXNativeTarget "example_gl" */ = {
+		1DEB923108733DC60010E9CD /* Build configuration list for PBXNativeTarget "example_gl" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				1DEB928608733DD80010E9CD /* Debug */,
-				1DEB928708733DD80010E9CD /* Release */,
+				1DEB923208733DC60010E9CD /* Debug */,
+				1DEB923308733DC60010E9CD /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		1DEB928908733DD80010E9CD /* Build configuration list for PBXProject "example_gl" */ = {
+		1DEB923508733DC60010E9CD /* Build configuration list for PBXProject "example_gl" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				1DEB928A08733DD80010E9CD /* Debug */,
-				1DEB928B08733DD80010E9CD /* Release */,
+				1DEB923608733DC60010E9CD /* Debug */,
+				1DEB923708733DC60010E9CD /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

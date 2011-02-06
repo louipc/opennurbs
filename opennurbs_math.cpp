@@ -636,6 +636,44 @@ ON_EvNormal(int limit_dir,
   return N.Unitize();
 }
 
+bool ON_EvTangent( 
+        const ON_3dVector& D1, // first derivative
+        const ON_3dVector& D2, // second derivative
+        ON_3dVector& T         // Unit tangent returned here
+        )
+{
+  // Evaluate unit tangent from first and second derivatives
+  // T = D1 / |D1|
+
+  bool rc = false;
+  double d1 = D1.Length();
+
+  if (d1 == 0.0) 
+  {
+    // Use L'hopital's rule to show that if the unit tanget
+    // exists and the 1rst derivative is zero and the 2nd derivative is
+    // nonzero, then the unit tangent is equal to +/-the unitized 
+    // 2nd derivative.  The sign is equal to the sign of D1(s) o D2(s)
+    // as s approaches the evaluation parameter.
+    //
+    d1 = D2.Length();
+    if (d1 > 0.0) 
+    {
+      T = D2/d1;
+      rc = true;
+    }
+    else 
+    {
+      T.Zero();
+    }
+  }
+  else 
+  {
+    T = D1/d1;
+    rc = true;
+  }
+  return rc;  
+}
 
 
 ON_BOOL32 
@@ -789,8 +827,6 @@ bool ON_EvSectionalCurvature(
   return true;
 }
 
-
-
 ON_BOOL32 ON_IsContinuous(
   ON::continuity desired_continuity,
   ON_3dPoint Pa, ON_3dVector D1a, ON_3dVector D2a,
@@ -842,18 +878,26 @@ ON_BOOL32 ON_IsContinuous(
 
   case ON::G2_continuous:
   case ON::G2_locus_continuous:
+  case ON::Gsmooth_continuous:
     ON_EvCurvature( D1a, D2a, Ta, Ka );
     ON_EvCurvature( D1b, D2b, Tb, Kb );
-    if ( !(Pa-Pb).IsTiny(point_tolerance) || Ta*Tb < cos_angle_tolerance || 
-					(Ka-Kb).Length() > curvature_tolerance || 
-					(!Ka.IsTiny() && !Kb.IsTiny() && Ka.Unitize()*Kb.Unitize() <.95 )  )
+    if ( !(Pa-Pb).IsTiny(point_tolerance) || Ta*Tb < cos_angle_tolerance )
       return false;
+    if ( ON::Gsmooth_continuous == desired_continuity )
+    {
+      if ( !ON_IsGsmoothCurvatureContinuous(Ka,Kb,cos_angle_tolerance,curvature_tolerance) )
+        return false;
+    }
+    else
+    {
+      if ( !ON_IsG2CurvatureContinuous(Ka,Kb,cos_angle_tolerance,curvature_tolerance) )
+        return false;
+    }
     break;
   }
 
   return true;
 }
-
 
 int 
 ON_SearchMonotoneArray(const double* array, int length, double t)
@@ -2056,7 +2100,7 @@ ON_Solve3x2(const double col0[3], const double col1[3],
  *      with full pivoting.
  * EXAMPLE:
  *      // If A, B and T are 3D vectors, find a and b so that
- *      // T - a*A + b*B is perpindicular to both A and B.
+ *      // T - a*A + b*B is perpendicular to both A and B.
  *      rc = TL_Solve3x3(A,B,T[0],T[1],T[2],&a,&b,&len);
  *      switch(rc) {
  *      case  0: // {x,y,z} = intersection point, len = T o (A X B / |A X B|)
@@ -3535,7 +3579,7 @@ const unsigned int* ON_BinarySearchUnsignedIntArray( unsigned int key, const uns
   return 0;
 }
 
-const int* ON_BinarySearchDoubleArray( int key, const int* base, size_t nel )
+const double* ON_BinarySearchDoubleArray( double key, const double* base, size_t nel )
 {
   if (nel > 0 && base )
   {
@@ -3600,6 +3644,21 @@ int ON_Compare3dex( const ON_3dex* a, const ON_3dex* b)
   {
     if ( 0 == (d = a->j - b->j) )
       d = a->k - b->k;
+  }
+  return d;
+}
+
+
+int ON_Compare4dex( const ON_4dex* a, const ON_4dex* b)
+{
+  int d;
+  if ( 0 == (d = (a->i - b->i)) )
+  {
+    if ( 0 == (d = a->j - b->j) )
+    {
+      if ( 0 == (d = a->k - b->k) )
+        d = a->l - b->l;
+    }
   }
   return d;
 }

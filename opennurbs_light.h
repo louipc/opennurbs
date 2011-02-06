@@ -248,14 +248,6 @@ public:
   void SetLightIndex( int );
   int LightIndex() const;
 
-  // m_light_id is set and maintained by Rhino - if your
-  // plug-in is messing with this field, fix the plugin
-  //__declspec(deprecated) void SetLightUuid( const ON_UUID& );
-
-  // m_light_id is set and maintained by Rhino - if your
-  // plug-in is messing with this field, fix the plugin
-  //__declspec(deprecated) const ON_UUID& LightUuid() const;
-
   /////////////////////////////////////////////////////////
   //
   // light name
@@ -284,8 +276,15 @@ public:
                            // corners of rectangular lights are m_location, m_location+m_length,
                            // m_location+m_width, m_location+m_width+m_length
 
-  double      m_intensity; // 0.0 = 0%, 1.0 = 100% 
-  double      m_watts;     // ignored if 0
+  double      m_intensity; // Linear dimming/brightening factor: 0.0 = off, 1.0 = 100%.
+                           // Values < 0.0 and values > 1.0 are permitted but are
+                           // not consistently interpreted by various renderers.
+                           // Renderers should clamp the range to [0.0, 1.0] if their
+                           // lighting model does not support more exotic interpretations
+                           // of m_intensity.
+  double      m_watts;     // Used by lighting models that reference lighting fixtures.
+                           // Values < 0.0 are invalid.  If m_watts is 0.0, the
+                           // value is ignored.
 
   // spot settings - ignored for non-spot lights
   double       m_spot_angle;    // 0.0 to 90.0

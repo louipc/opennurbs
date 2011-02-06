@@ -651,6 +651,56 @@ public:
   virtual
   void GetUnusedLayerName( ON_wString& layer_name ) const;
 
+  /////////////////////////////////////////////////////////////////////
+  //
+  // BEGIN model document level user string tools
+  //
+
+  /*
+  Description:
+    Attach a user string to the document.
+  Parameters:
+    key - [in] id used to retrieve this string.
+    string_value - [in] 
+      If NULL, the string with this id will be removed.
+  Returns:
+    True if successful.
+  */
+  bool SetDocumentUserString( 
+    const wchar_t* key, 
+    const wchar_t* string_value 
+    );
+
+  /*
+  Description:
+    Get user string from the document.
+  Parameters:
+    key - [in] id used to retrieve the string.
+    string_value - [out]
+  Returns:
+    True if a string with id was found.
+  */
+  bool GetDocumentUserString( 
+    const wchar_t* key, 
+    ON_wString& string_value 
+    ) const;
+
+  /*
+  Description:
+    Get a list of all user strings in the document.
+  Parameters:
+    user_strings - [out]
+      user strings are appended to this list.
+  Returns:
+    Number of elements appended to the user_strings list.
+  */
+  int GetDocumentUserStrings( ON_ClassArray<ON_UserString>& user_strings ) const;
+
+  //
+  // END model document level user string tools
+  //
+  /////////////////////////////////////////////////////////////////////
+
 
   /////////////////////////////////////////////////////////////////////
   //

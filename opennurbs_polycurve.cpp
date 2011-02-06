@@ -452,6 +452,7 @@ ON_Curve* ON_PolyCurve::DuplicateCurve() const
 	// Call DuplicateCurve on each segment to construct duplicate curve.
 	int cnt = Count();
 	ON_PolyCurve* dup_crv = new ON_PolyCurve( cnt );
+  dup_crv->CopyUserData(*this);
 	for( int i=0; i<cnt; i++){
 		const ON_Curve* seg = SegmentCurve(i);
 		if(seg)
@@ -1275,6 +1276,7 @@ bool ON_PolyCurve::GetNextDiscontinuity(
 
       case ON::C2_continuous:
       case ON::G2_continuous:
+      case ON::Gsmooth_continuous:
         crv->Ev2Der( crv0_t, Pm, D1m, D2m, crv0_side );   // point on this curve
         crv1->Ev2Der( crv1_t, Pp, D1p, D2p, -crv0_side ); // corresponding point on next curve
         if ( c == ON::C2_continuous )
@@ -1302,19 +1304,45 @@ bool ON_PolyCurve::GetNextDiscontinuity(
             if ( dtype )
               *dtype = 1;
           }
-          else if ( ON_IsCurvatureDiscontinuity( Km, Kp, 
-                                            cos_angle_tolerance,
-                                            curvature_tolerance, 
-                                            ON_UNSET_VALUE, 
-                                            ON_UNSET_VALUE )
-                  )
+          else 
           {
-            // NOTE:
-            //   The test to enter this scope must exactly match
-            //   the one used in ON_NurbsCurve::GetNextDiscontinuity().
-            rc = true;
-            if ( dtype )
-              *dtype = 2;
+            bool bIsCurvatureContinuous = ( ON::Gsmooth_continuous == c )
+              ? ON_IsGsmoothCurvatureContinuous(Km, Kp, cos_angle_tolerance, curvature_tolerance)
+              : ON_IsG2CurvatureContinuous(Km, Kp, cos_angle_tolerance, curvature_tolerance);
+            if ( !bIsCurvatureContinuous )
+            {
+              // NOTE:
+              //   The test to enter this scope must exactly match
+              //   the one used in ON_NurbsCurve::GetNextDiscontinuity().
+              rc = true;
+              if ( dtype )
+                *dtype = 2;
+            }
+            else if ( ON::Gsmooth_continuous == c )
+            {
+              const double is_linear_tolerance = 1.0e-8;  
+              const double is_linear_min_length = 1.0e-8;
+              const ON_Curve* seg0;
+              const ON_Curve* seg1;
+              if (crv0_side<0)
+              {
+                seg0 = crv;
+                seg1 = crv1;
+              }
+              else
+              {
+                seg0 = crv1;
+                seg1 = crv;
+              }
+              bool b0 = seg0->LastSpanIsLinear(is_linear_min_length,is_linear_tolerance);
+              bool b1 = seg1->FirstSpanIsLinear(is_linear_min_length,is_linear_tolerance);
+              if ( b0 != b1 )
+              {
+                rc = true;
+                if ( dtype )
+                  *dtype = 3;
+              }
+            }
           }
         }
         break;
@@ -1355,7 +1383,7 @@ bool ON_PolyCurve::IsContinuous(
     double point_tolerance, // default=ON_ZERO_TOLERANCE
     double d1_tolerance, // default==ON_ZERO_TOLERANCE
     double d2_tolerance, // default==ON_ZERO_TOLERANCE
-    double cos_angle_tolerance, // default==0.99984769515639123915701155881391
+    double cos_angle_tolerance, // default==ON_DEFAULT_ANGLE_TOLERANCE_COSINE
     double curvature_tolerance  // default==ON_SQRT_EPSILON
     ) const
 {
@@ -1436,11 +1464,11 @@ bool ON_PolyCurve::IsContinuous(
           *hint = (segment_index | (curve_hint<<14));
       }
     }
-    if ( count > 0 )
+    else if ( count > 0 )
     {
-      if ( segment_index == 0 && t == m_t[segment_index] )
+      if ( segment_index == 0 && t == m_t[0] )
         rc = true; // t at start of domain
-      else if ( segment_index == count-1 && t == m_t[segment_index+1] )
+      else if ( segment_index == count-1 && t == m_t[count] )
         rc = true; // t and end of domain
       else
       {
@@ -1448,6 +1476,29 @@ bool ON_PolyCurve::IsContinuous(
         rc = ON_Curve::IsContinuous( desired_continuity, t, hint, 
                            point_tolerance, d1_tolerance, d2_tolerance, 
                            cos_angle_tolerance, curvature_tolerance );
+        if ( 0 != rc 
+             && ON::Gsmooth_continuous == desired_continuity 
+             && segment_index >= 0
+             && segment_index < count
+           )
+        {
+          // check for linear to non-linear transition
+          const int i0 = ( t >= m_t[segment_index] ) ? segment_index-1 : segment_index;
+          if ( i0 >= 0 && t == m_t[i0+1] )
+          {
+            const ON_Curve* seg0 = SegmentCurve(i0);
+            const ON_Curve* seg1 = SegmentCurve(i0+1);
+            if ( 0 != seg0 && 0 != seg1 )
+            {
+              const double is_linear_tolerance = 1.0e-8;  
+              const double is_linear_min_length = 1.0e-8;
+              bool b0 = seg0->LastSpanIsLinear(is_linear_min_length,is_linear_tolerance);
+              bool b1 = seg1->FirstSpanIsLinear(is_linear_min_length,is_linear_tolerance);
+              if ( b0 != b1 )
+                rc = false;
+            }
+          }
+        }
       }
     }
   }
@@ -1473,6 +1524,49 @@ ON_PolyCurve::Reverse()
   return rc;
 }
 
+bool ON_TuneupEvaluationParameter( 
+   int side,
+   double s0, double s1, // segment domain
+   double *s             // segment parameter
+   )
+{
+  double t = *s;
+  if ( 0 != side && s0 < t && t < s1 )
+  {
+    // 9 November 2010 Dale Lear
+    //   I wrote this function today and chose
+    //   1.0e-10 as the "noise" factor.  1.0e-10
+    //   may need to be adjusted but it should
+    //   not be larger unless there is a very
+    //   good reason.  You must document any changes
+    //   and include a bug track number so subsequent
+    //   changes can be tested.  Any value used to
+    //   replace 1.0e-10 must be strictly smaller
+    //   than ON_SQRT_EPSILON because some solvers
+    //   use (s1-s0)*ON_SQRT_EPSILON as a minimum step
+    //   size.
+    double ds = (s1-s0)*1.0e-10;
+    if ( side < 0 )
+    {
+      if ( t <= s0+ds )
+      {
+        *s = s0;
+        return true;
+      }
+    }
+    else // side > 0
+    {
+      if ( t >= s1-ds )
+      {
+        *s = s1;
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+
 ON_BOOL32 ON_PolyCurve::Evaluate( // returns false if unable to evaluate
        double t,       // evaluation parameter
        int der_count,  // number of derivatives (>=0)
@@ -1490,9 +1584,25 @@ ON_BOOL32 ON_PolyCurve::Evaluate( // returns false if unable to evaluate
   const int count = Count();
   const int dim = Dimension();
   int segment_hint, curve_hint;
-  if ( count > 0 && dim > 0 && dim <= v_stride ) {
+  if ( count > 0 && dim > 0 && dim <= v_stride ) 
+  {
     segment_hint = (hint) ? (*hint & 0x3FFF) : 0;
-    const int segment_index = ON_NurbsSpanIndex(2,count+1,m_t,t,side,segment_hint);
+    int segment_index = ON_NurbsSpanIndex(2,count+1,m_t,t,side,segment_hint);
+    if ( -2 == side || 2 == side )
+    {
+      // 9 November 2010 Dale Lear - ON_TuneupEvaluationParameter fix
+      //   When evluation passes through ON_CurveProxy or ON_PolyCurve reparamterization
+      //   and the original side parameter was -1 or +1, it is changed to -2 or +2
+      //   to indicate that if t is numerically closed to an end paramter, then
+      //   it should be tuned up to be at the end paramter.
+      double a = t;
+      if ( ON_TuneupEvaluationParameter( side, m_t[segment_index], m_t[segment_index+1], &a) )
+      {
+        // recalculate segment index
+        t = a;
+        segment_index = ON_NurbsSpanIndex(2,count+1,m_t,t,side,segment_index);
+      }
+    }
     const ON_Curve* c = m_segment[segment_index];
     if ( c ) {
       double s0, s1;
@@ -1507,17 +1617,29 @@ ON_BOOL32 ON_PolyCurve::Evaluate( // returns false if unable to evaluate
         const double t1 = m_t[segment_index+1];
         double s;
         if ( s0 == t0 && s1 == t1 )
+        {
+          // segment domain = c->Domain()
           s = t;
+        }
         else 
         {
-          if (fabs(t1 - t0) < ON_EPSILON*(1.0+fabs(t0)))
+          // adjust segment domain parameter
+          if ( fabs(t1 - t0) < (ON_ZERO_TOLERANCE + ON_EPSILON*fabs(t0)) )
+          {
+            // segment domain is insanely short
             s = (fabs(t-t0) < fabs(t-t1)) ? s0 : s1;
-          else {
+          }
+          else 
+          {
             const double d = 1.0/(t1-t0);
             const double a = (t - t0)*d;
             const double b = (t1 - t)*d;
             s = b*s0 + a*s1;
           }
+          if ( -1 == side )
+            side = -2;
+          else if ( 1 == side )
+            side = 2;
         }
         curve_hint = ( hint && segment_hint == segment_index ) ? ((*hint)>>14) : 0;
         rc = c->Evaluate(
@@ -1531,9 +1653,8 @@ ON_BOOL32 ON_PolyCurve::Evaluate( // returns false if unable to evaluate
         {
           if ( der_count > 0 && s1 - s0 != t1 - t0 && t0 != t1 )
           {
-            // 20 March 2003 Dale Lear:
-            //     Fix polycurve evaluation bug by applying
-            //     chain rule. (Fixes RR 9796)
+            // Adjust segment derivative evaluation bug by applying chain rule
+            // to get polycurve derivative value.
             const double d = (s1-s0)/(t1-t0);
             s = d;
             int di, vi;
@@ -3059,7 +3180,7 @@ bool ON_PolyCurve::SynchronizeSegmentDomains()
   ON_Curve** c = m_segment.Array();
   if ( count < 1 || 0 == c )
     return false;
-  if ( count != m_t.Count()+1 )
+  if ( count+1 != m_t.Count() )
     return false;
   const double* t = m_t.Array();
   if ( 0 == t )
@@ -3076,13 +3197,18 @@ bool ON_PolyCurve::SynchronizeSegmentDomains()
          && t0 == t[i]
          && t1 == t[i+1]
          )
-     {
-       continue;
-     }
-     if ( t0 < t1 && c[i]->SetDomain(t[i],t[i+1]) )
-     {
-       rc = true; // indicates a change was made
-     }
+    {
+     continue;
+    }
+
+    if (    ON_IsValid(t[i]) 
+        && ON_IsValid(t[i+1])
+        && t[i] < t[i+1] 
+        && c[i]->SetDomain(t[i],t[i+1]) 
+      )
+    {
+     rc = true; // indicates a change was made
+    }
   }
   return rc;
 }

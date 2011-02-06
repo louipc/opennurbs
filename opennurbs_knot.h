@@ -377,6 +377,7 @@ Returns:
   The cv values are changed so that
   output_bezier(t) = input_bezier(lambda(t)).
 */
+ON_DECL
 bool ON_ReparameterizeRationalBezierCurve(
           double c,
           int dim,
@@ -413,6 +414,7 @@ Remarks:
   If the input Bezier has control vertices {B_0, ..., B_d}, then the 
   output Bezier has control vertices {s*B_0, ... s*r^i * B_i, ..., s*r^d * B_d}.
 */
+ON_DECL
 bool ON_ChangeRationalBezierCurveWeights(
           int dim, int order, int cvstride, double* cv,
           int i0, double w0, 

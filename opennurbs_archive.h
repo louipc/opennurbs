@@ -488,6 +488,7 @@ public:
   bool ReadArray( ON_ClassArray<ON_MappingRef>& );
   bool ReadArray( ON_ClassArray<class ON_ObjRef>& );
   bool ReadArray( ON_SimpleArray<class ON_ObjRef_IRefID>& );
+  bool ReadArray( ON_SimpleArray<class ON_ClippingPlaneInfo>& );
 
   bool WriteBool( bool );
 
@@ -670,6 +671,7 @@ public:
   bool WriteArray( const ON_ClassArray<ON_MappingRef>& );
   bool WriteArray( const ON_ClassArray<class ON_ObjRef>& );
   bool WriteArray( const ON_SimpleArray<class ON_ObjRef_IRefID>& );
+  bool WriteArray( const ON_SimpleArray<class ON_ClippingPlaneInfo>& );
 
   /////////////////////////////////////////////////////
   //
@@ -1182,16 +1184,10 @@ public:
     );
 
   // OBSOLETE - use BeginWrite3dmUserTable(plugin_id, bSavingGoo, 3dm_version, opennurbs_version )
-#if defined(ON_COMPILER_MSC)
-  __declspec(deprecated)
-#endif
-  bool BeginWrite3dmUserTable( const ON_UUID& );
+  ON_DEPRECATED bool BeginWrite3dmUserTable( const ON_UUID& );
 
   // OBSOLETE - use Write3dmAnonymousUserTableRecord(plugin_id, ..., goo)
-#if defined(ON_COMPILER_MSC)
-  __declspec(deprecated)
-#endif
-  bool Write3dmAnonymousUserTable( const ON_3dmGoo& );
+  ON_DEPRECATED bool Write3dmAnonymousUserTable( const ON_3dmGoo& );
 
   /*
   Parameters:
@@ -1234,18 +1230,12 @@ public:
   bool EndRead3dmUserTable();
 
   // OBSOLETE - use BeginRead3dmUserTable( plugin_id, bLastSavedAsGoo, archive_3dm_version, ... )
-#if defined(ON_COMPILER_MSC)
-  __declspec(deprecated) 
-#endif
-  bool BeginRead3dmUserTable(
+  ON_DEPRECATED bool BeginRead3dmUserTable(
     ON_UUID&
     );
 
   // OBSOLETE - use Read3dmAnonymousUserTable( archive_3dm_version, archive_opennurbs_version, goo )
-#if defined(ON_COMPILER_MSC)
-  __declspec(deprecated)
-#endif
-  bool Read3dmAnonymousUserTable( ON_3dmGoo& );
+  ON_DEPRECATED bool Read3dmAnonymousUserTable( ON_3dmGoo& );
 
 
 
@@ -1338,10 +1328,7 @@ public:
   bool Write3dmGoo( const ON_3dmGoo& ); // call to write "goo"
 
   // OBSOLETE - Use BeginRead3dmBigChunk()
-#if defined(ON_COMPILER_MSC)
-  __declspec(deprecated)
-#endif
-  bool BeginRead3dmChunk(
+  ON_DEPRECATED bool BeginRead3dmChunk(
         unsigned int*,   // typecode from opennurbs_3dm.h
         int*             // value
         );
@@ -1374,9 +1361,14 @@ public:
   /*
   Description:
     Calling this will skip rest of stuff in chunk if it was only partially read.
+  Parameters:
+    bSupressPartiallyReadChunkWarning - [in]
+      Generally, a call to ON_WARNING is made when a chunk is partially
+      read.  If bSupressPartiallyReadChunkWarning is true, then
+      no warning is issued for partially read chunks.
   */
   bool EndRead3dmChunk(); 
-
+  bool EndRead3dmChunk(bool bSupressPartiallyReadChunkWarning); 
 
 
   ///////////////////////////////////////////////////////////////////
@@ -1477,10 +1469,7 @@ public:
   bool Read3dmGoo( ON_3dmGoo& ); // Call to read "goo"
 
   // OBSOLETE - Use PeekAt3dmBigChunkType()
-#if defined(ON_COMPILER_MSC)
-  __declspec(deprecated)
-#endif
-  bool PeekAt3dmChunkType( // does not change file position
+  ON_DEPRECATED bool PeekAt3dmChunkType( // does not change file position
         unsigned int*,   // typecode from opennurbs_3dm.h
         int*             // value
         );
@@ -2099,6 +2088,97 @@ private:
   ON_Read3dmBufferArchive& operator=(const ON_Read3dmBufferArchive&);
 };
 
+class ON_CLASS ON_Write3dmBufferArchive : public ON_BinaryArchive
+{
+public:
+
+  /*
+  Description:
+    Construct an ON_BinaryArchive for writing information to a memory buffer.
+  Parameters:
+    initial_sizeof_buffer - [in] 
+      initial size of buffer in bytes (>=0)
+      If you are unable to estimate the size you will need, pass in zero.
+    max_sizeof_buffer - [in] 
+      maximum size of buffer in bytes (>=0)
+      If max_sizeof_buffer > 0 and the amount of information saved 
+      requires a buffer larger than this size, then writing fails. 
+      If max_sizeof_buffer <= 0, then no buffer size limits are enforced.
+    archive_3dm_version  - [in] (1,2,3,4 or 5)
+    archive_opennurbs_version - [in] YYYYMMDDn
+  */
+  ON_Write3dmBufferArchive( 
+    size_t initial_sizeof_buffer, 
+    size_t max_sizeof_buffer, 
+    int archive_3dm_version,
+    int archive_opennurbs_version
+    );
+
+  ~ON_Write3dmBufferArchive();
+
+  /*
+  Returns: 
+     Size of the archive in bytes.
+  */
+  size_t SizeOfArchive() const;
+
+  /*
+  Returns: 
+     value of m_sizeof_buffer
+  */
+  size_t SizeOfBuffer() const;
+
+  /*
+  Returns: 
+     value of m_buffer.
+     SizeOfArchive() reports the number of bytes
+     written to this buffer.
+     SizeOfBuffer() reports the number of bytes
+     allocated in this buffer.
+     
+  */
+  const void* Buffer() const;
+
+  /*
+  Returns:
+    The pointer to the buffer and sets all 
+    members on this archive back to zero.
+    The caller is responsible for calling onfree() on
+    the pointer when finished with the buffer.
+  */
+  void* HarvestBuffer();
+
+  // ON_BinaryArchive overrides
+  size_t CurrentPosition() const; 
+  bool SeekFromCurrentPosition(int); 
+  bool SeekFromStart(size_t);
+  bool AtEnd() const;
+
+protected:
+  // ON_BinaryArchive overrides
+  size_t Read( size_t, void* ); 
+  size_t Write( size_t, const void* ); // return actual number of bytes written (like fwrite())
+  bool Flush();
+
+private:
+  void AllocBuffer(size_t);
+  void* m_p;
+  unsigned char* m_buffer;
+  size_t m_sizeof_buffer;
+  const size_t m_max_sizeof_buffer;
+  size_t m_sizeof_archive;
+  size_t m_buffer_position;
+  ON__INT_PTR m_reserved1;
+  ON__INT_PTR m_reserved2;
+  ON__INT_PTR m_reserved3;
+  ON__INT_PTR m_reserved4;
+
+private:
+  // prohibit use - no implementation
+  ON_Write3dmBufferArchive(); 
+  ON_Write3dmBufferArchive( const ON_Write3dmBufferArchive& );
+  ON_Write3dmBufferArchive& operator=(const ON_Write3dmBufferArchive&);
+};
 
 /*
 Description:

@@ -186,10 +186,7 @@ public:
             0x20: linetype
             0x40: display order
   */
-#if defined(ON_COMPILER_MSC)
-  __declspec(deprecated) 
-#endif
-  unsigned int ApplyParentalControl( 
+  ON_DEPRECATED unsigned int ApplyParentalControl( 
          const ON_3dmObjectAttributes& parent_attributes,
          unsigned int control_limits = 0xFFFFFFFF
          );
@@ -299,10 +296,11 @@ public:
   //
   //   @table
   //   value    number of isoparametric wires
-  //   0        boundary and knot wires 
-  //   1        boundary and knot wires and, if there are no
+  //   -1       boundary wires
+  //    0       boundary and knot wires 
+  //    1       boundary and knot wires and, if there are no
   //            interior knots, a single interior wire.
-  //   N>=2     boundary and knot wires and (N+1) interior wires
+  //   N>=2     boundary and knot wires and (N-1) interior wires
   int m_wire_density;
 
 
@@ -329,6 +327,8 @@ private:
   unsigned char m_plot_weight_source; // ON::plot_weight_source values
   unsigned char m_material_source;    // ON::object_material_source values
   unsigned char m_linetype_source;    // ON::object_linetype_source values
+  
+  unsigned char m_reserved_0;
   
   ON_SimpleArray<int> m_group; // array of zero based group indices
 public:

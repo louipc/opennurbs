@@ -23,8 +23,6 @@
 #if !defined(OPENNURBS_INC_)
 #define OPENNURBS_INC_
 
-#define OPENNURBS_PLUS
-
 #include "opennurbs_system.h"       /* system headers used by openNURBS code */
 
 #include "opennurbs_3dm.h"          /* 3DM typecode (TCODE) definitions */

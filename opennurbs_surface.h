@@ -157,27 +157,6 @@ public:
   ////////////////////////////////////////////////////////////////////
   // surface interface
 
-  /*
-  Description:
-    Computes a polygon mesh approximation of the surface.    
-  Parameters:
-    mp - [in] meshing parameters
-    mesh - [in] if not NULL, the surface mesh will be put
-                into this mesh.
-  Returns:
-    A polygon mesh of the surface.
-  Remarks:
-    This virtual function works in the openNURBS that is
-    part of the Rhino SDK.  The source code for this 
-    functionallity is not provided in the free openNURBS
-    toolkit.
-  */
-  virtual
-  ON_Mesh* CreateMesh( 
-             const ON_MeshParameters& mp,
-             ON_Mesh* mesh = NULL
-             ) const;
-
   ON_BOOL32 GetDomain( 
          int dir,              // 0 gets first parameter, 1 gets second parameter
          double* t0,
@@ -505,7 +484,7 @@ public:
                   double* t,
                   int* hint=NULL,
                   int* dtype=NULL,
-                  double cos_angle_tolerance=0.99984769515639123915701155881391,
+                  double cos_angle_tolerance=ON_DEFAULT_ANGLE_TOLERANCE_COSINE,
                   double curvature_tolerance=ON_SQRT_EPSILON
                   ) const;
 
@@ -543,7 +522,7 @@ public:
     double point_tolerance=ON_ZERO_TOLERANCE,
     double d1_tolerance=ON_ZERO_TOLERANCE,
     double d2_tolerance=ON_ZERO_TOLERANCE,
-    double cos_angle_tolerance=0.99984769515639123915701155881391,
+    double cos_angle_tolerance=ON_DEFAULT_ANGLE_TOLERANCE_COSINE,
     double curvature_tolerance=ON_SQRT_EPSILON
     ) const;
 
@@ -1008,75 +987,6 @@ public:
 
   /*
   Description:
-    Calculate area mass properties of the surface.
-  Parameters:
-    mp - [out] 
-    bArea - [in] true to calculate area
-    bFirstMoments - [in] true to calculate area first moments,
-                         area and area centroid.
-    bSecondMoments - [in] true to calculate area second moments.
-    bProductMoments - [in] true to calculate area product moments.
-  Returns:
-    True if successful.
-  */
-  bool AreaMassProperties(
-    ON_MassProperties& mp,
-    bool bArea = true,
-    bool bFirstMoments = true,
-    bool bSecondMoments = true,
-    bool bProductMoments = true,
-    double rel_tol = 1.0e-6,
-    double abs_tol = 1.0e-6
-    ) const;
-
-  /*
-  Description:
-    Calculate volume mass properties of the surface.
-  Parameters:
-    mp - [out] 
-    bVolume - [in] true to calculate volume
-    bFirstMoments - [in] true to calculate volume first moments,
-                         volume, and volume centroid.
-    bSecondMoments - [in] true to calculate volume second moments.
-    bProductMoments - [in] true to calculate volume product moments.
-    base_point - [in] 
-      If the surface is closed, then pass ON_UNSET_VALUE.
-
-      This parameter is for expert users who are computing a
-      volume whose boundary is defined by several non-closed
-      breps, surfaces, and meshes.
-
-      When computing the volume, volume centroid, or volume
-      first moments of a volume whose boundary is defined by 
-      several breps, surfaces, and meshes, pass the same 
-      base_point to each call to VolumeMassProperties.  
-
-      When computing the volume second moments or volume product
-      moments of a volume whose boundary is defined by several
-      breps, surfaces, and meshes, you MUST pass the entire 
-      volume's centroid as the base_point and the input mp 
-      parameter must contain the results of a previous call
-      to VolumeMassProperties(mp,true,true,false,false,base_point).
-      In particular, in this case, you need to make two sets of
-      calls; use first set to calculate the volume centroid and
-      the second set calculate the second moments and product 
-      moments.
-  Returns:
-    True if successful.
-  */
-  bool VolumeMassProperties(
-    ON_MassProperties& mp, 
-    bool bVolume = true,
-    bool bFirstMoments = true,
-    bool bSecondMoments = true,
-    bool bProductMoments = true,
-    ON_3dPoint base_point = ON_UNSET_POINT,
-    double rel_tol = 1.0e-6,
-    double abs_tol = 1.0e-6
-    ) const;
-
-  /*
-  Description:
     Intersect this surface with surfaceB.
 
   Parameters:
@@ -1127,148 +1037,93 @@ public:
 
   /*
   Description:
-    Create a cubic nurbs surface that interpolates a list of curves.    
+    Intersect this surface with an infinite plane.
 
   Parameters:
-    curve_count - [in]  >= 2 
-      number of curves
+    plane_equation - [in]
 
-    curve_list - [in]
-      array of pointers to curves.  These curves define
-      the location of the The returned surface's "v" parameter
+    x - [out]
+      Intersection events are appended to this array.
 
-    k - [in] (0.0 <= k) or k = ON_UNSET_VALUE
-      k determines how the surface's m_knot[0] values
-      are calculated. Most frequently, 0.0, 0.5, or 1.0 should be used.
-        0.0: uniform
-        0.5: sqrt(chord length)
-        1.0: chord length
-          In general, when k >= 0.0, then spacing is pow(d,k), where d is the
-          average distance between the curves defining the span.
-        ON_UNSET_VALUE: the intepolation knot vector is explicity specified.
-          The knots in the interpolated direction are specified.  You must
-          understand the mathematics of NURBS surfaces to use this option.
-          To specify an explicit knot vector for the interpolation, the 
-          nurbs_suface parameter must be non-null, and nurbs_surface->m_knot[0]
-          must be an array of length 4+curve_count, and
-          (nurbs_surface->m_knot[0][2], ..., nurbs_surface->m_knot[0][curve_count+1])
-          must be a strictly increasing list of values.
+    intersection_tolerance - [in]
+      If the input intersection_tolerance <= 0.0, then 0.001 is used.
 
-    is_closed - [in]
-      0: open
-      1: closed
-      2: periodic
+    overlap_tolerance - [in]
+      If positive, then overlap_tolerance must be 
+      >= intersection_tolerance and is used to test for 
+      overlapping regions. If the input 
+      overlap_tolerance <= 0.0, then 2*intersection_tolerance 
+      is used.
 
-    start_shape - [in]
-    end_shape - [in]
-      The start_shape and end_shape paramters determine the
-      starting and ending shape of the lofted surface.
-      Simple shapes:
-        The simple end conditions calculate the rows of free
-        control points based on the locations of the input
-        curves and do not require additional input information.
-          ON::cubic_loft_ec_quadratic: quadratic
-          ON::cubic_loft_ec_linear: linear
-          ON::cubic_loft_ec_cubic: cubic
-          ON::cubic_loft_ec_natural: natrual (zero 2nd derivative)
-      Explicit shapes:
-        In order to specify explicit end conditions, curve_count must
-        be at least 3, is_closed must be 0 or 1, the nurbs_surface
-        parameter must be non-null, the nurbs_surface control
-        points must be allocated, nurbs_surface->m_cv_count[0]
-        must be curve_count+2, and the input curves must have nurbs
-        curve formats with the same number of control points as 
-        nurbs_surface->m_cv_count[1]. The values of the starting 
-        shape points are specified in nurbs_surface->CV(1,...) and
-        the values of ending shape points are specified in 
-        nurbs_surface->CV(curve_count,...).
-        N = curve_count
-          ON::cubic_loft_ec_unit_tangent: unit tangent is specified
-          ON::cubic_loft_ec_1st_derivative: first derivative is specified
-          ON::cubic_loft_ec_2nd_derivative: second derivative is specified
-          ON::cubic_loft_ec_free_cv: free control vertex is specified
+    fitting_tolerance - [in] 
+      If fitting_tolerance is > 0 and >= intersection_tolerance,
+      then the intersection curves are fit to this tolerance.
+      If input fitting_tolerance <= 0.0 or < intersection_tolerance,
+      then intersection_tolerance is used.
 
-    nurbs_surface - [in]
-      If not null, the result will returned in this ON_NurbsSurface.
-      Typically, this paramter is used when you want to store the
-      result in an ON_NurbsSurface that is on the stack.  This
-      paramter is also used when you want to specify the interpolation
-      knots or end conditions.
+    surface_udomain - [in]
+      optional restriction on surfaceA u domain
+    surface_vdomain - [in] 
+      optional restriction on surfaceA v domain
 
   Returns:
-    If successful, a pointer to the surface is returned. If the input
-    nurbs_surface parameter was null, then this surface is on the heap
-    and will need to be deleted to avoid memory leaks.  If the input
-    is not valid, null is returned, even when nurbs_surface is not
-    null.
-
-  Example:
-    
-    // EXAMPLE 1: Loft a surface through a list of curves
-      ON_SimpleArray< const ON_Curve* > curve_list = ....;
-      ON_NurbsSurface* srf = ON_Surface::CreateCubicLoft(
-                     curve_list.Count(),
-                     curve_list,
-                     0.5 // sqrt(chord length) spacing
-                     );
-    
-    // EXAMPLE 2: Create adjacent surfaces with an identical shared edge.
-      // First make two curve lists with 
-      // curve_listA.Count() == curve_listB.Count() and
-      // curve_listA[i]->PointAtEnd() == curve_listB[i]->PointAtStart()
-      ON_SimpleArray< const ON_Curve* > curve_listA = ....;
-      ON_SimpleArray< const ON_Curve* > curve_listB = ....;
-      curve_count = curve_listA.Count(); 
-      ON_NurbsSurface* srfA = 0;
-      ON_NurbsSurface* srfB = 0;
-      if ( curve_count == curve_listB.Count() )
-      {
-        srfA = ON_Surface::CreateCubicLoft(
-                       curve_count,
-                       curve_listA.Array(),
-                       1.0 // chord length spacing
-                       );
-        if (0 != srfA)
-        {
-          srfB = new ON_NurbsSurface();
-          int knot_count0 = srfA->KnotCount(0);
-          srfB->ReserveKnotCapacity(0,knot_count0);
-          memcpy(srfB->m_knot[0],srfA->m_knot[0],knot_count0*sizeof(srfB->m_knot[0][0]))
-          if ( 0 == ON_Surface::CreateCubicLoft(
-                         curve_count,
-                         curve_listB.Array(),
-                         ON_UNSET_VALUE, // knots specified in srfB->m_knot[0]
-                         0, // open loft
-                         ON::cubic_loft_ec_quadratic,
-                         ON::cubic_loft_ec_quadratic,
-                         srfB
-                         ) )
-         {
-           // clean up to prevent memory leaks
-           delete srfB;
-           srfB = 0;
-         }
-       }
-     }
+    Number of intersection events appended to x.
   */
-  static 
-  class ON_NurbsSurface* CreateCubicLoft(
-    int curve_count,
-    const ON_Curve* const* curve_list,
-    double k,
-    int is_closed = 0,
-    ON::cubic_loft_end_condition start_shape = ON::cubic_loft_ec_quadratic,
-    ON::cubic_loft_end_condition end_shape   = ON::cubic_loft_ec_quadratic,
-    class ON_NurbsSurface* nurbs_surface = 0
-    );
+  int IntersectPlane( 
+          ON_PlaneEquation plane_equation,
+          ON_ClassArray<ON_SSX_EVENT>& x,
+          double intersection_tolerance = 0.0,
+          double overlap_tolerance = 0.0,
+          double fitting_tolerance = 0.0,
+          const ON_Interval* surface_udomain = 0,
+          const ON_Interval* surface_vdomain = 0
+          ) const;
 
-protected:
+private:
   // Runtime only - ignored by Read()/Write()
-  ON_SurfaceTree* m_stree;
+  volatile ON_SurfaceTree* m_stree;
+
+public:
+  /*
+  Description:
+     Helper for ON_Surface::Pushup() to determine if an iso-curve can be
+     used.
+  Parameters:
+    curve_2d - [in]
+    tolerance  - [in]
+    curve_2d_subdomain  - [in] 
+      Pass null if entire curve_2d is being used.
+    c - [out]
+      Pass null if you don't need this value returned.
+    c3_dom - [out] 
+      Pass null if you don't want this returned.
+      c3_dom will be decreasing if curve_2d is going opposite
+      the surface's parameterization.  If -1 is returned, then
+      the input value of c2_dom is not changed.
+  Returns:
+    0 or 1: 
+        The 3d curve returned by IsoCurve( dir, c ) will be a pushup
+        tolerance.  The starting parameter of the 3d curve is c3_dom[0]
+        and the ending parameter of the 3d curve is at c3_dom[1].  
+        Note that c3_dom will be decreasing when curve_2d is oriented
+        opposite to the direction of the surface's paramterization.
+    -1:
+        if a pushup cannot be used.
+  */
+  int GetIsoPushupDirection( 
+          const ON_Curve& curve_2d,
+          double tolerance,
+          const ON_Interval* curve_2d_subdomain,
+          double* c,
+          ON_Interval* c3_dom
+          ) const;
 
 protected:
   // Helper for ON_Surface::Pullback overrides that does a segment-by-segment
   // pullback.
+  friend ON_Curve* TL_Surface_PushupHelper(const ON_Surface&,const ON_Curve&,double,const ON_Interval*);
+  friend ON_Curve* TL_Surface_PullbackHelper(const ON_Surface&,const ON_Curve&,double,const ON_Interval*,ON_3dPoint,ON_3dPoint);
+
   ON_Curve* PullbackPolyCurve( 
                   const ON_PolyCurve& polycurve_3d,
                   double tolerance,
@@ -1283,7 +1138,6 @@ protected:
                     double tolerance,
                     const ON_Interval* curve_2d_subdomain
                     ) const;
-
 
   // Helper for ON_Surface::Pullback overrides that handles "real" curve issues.
   ON_Curve* PullbackCurveProxy( 
@@ -1329,5 +1183,9 @@ public:
 
 ON_DECL
 double ON_ClosestPointAngle(const ON_Line&, const ON_Curve&, ON_Interval,const ON_3dPoint&,ON_3dPoint&, double*, double* );
+
+ON_DECL
+double ON_GetFittingTolerance( const class ON_SurfaceTreeNode* snodeA, const class ON_SurfaceTreeNode* snodeB, double intersection_tolerance, double fitting_tolerance );
+
 
 #endif

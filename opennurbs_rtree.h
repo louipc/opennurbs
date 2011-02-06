@@ -135,7 +135,7 @@ struct ON_RTreeSearchResult
 class ON_CLASS ON_RTreeMemPool
 {
 public:
-  ON_RTreeMemPool( ON_MEMORY_POOL* heap, size_t leaf_count );
+  ON_RTreeMemPool(size_t leaf_count );
   ~ON_RTreeMemPool();
 
   ON_RTreeNode* AllocNode();
@@ -178,7 +178,6 @@ private:
   struct Blk* m_blk_list;   // linked list used to free all allocated memory
   size_t m_sizeof_blk;      // total amount of memory in each block.
 
-  ON_MEMORY_POOL* m_heap;
   size_t m_sizeof_heap; // total amount of heap memory in this rtree
 };
 
@@ -364,7 +363,7 @@ private:
 class ON_CLASS ON_RTree
 {
 public:
-  ON_RTree( ON_MEMORY_POOL* heap = 0, size_t leaf_count = 0 );
+  ON_RTree( size_t leaf_count = 0 );
   ~ON_RTree();
 
   /*
@@ -445,6 +444,9 @@ public:
       The ids of elements that overlaps the search region.
   Returns:
     True if entire tree was searched.  It is possible no results were found.
+  Remarks:
+    If you are using a Search() that uses a resultCallback() function,
+    then return true to keep searching and false to terminate the search.
   */
   bool Search(const double a_min[3], const double a_max[3],
     bool ON_MSC_CDECL resultCallback(void* a_context, ON__INT_PTR a_id), void* a_context ) const;
@@ -520,6 +522,29 @@ public:
           void* a_context
           );
 
+  /*
+  Description:
+    Search two R-trees for all pairs elements whose bounding boxes overlap.
+  Parameters:
+    a_rtreeA - [in]
+    a_rtreeB - [in]
+    tolerance - [in]
+      If the distance between a pair of bounding boxes is <= tolerance, 
+      then resultCallback() is called.
+    resultCallback - [out]
+      callback function
+      Return true for the search to continue and false to terminate the search.
+    a_context - [in] argument passed through to resultCallback().
+  Returns:
+    True if entire tree was searched.  It is possible no results were found.
+  */
+  static bool Search( 
+          const ON_RTree& a_rtreeA,
+          const ON_RTree& a_rtreeB, 
+          double tolerance,
+          bool ON_MSC_CDECL resultCallback(void* a_context, ON__INT_PTR a_idA, ON__INT_PTR a_idB),
+          void* a_context
+          );
   /*
   Returns:
     Number of elements (leaves).

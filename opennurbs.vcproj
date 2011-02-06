@@ -20,8 +20,8 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory="$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)"
+			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
+			IntermediateDirectory="$(ConfigurationName)Dll"
 			ConfigurationType="2"
 			CharacterSet="1"
 			>
@@ -67,7 +67,6 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="RPCRT4.LIB"
-				OutputFile="$(OutDir)\$(ProjectName)_d.dll"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				SubSystem="2"
@@ -101,8 +100,8 @@
 		</Configuration>
 		<Configuration
 			Name="Debug|x64"
-			OutputDirectory="$(PlatformName)\$(ConfigurationName)"
-			IntermediateDirectory="$(PlatformName)\$(ConfigurationName)"
+			OutputDirectory="$(SolutionDir)$(PlatformName)\$(ConfigurationName)"
+			IntermediateDirectory="$(PlatformName)\$(ConfigurationName)Dll"
 			ConfigurationType="2"
 			CharacterSet="1"
 			>
@@ -149,7 +148,6 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="RPCRT4.LIB"
-				OutputFile="$(OutDir)\$(ProjectName)x64_d.dll"
 				LinkIncremental="2"
 				GenerateDebugInformation="true"
 				SubSystem="2"
@@ -183,8 +181,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory="$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)"
+			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
+			IntermediateDirectory="$(ConfigurationName)Dll"
 			ConfigurationType="2"
 			CharacterSet="1"
 			>
@@ -228,7 +226,6 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="RPCRT4.LIB"
-				OutputFile="$(OutDir)\$(ProjectName).dll"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				SubSystem="2"
@@ -264,8 +261,8 @@
 		</Configuration>
 		<Configuration
 			Name="Release|x64"
-			OutputDirectory="$(PlatformName)\$(ConfigurationName)"
-			IntermediateDirectory="$(PlatformName)\$(ConfigurationName)"
+			OutputDirectory="$(SolutionDir)$(PlatformName)\$(ConfigurationName)"
+			IntermediateDirectory="$(PlatformName)\$(ConfigurationName)Dll"
 			ConfigurationType="2"
 			CharacterSet="1"
 			>
@@ -310,7 +307,6 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="RPCRT4.LIB"
-				OutputFile="$(OutDir)\$(ProjectName)x64.dll"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				SubSystem="2"
@@ -540,22 +536,6 @@
 						UsePrecompiledHeader="2"
 					/>
 				</FileConfiguration>
-				<FileConfiguration
-					Name="DebugPurify|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						UsePrecompiledHeader="2"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="DebugPurify|x64"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						UsePrecompiledHeader="2"
-					/>
-				</FileConfiguration>
 			</File>
 			<File
 				RelativePath=".\opennurbs_ellipse.cpp"
@@ -653,7 +633,6 @@
 					>
 					<Tool
 						Name="VCCLCompilerTool"
-						PreprocessorDefinitions="ON_MEMORY_MICROSOFT_HEAP"
 						UsePrecompiledHeader="0"
 					/>
 				</FileConfiguration>
@@ -662,7 +641,6 @@
 					>
 					<Tool
 						Name="VCCLCompilerTool"
-						PreprocessorDefinitions="ON_MEMORY_MICROSOFT_HEAP"
 						UsePrecompiledHeader="0"
 					/>
 				</FileConfiguration>
@@ -671,7 +649,6 @@
 					>
 					<Tool
 						Name="VCCLCompilerTool"
-						PreprocessorDefinitions="ON_MEMORY_MICROSOFT_HEAP"
 						UsePrecompiledHeader="0"
 					/>
 				</FileConfiguration>
@@ -680,44 +657,7 @@
 					>
 					<Tool
 						Name="VCCLCompilerTool"
-						PreprocessorDefinitions="ON_MEMORY_MICROSOFT_HEAP"
 						UsePrecompiledHeader="0"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="DebugPurify|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						UsePrecompiledHeader="0"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="DebugPurify|x64"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						UsePrecompiledHeader="0"
-					/>
-				</FileConfiguration>
-			</File>
-			<File
-				RelativePath=".\opennurbs_memory_new.cpp"
-				>
-				<FileConfiguration
-					Name="DebugPurify|Win32"
-					ExcludedFromBuild="true"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="DebugPurify|x64"
-					ExcludedFromBuild="true"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
 					/>
 				</FileConfiguration>
 			</File>
@@ -750,22 +690,6 @@
 				</FileConfiguration>
 				<FileConfiguration
 					Name="Release|x64"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						UsePrecompiledHeader="0"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="DebugPurify|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						UsePrecompiledHeader="0"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="DebugPurify|x64"
 					>
 					<Tool
 						Name="VCCLCompilerTool"
@@ -900,22 +824,6 @@
 						UsePrecompiledHeader="1"
 					/>
 				</FileConfiguration>
-				<FileConfiguration
-					Name="DebugPurify|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						UsePrecompiledHeader="1"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="DebugPurify|x64"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						UsePrecompiledHeader="1"
-					/>
-				</FileConfiguration>
 			</File>
 			<File
 				RelativePath=".\opennurbs_quaternion.cpp"
@@ -1001,63 +909,6 @@
 				RelativePath=".\opennurbs_zlib_memory.cpp"
 				>
 			</File>
-			<File
-				RelativePath="..\PurifyAPI\pure_api.c"
-				>
-				<FileConfiguration
-					Name="Debug|Win32"
-					ExcludedFromBuild="true"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						UsePrecompiledHeader="0"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Debug|x64"
-					ExcludedFromBuild="true"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						UsePrecompiledHeader="0"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Release|Win32"
-					ExcludedFromBuild="true"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						UsePrecompiledHeader="0"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="Release|x64"
-					ExcludedFromBuild="true"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						UsePrecompiledHeader="0"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="DebugPurify|Win32"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						UsePrecompiledHeader="0"
-					/>
-				</FileConfiguration>
-				<FileConfiguration
-					Name="DebugPurify|x64"
-					ExcludedFromBuild="true"
-					>
-					<Tool
-						Name="VCCLCompilerTool"
-						UsePrecompiledHeader="0"
-					/>
-				</FileConfiguration>
-			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -1129,10 +980,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\opennurbs_bezier_volume.h"
-				>
-			</File>
-			<File
 				RelativePath=".\opennurbs_bitmap.h"
 				>
 			</File>
@@ -1197,6 +1044,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\opennurbs_dll_resource.h"
+				>
+			</File>
+			<File
 				RelativePath=".\opennurbs_ellipse.h"
 				>
 			</File>
@@ -1222,10 +1073,6 @@
 			</File>
 			<File
 				RelativePath=".\opennurbs_geometry.h"
-				>
-			</File>
-			<File
-				RelativePath=".\opennurbs_ginfinity.h"
 				>
 			</File>
 			<File
@@ -1346,22 +1193,6 @@
 			</File>
 			<File
 				RelativePath=".\opennurbs_pluginlist.h"
-				>
-			</File>
-			<File
-				RelativePath=".\opennurbs_plus.h"
-				>
-			</File>
-			<File
-				RelativePath=".\opennurbs_plus_function.h"
-				>
-			</File>
-			<File
-				RelativePath=".\opennurbs_plus_mesh_marker.h"
-				>
-			</File>
-			<File
-				RelativePath=".\opennurbs_plus_registry.h"
 				>
 			</File>
 			<File

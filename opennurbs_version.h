@@ -200,12 +200,13 @@
 // The last digit of a V4 release build version number is 4.
 // The last digit of a V5 release build version number is 5.
 #if defined(_DEBUG)
-#define OPENNURBS_VERSION 201004099
+#define OPENNURBS_VERSION 201102029
 #else
-#define OPENNURBS_VERSION 201004095
+#define OPENNURBS_VERSION 201102025
 #endif
 
-// Subversion revision used to build opennurbs
-#define OPENNURBS_SVN_REVISION "52489"
 
-
+// Subversion revision used to build opennurbs.
+// The build process updates this number; it should be zero for developers.
+// If the build process commits a number other than 0 it's a bug.
+#define OPENNURBS_SVN_REVISION "65478"

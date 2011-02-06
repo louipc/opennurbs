@@ -3,7 +3,7 @@
 
 Legal Stuff:
 
-  Copyright (c) 1993-2010 Robert McNeel & Associates. All Rights Reserved.
+  Copyright (c) 1993-2011 Robert McNeel & Associates. All Rights Reserved.
   Rhinoceros is a registered trademark of Robert McNeel & Associates.
 
   THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED
@@ -74,11 +74,13 @@ Can I use my brand X C++ compiler?
 
 Answer:
 
-The openNURBS toolkit has been successfully used with
+The openNURBS toolkit has been thoroughly tested with
 
-  Microsoft Visual C++ 2005 (VC 8.0) (32 and 64 bit Windows 7, Vista, XP )
+  Microsoft Visual Studio 2005 (VC 8.0) (Windows XP and x64)
 
-  gcc version 4.2.1 (Apple Inc. build 5646)
+  Microsoft Visual Studio 2010 (VC 10.0) (Windows 7)
+
+  gcc version 4.2.1 (Apple Build 5664)
   
   Apple XCode (MaxBook Pro + OSX)
 
@@ -102,24 +104,38 @@ compiler.
 
 ====================================================================
 
-Compiling the Open GL example:
+Microsoft Visual C++ 6.0 Users:
+  If you get a compile bug error c2676 binary != not defined 
+  for stuct _GUID, then you are not using the November 2001
+  Platform SDK or the platform SDK is not first in your includes
+  list.
 
-Carefully read the three paragraphs in the readme.txt file that cover
-example_gl.cpp.
+====================================================================
 
-1)
-Your system must have the Open GL header files and libraries,
-including the auxiliary library (usually contains the Open GL
-NURBS rendering stuff) and the utility library.  Consult your
-documentation or local GL whiz for details.
+Microsoft Visual Studio 2003 users:
+  You will have to modify the opennurbs source code to get
+  it to compile with VS 2003. It tedius, but not hard, to 
+  get opennurbs to compile with VS 2003.  If you need to use
+  a Microsoft Windows compiler, we strongly suggest you 
+  avoid VS 2003 and use VS 2005.  We will NOT provide support
+  for using Microsoft Visual Studio 2003.
 
-2)
-To create the example_gl program you must compile two openNURBS
-toolkit files (example_gl.cpp and opennurbs_gl.cpp) and link both
-resulting objects with the openNURBS library and Open GL libraries.
-If you get unresolved references to ON_GL() functions, then you
-probably forgot compile opennurbs_gl.cpp or forgot to link with
-opennurbs_gl.o/obj.
+====================================================================
+
+Microsoft Visual Studio 2010 users:
+  This is the current platform for opennurbs development.
+
+====================================================================
+
+The Open GL example:
+
+Past versions of opennurbs have included a crude version of an
+Open GL example.  The code for this example is still included in
+the current version, but we no longer provide support for using
+OpenGL with opennurbs.  Nothing has changed in opennurbs to with
+respect to using OpenGL; we simply do not have the resources to
+provide quality OpenGL support on the wide variety of platforms
+where opennurbs is used.
 
 ====================================================================
 

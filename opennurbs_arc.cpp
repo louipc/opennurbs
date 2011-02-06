@@ -385,7 +385,9 @@ bool ON_ArcCurve::IsContinuous(
     case ON::C2_continuous:
     case ON::G1_continuous:
     case ON::G2_continuous:
-      rc = true;
+    case ON::Cinfinity_continuous:
+    case ON::Gsmooth_continuous:
+      // rc = true;
       break;
 
     case ON::C0_locus_continuous:
@@ -398,9 +400,6 @@ bool ON_ArcCurve::IsContinuous(
       // is locus continuous at start parameter.
       if ( t >= Domain()[1] )
         rc = false;
-      break;
-
-    case ON::Cinfinity_continuous:
       break;
     }
   }
@@ -423,6 +422,39 @@ double ON_Arc::Length() const
 {
   return fabs(AngleRadians()*radius);
 }
+
+double ON_Arc::SectorArea() const
+{
+  return fabs(0.5*AngleRadians()*radius*radius);
+}
+
+ON_3dPoint ON_Arc::SectorAreaCentroid() const
+{
+  double a = 0.5*fabs(AngleRadians());
+  double d = (a > 0.0) ? sin(a)/a : 0.0;
+  d *= 2.0*radius/3.0;
+  a = 0.5*(m_angle[1]+m_angle[0]);
+  return plane.PointAt(d*cos(a),d*sin(a));
+}
+
+double ON_Arc::SegmentArea() const
+{
+  double a = fabs(AngleRadians());
+  return (0.5*(a - sin(a))*radius*radius);
+}
+
+ON_3dPoint ON_Arc::SegmentAreaCentroid() const
+{
+  double a = fabs(AngleRadians());
+  double sin_halfa = sin(0.5*a);
+  double d = 3.0*(a - sin(a));
+  if ( d > 0.0 )
+    d = (sin_halfa*sin_halfa*sin_halfa)/d;
+  d *= 4.0*radius;
+  a = 0.5*(m_angle[1]+m_angle[0]);
+  return plane.PointAt(d*cos(a),d*sin(a));
+}
+
 
 /* moved to opennurbs_arccurve.cpp
 

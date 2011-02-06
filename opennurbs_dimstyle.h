@@ -97,6 +97,8 @@ public:
   int Index() const;
 
   void SetDefaults();
+  void SetDefaultsNoExtension();
+
 
   double ExtExtension() const;
   void SetExtExtension( const double);
@@ -148,14 +150,14 @@ public:
 
   // added at ver 1.3
   double LengthFactor() const;
-  void SetLengthactor( double);
+  ON_DEPRECATED void SetLengthactor( double);
   void SetLengthFactor( double); // added 6/24/07 because of typo
 
   bool Alternate() const;
   void SetAlternate( bool);
 
   double AlternateLengthFactor() const;
-  void SetAlternateLengthactor( double);
+  ON_DEPRECATED void SetAlternateLengthactor( double);
   void SetAlternateLengthFactor( double); // added 6/24/07 because of typo
 
   int AlternateLengthFormat() const;
@@ -197,7 +199,7 @@ public:
   void SetSuppressExtension2( bool);
 
   // obsolete
-  void Composite( const ON_DimStyle& override);
+  ON_DEPRECATED void Composite( const ON_DimStyle& override);
 
   // Don't change these enum values
   // They are used in file reading & writing
@@ -287,11 +289,10 @@ public:
 
   // These are obsolete - don't use
   // 5/01/07 - LW
-  void InvalidateField( eField field);
-  void InvalidateAllFields();
-  void ValidateField( eField field);
-  bool IsFieldValid( eField) const;
-//#pragma deprecated( InvalidateField, InvalidateAllFields, ValidateField, IsFieldValid, Composite)
+  ON_DEPRECATED void InvalidateField( eField field);
+  ON_DEPRECATED void InvalidateAllFields();
+  ON_DEPRECATED void ValidateField( eField field);
+  ON_DEPRECATED bool IsFieldValid( eField) const;
 
   // added version 1.3
   double DimExtension() const;
@@ -383,6 +384,11 @@ public:
 
   void Scale( double scale);
 
+  // UUID of the dimstyle this was originally copied from
+  // so Restore Defaults has some place to look
+  void SetSourceDimstyle(ON_UUID source_uuid);
+  ON_UUID SourceDimstyle() const;
+
   // Defaults for values stored in Userdata extension
   static int    DefaultToleranceStyle();
   static int    DefaultToleranceResolution();
@@ -429,7 +435,9 @@ public:
   ON_wString m_alternate_prefix;    // string preceding alternate value string
   ON_wString m_alternate_suffix;    // string following alternate value string
 
-  unsigned int m_valid;        // Obsolete field to be removed - Do not use
+private:
+  unsigned int m_valid;        // Obsolete deprecated field to be removed - Do not use
+public:
 
   // field added version 1.4, Dec 28, 05
   double m_dimextension;  // (dimdle) dimension line extension past the "tip" location

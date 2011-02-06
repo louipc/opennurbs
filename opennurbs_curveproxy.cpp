@@ -711,6 +711,8 @@ bool ON_CurveProxy::GetNextDiscontinuity(
                 ) const
 {
   bool rc = false;
+  if ( 0 != dtype )
+    *dtype = 0;
 
   if ( 0 != m_real_curve )
   {
@@ -735,32 +737,34 @@ bool ON_CurveProxy::GetNextDiscontinuity(
 
     ON::continuity parametric_c = ON::ParametricContinuity(c);
 
-    rc = m_real_curve->GetNextDiscontinuity(parametric_c,s0,s1,&s,hint,dtype,cos_angle_tolerance,curvature_tolerance);
+    int realcrv_dtype = 0;
+    bool realcrv_rc = m_real_curve->GetNextDiscontinuity(parametric_c,s0,s1,&s,hint,&realcrv_dtype,cos_angle_tolerance,curvature_tolerance);
 
-    if ( rc ) 
+    if ( realcrv_rc ) 
     {
-      *t = ThisCurveParameter(s);
-      if ( (t0 < t1 && *t <= t0) || (t1 < t0 && *t >= t0) )
+      double thiscrv_t = ThisCurveParameter(s);
+      if ( !(t0 < thiscrv_t && thiscrv_t < t1) && !(t1 < thiscrv_t && thiscrv_t < t0) )
       {
+        realcrv_rc = false;
+        realcrv_dtype = 0;
         // Sometimes proxy domain adjustments kill all the precision.
         // To avoid infinite loops, it is critical that *t != t0
-        rc = false;
-        if ( dtype )
-          *dtype = 0;
         double s2 = ON_SQRT_EPSILON*s1 + (1.0 - ON_SQRT_EPSILON)*s0;
-        if ( s0 < s2 && s2 < s1 )
+        if ( (s0 < s2 && s2 < s1) || (s1 < s2 && s2 < s0) )
         {
-          rc = m_real_curve->GetNextDiscontinuity(parametric_c,s2,s1,&s,hint,dtype,cos_angle_tolerance,curvature_tolerance);
-          if ( rc )
-          {
-            *t = ThisCurveParameter(s);
-            if ( (t0 < t1 && *t <= t0) || (t1 < t0 && *t >= t0) )
-            {
-              if ( dtype )
-                *dtype = 0;
-              rc = false;
-            }
-          }
+          realcrv_rc = m_real_curve->GetNextDiscontinuity(parametric_c,s2,s1,&s,hint,&realcrv_dtype,cos_angle_tolerance,curvature_tolerance);
+          if ( realcrv_rc )
+            thiscrv_t = ThisCurveParameter(s);
+        }
+      }
+      if ( realcrv_rc )
+      {
+        if ( (t0 < thiscrv_t && thiscrv_t < t1) || (t1 < thiscrv_t && thiscrv_t < t0) )
+        {
+          *t = thiscrv_t;
+          if ( dtype )
+            *dtype = realcrv_dtype;
+          rc = true;
         }
       }
     }
@@ -784,7 +788,7 @@ bool ON_CurveProxy::IsContinuous(
     double point_tolerance, // default=ON_ZERO_TOLERANCE
     double d1_tolerance, // default==ON_ZERO_TOLERANCE
     double d2_tolerance, // default==ON_ZERO_TOLERANCE
-    double cos_angle_tolerance, // default==0.99984769515639123915701155881391
+    double cos_angle_tolerance, // default==ON_DEFAULT_ANGLE_TOLERANCE_COSINE
     double curvature_tolerance  // default==ON_SQRT_EPSILON
     ) const
 {
@@ -805,6 +809,7 @@ bool ON_CurveProxy::IsContinuous(
       case ON::G1_continuous:
       case ON::G2_continuous:
       case ON::Cinfinity_continuous:
+      case ON::Gsmooth_continuous:
         break;
 
       case ON::C0_locus_continuous:
@@ -863,22 +868,45 @@ ON_CurveProxy::Evaluate( // returns false if unable to evaluate
                        //            repeated evaluations
        ) const
 {
-	// Set side hint if we are at a domain endpoint
-	double normt = m_this_domain.NormalizedParameterAt(t);
-	if( fabs( normt )<ON_ZERO_TOLERANCE)
-		side = m_bReversed?-1: 1;
-	else if( fabs(1.0 - normt)<ON_ZERO_TOLERANCE)
-		side =  m_bReversed?1:-1;
+  // When the proxy domain is a proper subdomain of the 
+  // real curve and we are evaluating at the end, we
+  // need to be certain we are getting the values
+  // from the active part of the curve.
+  double normt = m_this_domain.NormalizedParameterAt(t);
+  if( fabs( normt )<ON_ZERO_TOLERANCE)
+    side = (abs(side) <= 1) ? 1 : 2;
+  else if( fabs(1.0 - normt)<ON_ZERO_TOLERANCE)
+    side = (abs(side) <= 1) ? -1 : -2;
+  
+  if ( 0 != side )
+  {
+    if ( m_bReversed )
+    {
+      side = -side;
+    }
+    if (m_bReversed || m_real_curve_domain != m_this_domain )
+    {
+      // 9 November 2010 Dale Lear - ON_TuneupEvaluationParameter fix
+      //  If we have to adjust the evaluation parameter for the 
+      //  real curve and the evaluation side was specified, then
+      //  set side to +2 or -2 to trigger the use of
+      //  ON_TuneupEvaluationParameter() when it matters.
+      if ( -1 == side )
+        side = -2;
+      else if ( 1 == side )
+        side = 2;
+    }
+  }
 
+  double r = RealCurveParameter(t);
   ON_BOOL32 rc = ( m_real_curve ) 
-          ? m_real_curve->Evaluate( RealCurveParameter(t),der_count,v_stride,v,side,hint) 
+          ? m_real_curve->Evaluate( r,der_count,v_stride,v,side,hint) 
           : false;
   if ( rc && m_bReversed ) 
   {
     // negate odd derivatives
     const int dim = m_real_curve->Dimension();
     int di, i;
-    // GBA 8-Aug-2006  Fixed a bug here that caused memory corruption. see TRR#22030
     for ( di = 1; di <= der_count; di+=2 ) 
     {
       v += v_stride;

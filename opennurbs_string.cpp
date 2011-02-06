@@ -269,9 +269,7 @@ ON_String::~ON_String()
 
 ON_String::ON_String(const ON_String& src)
 {
-	if (    src.Header()->ref_count > 0 
-       && 0 == ON_WorkerMemoryPool()
-     )	
+	if ( src.Header()->ref_count > 0 )
   {
 		m_s = src.m_s;
     src.Header()->ref_count++;
@@ -416,9 +414,7 @@ ON_String& ON_String::operator=(const ON_String& src)
       Destroy();
       Create();
     }
-    else if (    src.Header()->ref_count > 0 
-              && 0 == ON_WorkerMemoryPool()
-            ) 
+    else if ( src.Header()->ref_count > 0 )
     {
       Destroy();
       src.Header()->ref_count++;
@@ -597,6 +593,16 @@ unsigned int ON_String::SizeOf() const
   return (unsigned int)sz;
 }
 
+ON__UINT32 ON_String::DataCRC(ON__UINT32 current_remainder) const
+{
+  int string_length = Header()->string_length;
+  if ( string_length > 0 )
+  {
+    current_remainder = ON_CRC32(current_remainder,string_length*sizeof(*m_s),m_s);
+  }
+  return current_remainder;
+}
+
 int ON_String::Compare( const char* s ) const
 {
   int rc = 0;
@@ -721,7 +727,7 @@ bool ON_WildCardMatchNoCase(const char* s, const char* pattern)
       return true;
 
     while (*s) {
-      if ( ON_WildCardMatch(s,pattern) )
+      if ( ON_WildCardMatchNoCase(s,pattern) )
         return true;
       s++;
     }
@@ -760,7 +766,7 @@ bool ON_WildCardMatchNoCase(const char* s, const char* pattern)
     s++;
   }
   
-  return ON_WildCardMatch(s,pattern);
+  return ON_WildCardMatchNoCase(s,pattern);
 }
 
 bool ON_String::WildCardMatch( const char* pattern) const

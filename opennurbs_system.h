@@ -33,6 +33,25 @@
 /* compiler choice */
 #if defined(_MSC_VER)
 
+#if defined(OPENNURBS_EXPORTS)
+// "OPENNURBS_EXPORTS" is Microsoft's prefered define to indicate
+// an opennurbs DLL is being compiled.
+#if !defined(ON_DLL_EXPORTS)
+#define ON_DLL_EXPORTS
+#endif
+#if !defined(ON_COMPILING_OPENNURBS)
+#define ON_COMPILING_OPENNURBS
+#endif
+#endif
+
+#if defined(OPENNURBS_IMPORTS)
+// "OPENNURBS_IMPORTS" is Microsoft's prefered define to indicate
+// an opennurbs DLL is being linked with.
+#if !defined(ON_DLL_IMPORTS)
+#define ON_DLL_IMPORTS
+#endif
+#endif
+
 /* using a Microsoft compiler */
 #define ON_COMPILER_MSC
 
@@ -44,7 +63,14 @@
 // the /Zc:wchar_t compiler option.
 
 #if _MSC_VER >= 1400
+// Using at least Visual C++ 8.0 (2005)
 #define ON_COMPILER_MSC1400
+
+
+#if _MSC_VER >= 1600
+// Using at least Visual C++ 10.0 (2010)
+#define ON_COMPILER_MSC1600
+#endif
 
 // We are using /W4 wrning levels and disable
 // these warnings.  I would prefer to use
@@ -131,6 +157,14 @@
 // defines disable the inclusion of most of the Windows garbage.
 */
 
+#if defined(ON_COMPILER_MSC1600)
+// include SKDDDKVer.h When using the v100 platform headers.
+// Including SDKDDKVer.h defines the highest available Windows platform.
+// If you wish to build your application for a previous Windows platform, include WinSDKVer.h and
+// set the _WIN32_WINNT macro to the platform you wish to support before including SDKDDKVer.h.
+//#include <SDKDDKVer.h>
+#endif
+
 #if !defined(_WINDOWS_)
 /* windows.h has not been read - read just what we need */
 #define WIN32_LEAN_AND_MEAN  /* Exclude rarely-used stuff from Windows headers */
@@ -209,7 +243,7 @@
 
 #if defined(ON_OS_WINDOWS)
 #include <io.h>
-#include <sys\stat.h>
+#include <sys/stat.h>
 #include <tchar.h>
 
 // ON_CreateUuid calls Windows's ::UuidCreate() which

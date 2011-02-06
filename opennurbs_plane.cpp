@@ -536,7 +536,7 @@ bool ON_Plane::Rotate(
     xaxis = rot*xaxis;
     yaxis = rot*yaxis;
     zaxis = rot*zaxis;
-    UpdateEquation();
+    rc = UpdateEquation();
   }
   else {
     rot.Rotation( sin_angle, cos_angle, axis, center );

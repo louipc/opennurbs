@@ -21,6 +21,7 @@ class ON_CLASS ON_Layer : public ON_Object
   ON_OBJECT_DECLARE(ON_Layer);
 
 public:
+
   ON_Layer();
   ~ON_Layer();
   // C++ default copy construction and operator= work fine.
@@ -74,6 +75,87 @@ public:
   bool SetLayerName( const char* );
   bool SetLayerName( const wchar_t* );
 	const ON_wString& LayerName() const;
+
+  /*
+  Description:
+    The string returned by ON_Layer::LayerNameReferenceDelimiter()
+    is used to separate the name of a reference file from the name of 
+    the layer in the file.
+  Example:
+    If a layer named "electrical" is in a file named "house plan.3dm"
+    and "house plan.3dm" is a reference file in a Rhino worksession,
+    then Rhino's user interface will use the string 
+    "house plan : electrical" to identify the layer.
+  Returns:
+    " : " (null terminated string space,colon,space)
+  Remarks:
+    Rhino does not save the names of reference files in 3dm archives.
+    Reference file names are used as runtime decorations.
+  */
+  static const wchar_t* LayerNameReferenceDelimiter();
+
+  /*
+  Description:
+    The string "::" (colon,colon) returned by LayerNamePathDelimiter()
+    is used to separate parent and child layer names.
+  Example:
+    If a model of a building has "level 1" and "level 2" as top level
+    layers, an architect might choose to have a "fixtures" sublayer
+    on each level.  The complete layer names would be
+    "level 1::fixtures" and "level 2::fixtures".
+  Returns:
+    "::" (null terminated string colon,colon)
+  */
+  static const wchar_t* LayerNamePathDelimiter();
+
+  /*
+  Description:
+    Get a layer name's "leaf" level name.
+  Example:
+    If a layer name is "refernce file : alpha::beta::gamma", 
+    then ON_Layer::GetLeafName() returns "gamma"
+  Returns:    
+    True if the layer has a valid non-empty leaf name.
+  */
+  static bool GetLeafName( const wchar_t* layer_name, ON_wString& leaf_name);
+
+  /*
+  Description:
+    Get the layer's "parent" path name.
+  Example:
+    If a layer name is "refenence file : alpha::beta::gamma", then
+    ON_Layer::GetParentPathName() returns "alpha::beta"
+  Returns:    
+    True if the layer has a valid non-empty parent path name.
+  */
+  static bool GetParentName( const wchar_t* layer_name, ON_wString& parent_path_name );
+
+  /*
+  Description:
+    Remove any "reference : " prefix from a layer's name.
+  Parameters:
+    layer_name - [in]
+    layer_path_name - [out]
+      layer_name with any reference prefix removed.
+  Example:
+    If a layer name is "refenence file : alpha::beta::gamma", then
+    ON_Layer::RemoveReferenceName() returns "alpha::beta::gamma"
+  Returns:    
+    True if layer_path_name is non-empty. If no reference prefix was present,
+    then the returned layer_path_name is identical to the input layer_name.
+  */
+  static bool RemoveReferenceName( const wchar_t* layer_name, ON_wString& layer_path_name );
+
+  /*
+  Description:
+    Get the layer's reference name.
+  Example:
+    If a layer name is "refenence file : alpha::beta::gamma", then
+    ON_Layer::GetReferenceFileName() returns "refenence file"
+  Returns:    
+    True if the layer has a valid non-empty reference file name.
+  */
+  static bool GetReferenceName( const wchar_t* layer_name, ON_wString& reference_name );
 
   /*
   Parameters:

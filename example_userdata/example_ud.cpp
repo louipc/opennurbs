@@ -1,3 +1,5 @@
+// uncomment the "ON_DLL_IMPORTS" define to use opennurbs as a Windows DLL
+//#define ON_DLL_IMPORTS
 #include "../opennurbs.h"
 #include "example_ud.h"
 

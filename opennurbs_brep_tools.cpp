@@ -714,7 +714,18 @@ ON_BrepLoop* ON_Brep::NewOuterLoop(
   {
     if ( c3[i] )
     {
-      ON_BrepEdge& edge = NewEdge( m_V[vid[i]], m_V[vid[(i+1)%4]], AddEdgeCurve( c3[i] ) );
+      int i0, i1;
+      if ( bRev3d[i] )
+      {
+        i0 = (i+1)%4;
+        i1 = i;
+      }
+      else
+      {
+        i0 = i;
+        i1 = (i+1)%4;
+      }
+      ON_BrepEdge& edge = NewEdge( m_V[vid[i0]], m_V[vid[i1]], AddEdgeCurve( c3[i] ) );
       edge.m_tolerance = 0.0;
       eid[i] = edge.m_edge_index;
       if ( i == 0 && bIsClosed[1] )
@@ -1377,7 +1388,8 @@ static ON_BOOL32 AddC3Curve( const ON_Curve* c3, ON_SimpleArray<ON_Curve*>& C3 )
   int j;
   if ( !c3 )
     return false;
-  if ( c3->Dimension() != 3 )
+  const int c3dim = c3->Dimension();
+  if ( c3dim != 3 && c3dim != 2 )
     return false;
   if ( ON_PolyCurve::Cast(c3) )
   {
@@ -1394,16 +1406,34 @@ static ON_BOOL32 AddC3Curve( const ON_Curve* c3, ON_SimpleArray<ON_Curve*>& C3 )
     //ON_LineCurve* linecrv = 0;
     const ON_PolylineCurve* pline = static_cast<const ON_PolylineCurve*>(c3);
     line.to = pline->m_pline[0];
+    if ( 2 == c3dim )
+      line.to.z = 0.0;
     for ( j = 1; j < pline->m_pline.Count(); j++ )
     {
       line.from = line.to;
       line.to = pline->m_pline[j];
+      if ( 2 == c3dim )
+        line.to.z = 0.0;
       if ( line.Length() > 0 )
         C3.Append( new ON_LineCurve(line) );
     }
   }
   else
-    C3.Append( c3->DuplicateCurve() );
+  {
+    ON_Curve* c3dup = c3->DuplicateCurve();
+    if ( 0 == c3dup )
+      return false;
+    if ( 2 == c3dup->Dimension() )
+    {
+      c3dup->ChangeDimension(3);
+      if ( 3 != c3dup->Dimension() )
+      {
+        delete c3dup;
+        return false;
+      }
+    }
+    C3.Append( c3dup );
+  }
   return true;
 }
 

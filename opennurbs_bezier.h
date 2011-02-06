@@ -280,28 +280,6 @@ public:
   //   Axis aligned bounding box.
   ON_BoundingBox BoundingBox() const;
 
-  /*
-	Description:
-    Get tight bounding box of the bezier.
-	Parameters:
-		tight_bbox - [in/out] tight bounding box
-		bGrowBox -[in]	(default=false)			
-      If true and the input tight_bbox is valid, then returned
-      tight_bbox is the union of the input tight_bbox and the 
-      tight bounding box of the bezier curve.
-		xform -[in] (default=NULL)
-      If not NULL, the tight bounding box of the transformed
-      bezier is calculated.  The bezier curve is not modified.
-	Returns:
-    True if the returned tight_bbox is set to a valid 
-    bounding box.
-  */
-	bool GetTightBoundingBox( 
-			ON_BoundingBox& tight_bbox, 
-      int bGrowBox = false,
-			const ON_Xform* xform = 0
-      ) const;
-
   // Description:
   //   Transform the bezier.
   // Parameters:

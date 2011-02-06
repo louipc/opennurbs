@@ -312,10 +312,6 @@ public:
   */
   ON_WindowsBitmap& operator=( const BITMAPINFO& src );
 
-
-  // OBSOLETE - just use the m_bmi pointer
-  //__declspec(deprecated) BITMAPINFO* Convert();
-
   /*
   Description:
     Create and ON_WindowsBitmap from a Windows BITMAPINFO pointer

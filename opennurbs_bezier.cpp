@@ -719,10 +719,6 @@ bool ON_Line::GetTightBoundingBox(
   {
     bGrowBox = false;
   }
-  if ( !bGrowBox )
-  {
-    tight_bbox.Destroy();
-  }
 
   if ( xform && !xform->IsIdentity() )
   {
@@ -748,6 +744,11 @@ bool ON_Arc::GetTightBoundingBox(
 		const ON_Xform* xform
     ) const
 {
+  if ( IsCircle() && (0 == xform || xform->IsIdentity()) )
+  {
+    return ON_Circle::GetTightBoundingBox(tight_bbox,bGrowBox,0);
+  }
+
   if ( bGrowBox && !tight_bbox.IsValid() )
   {
     bGrowBox = false;
@@ -757,30 +758,24 @@ bool ON_Arc::GetTightBoundingBox(
     tight_bbox.Destroy();
   }
 
+  // Using the nurbs_knot[] and nurbs_cv[] arrays 
+  // removes all calls to onmalloc() and onfree().
+  double nurbs_knot[10];
+  ON_4dPoint nurbs_cv[9];
   ON_NurbsCurve nurbs_arc;
+  nurbs_arc.m_knot = nurbs_knot;
+  nurbs_arc.m_cv = &nurbs_cv[0].x;
   if ( GetNurbForm(nurbs_arc) )
   {
     if ( xform && !xform->IsIdentity() )
     {
       nurbs_arc.Transform(*xform);
     }
-    ON_BezierCurve bez_arc;
-    bez_arc.m_dim = nurbs_arc.m_dim;
-    bez_arc.m_is_rat = nurbs_arc.m_is_rat;
-    bez_arc.m_order = nurbs_arc.m_order;
-    bez_arc.m_cv_stride = nurbs_arc.m_cv_stride;
-    bez_arc.m_cv = nurbs_arc.m_cv;
-    int i;
-    for ( i = nurbs_arc.m_order-2; i < nurbs_arc.m_cv_count-1; i++, bez_arc.m_cv += bez_arc.m_cv_stride )
-    {
-      if ( nurbs_arc.m_knot[i] < nurbs_arc.m_knot[i+1] )
-      {
-        if ( bez_arc.GetTightBoundingBox( tight_bbox, bGrowBox, 0 ) )
-          bGrowBox = true;
-      }
-    }
-    bez_arc.m_cv = 0;
+    if ( nurbs_arc.GetBoundingBox(tight_bbox,bGrowBox) )
+      bGrowBox = true;
   }
+  nurbs_arc.m_cv = 0;
+  nurbs_arc.m_knot = 0;
 
   return (0!=bGrowBox);
 }
@@ -791,8 +786,50 @@ bool ON_Circle::GetTightBoundingBox(
 		const ON_Xform* xform
     ) const
 {
-  ON_Arc arc(*this,2.0*ON_PI);
-  return arc.GetTightBoundingBox(tight_bbox,bGrowBox,xform);
+  // April 8, 2010 Dale Lear: 
+  //   Changed this function to be faster when xform is the identity.
+  if ( 0 != xform && !xform->IsIdentity() )
+  {
+    // The ON_Arc version handles all transformations including
+    // ones that are not in rotations.
+    ON_Arc arc(*this,2.0*ON_PI);
+    return arc.GetTightBoundingBox(tight_bbox,bGrowBox,xform);
+  }
+
+  if ( bGrowBox && !tight_bbox.IsValid() )
+  {
+    bGrowBox = false;
+  }
+
+  const double rx = radius*ON_Length2d(plane.zaxis.y, plane.zaxis.z);
+  const double ry = radius*ON_Length2d(plane.zaxis.z, plane.zaxis.x);
+  const double rz = radius*ON_Length2d(plane.zaxis.x, plane.zaxis.y);
+  if ( bGrowBox )
+  {    
+    if ( plane.origin.x-rx < tight_bbox.m_min.x )
+      tight_bbox.m_min.x = plane.origin.x-rx;
+    if ( plane.origin.x+rx > tight_bbox.m_max.x )
+      tight_bbox.m_max.x = plane.origin.x+rx;
+    if ( plane.origin.y-ry < tight_bbox.m_min.y )
+      tight_bbox.m_min.y = plane.origin.y-ry;
+    if ( plane.origin.y+ry > tight_bbox.m_max.y )
+      tight_bbox.m_max.y = plane.origin.y+ry;
+    if ( plane.origin.z-rz < tight_bbox.m_min.z )
+      tight_bbox.m_min.z = plane.origin.z-rz;
+    if ( plane.origin.z+rz > tight_bbox.m_max.z )
+      tight_bbox.m_max.z = plane.origin.z+rz;
+  }
+  else
+  {
+    tight_bbox.m_min.x = plane.origin.x-rx;
+    tight_bbox.m_max.x = plane.origin.x+rx;
+    tight_bbox.m_min.y = plane.origin.y-ry;
+    tight_bbox.m_max.y = plane.origin.y+ry;
+    tight_bbox.m_min.z = plane.origin.z-rz;
+    tight_bbox.m_max.z = plane.origin.z+rz;
+  }  
+
+  return true;  
 }
 
 bool ON_ArcCurve::GetTightBoundingBox( 
@@ -2634,7 +2671,7 @@ bool ON_BezierSurface::Trim(
 {
   bool rc = false;
   ON_BezierCurve crv;
-  const double* cv;
+  double* cv;
   const int k = m_is_rat ? (m_dim+1) : m_dim;
   const int sizeofcv = k*sizeof(*cv);
   
@@ -2667,7 +2704,7 @@ bool ON_BezierSurface::Trim(
     int& j= ind[1-dir];
     for( i=0; i<m_order[dir]; i++)
     {
-      double* cv = crv.CV(i);
+      cv = crv.CV(i);
       for( j=0; j<m_order[1-dir]; j++){
         memcpy( cv, CV( ind[0],ind[1]), sizeofcv);
         cv += k;
@@ -2680,7 +2717,7 @@ bool ON_BezierSurface::Trim(
     {
       for( i=0; i<m_order[dir]; i++)
       {
-        double* cv = crv.CV(i);
+        cv = crv.CV(i);
         for( j=0; j<m_order[1-dir]; j++){
           memcpy( CV( ind[0],ind[1]), cv, sizeofcv);
           cv += k;

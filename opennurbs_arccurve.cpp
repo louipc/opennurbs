@@ -670,7 +670,7 @@ static ON_BOOL32 NurbsCurveArc ( const ON_Arc& arc, int dim, ON_NurbsCurve& nurb
   const double angle1 = dom[1];
   ON_3dPoint start_point = arc.StartPoint();
   //ON_3dPoint mid_point   = arc.PointAt(angle0 + 0.5*angle);
-  ON_3dPoint end_point   = arc.EndPoint();
+  ON_3dPoint end_point   = arc.IsCircle() ? start_point : arc.EndPoint();
 
   ON_4dPoint CV[9];
   double knot[10];
@@ -829,10 +829,20 @@ bool ON_Arc::GetRadianFromNurbFormParameter(double NurbParameter, double* Radian
 	double theta = atan2(y,x);
 
 	theta -= floor( (theta-dom[0])/(2*ON_PI)) * 2* ON_PI;
-	if( theta<dom[0])
-		theta = dom[0];
-	else if(theta>dom[1])
-		theta = dom[1];
+	if( theta<dom[0] || theta>dom[1])
+	{
+		// 24-May-2010 GBA 
+		// We got outside of the domain because of a numerical error somewhere.
+		// The only case that matters is because we are right near an endpoint.
+		// So we need to decide which endpoint to return.  (Other possibilities 
+		// are that the radius is way to small relative to the coordinates of the center.
+		// In this case the circle is just numerical noise around the center anyway.)
+		if( NurbParameter< (dom[0]+dom[1])/2.0)
+			theta = dom[0];
+		else 
+			theta = dom[1];
+	}
+
 
 	// Carefully handle the potential discontinuity of this function
 	//  when the domain is a full circle

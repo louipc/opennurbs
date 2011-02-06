@@ -286,6 +286,12 @@ public:
 
   /*
   Returns:
+    True if a, b, c, and d are all valid, finite and at least one is non-zero.
+  */
+  bool IsNotZero() const;
+
+  /*
+  Returns:
     True if b, c, and d are all zero.
   */
   bool IsScalar() const;

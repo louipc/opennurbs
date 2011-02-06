@@ -60,8 +60,9 @@ class ON_DimStyleExtra : public ON_UserData
 {
   ON_OBJECT_DECLARE(ON_DimStyleExtra);
 public:
-  static ON_DimStyleExtra* DimStyleExtension( ON_DimStyle* pDimStyle, bool bCreate);
-  static const ON_DimStyleExtra* DimStyleExtension( const ON_DimStyle* pDimStyle, bool bCreate);
+  // 26 Oct 2010 - Changed to always create ON_DimStyleExtra
+  static ON_DimStyleExtra* DimStyleExtension( ON_DimStyle* pDimStyle);
+  static const ON_DimStyleExtra* DimStyleExtension( const ON_DimStyle* pDimStyle);
 
   ON_DimStyleExtra();
   ~ON_DimStyleExtra();
@@ -137,6 +138,8 @@ public:
   void SetDimScaleSource(int source);
   int DimScaleSource() const;
 
+  void SetSourceDimstyle(ON_UUID source_uuid);
+  ON_UUID SourceDimstyle() const;
 
   bool CompareFields(const ON_DimStyleExtra* pOther) const;
 
@@ -162,6 +165,9 @@ public:
   // Per dimstyle DimScale added Dec 16, 2009
   double   m_dimscale;
   int      m_dimscale_source;
+
+  // 19 Oct 2010 - Added uuid of source dimstyle to restore defaults
+  ON_UUID  m_source_dimstyle;
 };
 
 
@@ -171,14 +177,14 @@ public:
 // Added for v5 - 5/01/07 LW
 ON_OBJECT_IMPLEMENT(ON_DimStyleExtra,ON_UserData,"513FDE53-7284-4065-8601-06CEA8B28D6F");
 
-
-ON_DimStyleExtra* ON_DimStyleExtra::DimStyleExtension( ON_DimStyle* pDimStyle, bool bCreate)
+// 26 Oct 2010 - Lowell - Changed to always create ON_DimStyleExtra if there's not one
+ON_DimStyleExtra* ON_DimStyleExtra::DimStyleExtension( ON_DimStyle* pDimStyle)
 {
   ON_DimStyleExtra* pExtra = 0;
   if( pDimStyle)
   {
     pExtra = ON_DimStyleExtra::Cast( pDimStyle->GetUserData( ON_DimStyleExtra::m_ON_DimStyleExtra_class_id.Uuid()));
-    if( pExtra == 0 && bCreate)
+    if( pExtra == 0)
     {
       pExtra = new ON_DimStyleExtra;
       if( pExtra)
@@ -195,9 +201,9 @@ ON_DimStyleExtra* ON_DimStyleExtra::DimStyleExtension( ON_DimStyle* pDimStyle, b
 }
 
 const 
-ON_DimStyleExtra* ON_DimStyleExtra::DimStyleExtension( const ON_DimStyle* pDimStyle, bool bCreate)
+ON_DimStyleExtra* ON_DimStyleExtra::DimStyleExtension( const ON_DimStyle* pDimStyle)
 {
-  return DimStyleExtension( (ON_DimStyle*)pDimStyle, bCreate);
+  return DimStyleExtension( (ON_DimStyle*)pDimStyle);
 }
 
 ON_DimStyleExtra::ON_DimStyleExtra()
@@ -211,6 +217,7 @@ ON_DimStyleExtra::ON_DimStyleExtra()
   m_valid_fields.Reserve( eFieldCount);
   m_valid_fields.SetCount( eFieldCount);
   m_parent_dimstyle = ON_nil_uuid;
+  m_source_dimstyle = ON_nil_uuid;
   SetDefaults();
 }
 
@@ -252,7 +259,8 @@ ON_BOOL32 ON_DimStyleExtra::Write(ON_BinaryArchive& archive) const
 {
 //  bool rc = archive.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,0); Changed to 1,1 for mask settings 12/12/09
 //  bool rc = archive.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,1); Changed to 1,2 for dimscale 12/17/09
-  bool rc = archive.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,2);
+//  bool rc = archive.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,2); Changed to 1,3 for source_dimstyle 10/19/10
+  bool rc = archive.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,3);
 
   if(rc) rc = archive.WriteUuid( m_parent_dimstyle);
   if(rc) rc = archive.WriteArray( m_valid_fields);
@@ -264,14 +272,32 @@ ON_BOOL32 ON_DimStyleExtra::Write(ON_BinaryArchive& archive) const
   if(rc) rc = archive.WriteDouble(m_tolerance_lower_value);
   if(rc) rc = archive.WriteDouble(m_tolerance_height_scale);
 
-  if(rc) rc = archive.WriteDouble(m_baseline_spacing);
+  // March 22, 2010 - Global DimStyle was obsoleted and moved into DimStyles
+  // So now for writing older version files, its multiplied into all distance values
+  if(archive.Archive3dmVersion() < 5)
+  {
+    if(rc) rc = archive.WriteDouble(m_baseline_spacing * m_dimscale);
+  }
+  else
+  {
+    if(rc) rc = archive.WriteDouble(m_baseline_spacing);
+  }
 
   if(rc) rc = archive.WriteBool(m_bDrawMask);
   if(rc) rc = archive.WriteInt(m_mask_color_source);
   if(rc) rc = archive.WriteColor(m_mask_color);
 
-  if(rc) rc = archive.WriteDouble(m_dimscale);
-  if(rc) rc = archive.WriteInt(m_dimscale_source);
+  if(archive.Archive3dmVersion() < 5)
+  {
+    if(rc) rc = archive.WriteDouble(1.0);
+  }
+  else
+  {
+    if(rc) rc = archive.WriteDouble(m_dimscale);
+  }
+  if(rc) rc = archive.WriteInt(m_dimscale_source); // Obsolete field
+
+  if(rc) rc = archive.WriteUuid(m_source_dimstyle);  // Added 19 Oct 2010
 
   if(!archive.EndWrite3dmChunk())
     rc = false;
@@ -308,8 +334,15 @@ ON_BOOL32 ON_DimStyleExtra::Read(ON_BinaryArchive& archive)
   }
 
   if(minor_version >= 2)
+  {
     if(rc) rc = archive.ReadDouble(&m_dimscale);
     if(rc) rc = archive.ReadInt(&m_dimscale_source);
+  }
+
+  if(minor_version >= 3)
+  {
+    if(rc) rc = archive.ReadUuid(m_source_dimstyle);
+  }
 
   if ( !archive.EndRead3dmChunk() )
     rc = false;
@@ -455,6 +488,16 @@ int ON_DimStyleExtra::DimScaleSource() const
   return m_dimscale_source;
 }
 
+void ON_DimStyleExtra::SetSourceDimstyle(ON_UUID source_uuid)
+{
+  m_source_dimstyle = source_uuid;
+}
+
+ON_UUID ON_DimStyleExtra::SourceDimstyle() const
+{
+  return m_source_dimstyle;
+}
+
 // returns true if they are the same
 bool ON_DimStyleExtra::CompareFields(const ON_DimStyleExtra* pOther) const
 {
@@ -489,7 +532,11 @@ ON_OBJECT_IMPLEMENT( ON_DimStyle, ON_Object, "81BD83D5-7120-41c4-9A57-C449336FF1
 
 ON_DimStyle::ON_DimStyle()
 {
-  SetDefaults();
+  // 26 Oct 2010
+  // Can't create this here because reading files won't attach what's read from the file if 
+  // there's already one there.
+//  ON_DimStyleExtra::DimStyleExtension( this);
+  SetDefaultsNoExtension();
 }
 
 ON_DimStyle::~ON_DimStyle()
@@ -500,7 +547,7 @@ void ON_DimStyle::SetDefaults()
 {
   // If there is already a userdata extension, reset it to the defaults,
   // but don't make one if its not there already
-  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, false);
+  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if( pDE)
   {
     // reset all field override flags
@@ -508,7 +555,13 @@ void ON_DimStyle::SetDefaults()
       pDE->m_valid_fields[i] = false;
     pDE->SetDefaults();
   }
+  SetDefaultsNoExtension();
+}
 
+// Need to be able to set defaults in base without creating extension
+// because file reading won't attach userdata if there's already one there
+void ON_DimStyle::SetDefaultsNoExtension()
+{
   m_dimstyle_index = -1;
   memset(&m_dimstyle_id,0,sizeof(m_dimstyle_id));
   m_dimstyle_name = L"Default";
@@ -596,6 +649,12 @@ ON_BOOL32 ON_DimStyle::Write(
        ON_BinaryArchive& file // serialize definition to binary archive
      ) const
 {
+  // March 22, 2010 - Global DimStyle was obsoleted and moved into DimStyles
+  // So now for writing older version files, its multiplied into all distance values
+  double ds = 1.0;
+  if(file.Archive3dmVersion() < 5)
+    ds = DimScale();
+
   // changed to version 1.4 Dec 28, 05
   // changed to version 1.5 Mar 23, 06
   ON_BOOL32 rc = file.Write3dmChunkVersion(1,5);
@@ -603,11 +662,11 @@ ON_BOOL32 ON_DimStyle::Write(
   if (rc) rc = file.WriteInt(m_dimstyle_index);
   if (rc) rc = file.WriteString(m_dimstyle_name);
 
-  if (rc) rc = file.WriteDouble(m_extextension);
-  if (rc) rc = file.WriteDouble(m_extoffset);
-  if (rc) rc = file.WriteDouble(m_arrowsize);
-  if (rc) rc = file.WriteDouble(m_centermark);
-  if (rc) rc = file.WriteDouble(m_textgap);
+  if (rc) rc = file.WriteDouble(m_extextension * ds);
+  if (rc) rc = file.WriteDouble(m_extoffset * ds);
+  if (rc) rc = file.WriteDouble(m_arrowsize * ds);
+  if (rc) rc = file.WriteDouble(m_centermark * ds);
+  if (rc) rc = file.WriteDouble(m_textgap * ds);
   
   if (rc) rc = file.WriteInt(m_textalign);
   if (rc) rc = file.WriteInt(m_arrowtype);
@@ -618,7 +677,7 @@ ON_BOOL32 ON_DimStyle::Write(
   if (rc) rc = file.WriteInt(m_angleresolution);
   if (rc) rc = file.WriteInt(m_fontindex);
 
-  if (rc) rc = file.WriteDouble(m_textheight);
+  if (rc) rc = file.WriteDouble(m_textheight * ds);
 
   // added 1/13/05 ver 1.2
   if (rc) rc = file.WriteDouble(m_lengthfactor);
@@ -639,10 +698,10 @@ ON_BOOL32 ON_DimStyle::Write(
   if (rc) rc = file.WriteUuid(m_dimstyle_id);
 
   // Added Dec 28, 05 ver 1.4
-  if (rc) rc = file.WriteDouble(m_dimextension);
+  if (rc) rc = file.WriteDouble(m_dimextension * ds);
 
   // Added Mar 23 06 ver 1.5
-  if (rc) rc = file.WriteDouble(m_leaderarrowsize);
+  if (rc) rc = file.WriteDouble(m_leaderarrowsize * ds);
   if (rc) rc = file.WriteInt(m_leaderarrowtype);
   if (rc) rc = file.WriteBool(m_bSuppressExtension1);
   if (rc) rc = file.WriteBool(m_bSuppressExtension2);
@@ -654,7 +713,7 @@ ON_BOOL32 ON_DimStyle::Read(
        ON_BinaryArchive& file // restore definition from binary archive
      )
 {
-  SetDefaults();
+  SetDefaultsNoExtension();
 
   int major_version = 0;
   int minor_version = 0;
@@ -954,7 +1013,8 @@ void ON_DimStyle::SetLengthactor( double factor)
 void ON_DimStyle::SetLengthFactor( double factor)
 {
   m_lengthfactor = factor;
-  ValidateField( fn_lengthfactor);
+  //ValidateField( fn_lengthfactor);
+  m_valid |= ( 1 << fn_lengthfactor);
 }
 
 bool ON_DimStyle::Alternate() const
@@ -977,7 +1037,8 @@ void ON_DimStyle::SetAlternateLengthactor( double factor)
 void ON_DimStyle::SetAlternateLengthFactor( double factor)
 {
   m_alternate_lengthfactor = factor;
-  ValidateField( fn_alternate_lengthfactor);
+  //ValidateField( fn_alternate_lengthfactor);
+  m_valid |= ( 1 << fn_alternate_lengthfactor);
 }
 
 int ON_DimStyle::AlternateLengthFormat() const
@@ -1180,7 +1241,7 @@ void ON_DimStyle::SetDimExtension( const double e)
 
 bool ON_DimStyle::IsFieldOverride( ON_DimStyle::eField field_id) const
 {
-  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, false);
+  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
     return pDE->IsFieldOverride( field_id);
 
@@ -1189,14 +1250,14 @@ bool ON_DimStyle::IsFieldOverride( ON_DimStyle::eField field_id) const
 
 void ON_DimStyle::SetFieldOverride(  ON_DimStyle::eField field_id, bool bOverride)
 {
-  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, true);
+  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
     pDE->SetFieldOverride( field_id, bOverride);
 }
   
 bool ON_DimStyle::HasOverrides() const 
 {
-  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, true);
+  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
   {
     for( int i = 0; i < pDE->m_valid_fields.Count(); i++)
@@ -1211,8 +1272,8 @@ bool ON_DimStyle::HasOverrides() const
 bool ON_DimStyle::OverrideFields( const ON_DimStyle& src, const ON_DimStyle& parent)
 {
   bool rc = false;
-  const ON_DimStyleExtra* pDEsrc = ON_DimStyleExtra::DimStyleExtension( &src, true);
-  ON_DimStyleExtra* pDE    = ON_DimStyleExtra::DimStyleExtension( this, true);
+  const ON_DimStyleExtra* pDEsrc = ON_DimStyleExtra::DimStyleExtension( &src);
+  ON_DimStyleExtra* pDE    = ON_DimStyleExtra::DimStyleExtension( this);
   if( pDEsrc && pDE)
   {
     for( int i = 0; i < pDEsrc->eFieldCount; i++)
@@ -1320,9 +1381,9 @@ bool ON_DimStyle::OverrideFields( const ON_DimStyle& src, const ON_DimStyle& par
         break;
       case fn_lengthfactor:
         if( pDEsrc->m_valid_fields[i])
-          SetLengthactor( src.LengthFactor());
+          SetLengthFactor( src.LengthFactor());
         else
-          SetLengthactor( parent.LengthFactor());
+          SetLengthFactor( parent.LengthFactor());
         rc = true;
         break;
       case fn_bAlternate:
@@ -1516,7 +1577,7 @@ bool ON_DimStyle::OverrideFields( const ON_DimStyle& src, const ON_DimStyle& par
 bool ON_DimStyle::InheritFields( const ON_DimStyle& parent)
 {
   bool rc = false;
-  const ON_DimStyleExtra* pDE       = ON_DimStyleExtra::DimStyleExtension( this, true);
+  const ON_DimStyleExtra* pDE       = ON_DimStyleExtra::DimStyleExtension( this);
   if( pDE)
   {
     for( int i = 0; i < pDE->eFieldCount; i++)
@@ -1624,7 +1685,7 @@ bool ON_DimStyle::InheritFields( const ON_DimStyle& parent)
       case fn_lengthfactor:
         if( !pDE->m_valid_fields[i])
         {
-          SetLengthactor( parent.LengthFactor());
+          SetLengthFactor( parent.LengthFactor());
           rc = true;
         }
         break;
@@ -1820,7 +1881,7 @@ bool ON_DimStyle::InheritFields( const ON_DimStyle& parent)
 bool ON_DimStyle::IsChildDimstyle() const
 {
 
-  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, false);
+  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE && pDE->m_parent_dimstyle != ON_nil_uuid)
     return true;
   else
@@ -1829,7 +1890,7 @@ bool ON_DimStyle::IsChildDimstyle() const
 
 bool ON_DimStyle::IsChildOf( ON_UUID& parent_uuid) const
 {
-  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, false);
+  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE && parent_uuid != ON_nil_uuid && pDE->m_parent_dimstyle == parent_uuid)
     return true;
   else
@@ -1838,7 +1899,7 @@ bool ON_DimStyle::IsChildOf( ON_UUID& parent_uuid) const
 
 void ON_DimStyle::SetParent( ON_UUID& parent_uuid)
 {
-  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, true);
+  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
     pDE->m_parent_dimstyle = parent_uuid;
 }
@@ -1866,7 +1927,7 @@ void ON_DimStyleExtra::SetFieldOverride( int field_id, bool bOverride)
 //  4: Basic
 int ON_DimStyle::ToleranceStyle() const
 {
-  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, false);
+  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
     return pDE->ToleranceStyle();
   else
@@ -1874,7 +1935,7 @@ int ON_DimStyle::ToleranceStyle() const
 }
 int ON_DimStyle::ToleranceResolution() const
 {
-  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, false);
+  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
     return pDE->ToleranceResolution();
   else
@@ -1882,7 +1943,7 @@ int ON_DimStyle::ToleranceResolution() const
 }
 double ON_DimStyle::ToleranceUpperValue() const
 {
-  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, false);
+  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
     return pDE->ToleranceUpperValue();
   else
@@ -1890,7 +1951,7 @@ double ON_DimStyle::ToleranceUpperValue() const
 }
 double ON_DimStyle::ToleranceLowerValue() const
 {
-  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, false);
+  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
     return pDE->ToleranceLowerValue();
   else
@@ -1898,7 +1959,7 @@ double ON_DimStyle::ToleranceLowerValue() const
 }
 double ON_DimStyle::ToleranceHeightScale() const
 {
-  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, false);
+  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
     return pDE->ToleranceHeightScale();
   else
@@ -1906,7 +1967,7 @@ double ON_DimStyle::ToleranceHeightScale() const
 }
 double ON_DimStyle::BaselineSpacing() const
 {
-  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, false);
+  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
     return pDE->BaselineSpacing();
   else
@@ -1963,7 +2024,7 @@ void ON_DimStyle::Scale( double scale)
     m_dimextension    *= scale;
     m_leaderarrowsize *= scale;
 
-    ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, true);
+    ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
     if(pDE)
     {
       pDE->Scale( scale);
@@ -1973,7 +2034,7 @@ void ON_DimStyle::Scale( double scale)
 
 void ON_DimStyle::SetToleranceStyle( int style)
 {
-  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, true);
+  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
   {
     pDE->SetToleranceStyle( style);
@@ -1981,7 +2042,7 @@ void ON_DimStyle::SetToleranceStyle( int style)
 }
 void ON_DimStyle::SetToleranceResolution( int resolution)
 {
-  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, true);
+  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
   {
     pDE->SetToleranceResolution( resolution);
@@ -1989,7 +2050,7 @@ void ON_DimStyle::SetToleranceResolution( int resolution)
 }
 void ON_DimStyle::SetToleranceUpperValue( double upper_value)
 {
-  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, true);
+  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
   {
     pDE->SetToleranceUpperValue( upper_value);
@@ -1997,7 +2058,7 @@ void ON_DimStyle::SetToleranceUpperValue( double upper_value)
 }
 void ON_DimStyle::SetToleranceLowerValue( double lower_value)
 {
-  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, true);
+  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
   {
     pDE->SetToleranceLowerValue( lower_value);
@@ -2005,7 +2066,7 @@ void ON_DimStyle::SetToleranceLowerValue( double lower_value)
 }
 void ON_DimStyle::SetToleranceHeightScale( double scale)
 {
-  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, true);
+  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
   {
     pDE->SetToleranceHeightScale( scale);
@@ -2013,7 +2074,7 @@ void ON_DimStyle::SetToleranceHeightScale( double scale)
 }
 void ON_DimStyle::SetBaselineSpacing( double spacing)
 {
-  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, true);
+  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
   {
     pDE->SetBaselineSpacing( spacing);
@@ -2022,7 +2083,7 @@ void ON_DimStyle::SetBaselineSpacing( double spacing)
 
 bool ON_DimStyle::DrawTextMask() const
 {
-  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, false);
+  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
     return pDE->DrawTextMask();
   else
@@ -2031,14 +2092,14 @@ bool ON_DimStyle::DrawTextMask() const
 
 void ON_DimStyle::SetDrawTextMask(bool bDraw)
 {
-  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, true);
+  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
     pDE->SetDrawTextMask(bDraw);
 }
 
 int ON_DimStyle::MaskColorSource() const
 {
-  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, false);
+  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
     return pDE->MaskColorSource();
   else
@@ -2047,14 +2108,14 @@ int ON_DimStyle::MaskColorSource() const
 
 void ON_DimStyle::SetMaskColorSource(int source)
 {
-  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, true);
+  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
     pDE->SetMaskColorSource(source);
 }
 
 ON_Color ON_DimStyle::MaskColor() const
 {
-  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, false);
+  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
     return pDE->MaskColor();
   else
@@ -2063,7 +2124,7 @@ ON_Color ON_DimStyle::MaskColor() const
 
 void ON_DimStyle::SetMaskColor(ON_Color color)
 {
-  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, true);
+  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
     pDE->SetMaskColor(color);
 }
@@ -2078,14 +2139,14 @@ double ON_DimStyle::MaskOffsetFactor() const
 
 void ON_DimStyle::SetDimScale(double scale)
 {
-  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, true);
+  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
     pDE->SetDimScale(scale);
 }
 
 double ON_DimStyle::DimScale() const
 {
-  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, false);
+  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE) // && pDE->DimScaleSource() == 1)
       return pDE->DimScale();
   else
@@ -2094,19 +2155,38 @@ double ON_DimStyle::DimScale() const
 
 void ON_DimStyle::SetDimScaleSource(int source)
 {
-  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, true);
+  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
     pDE->SetDimScaleSource(source);
 }
 
 int ON_DimStyle::DimScaleSource() const
 {
-  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this, false);
+  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
   if(pDE)
     return pDE->DimScaleSource();
   else
     return 0;
 }
+
+void ON_DimStyle::SetSourceDimstyle(ON_UUID source_uuid)
+{
+  ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
+  if(pDE)
+    pDE->SetSourceDimstyle(source_uuid);
+}
+
+ON_UUID ON_DimStyle::SourceDimstyle() const
+{
+  const ON_DimStyleExtra* pDE = ON_DimStyleExtra::DimStyleExtension( this);
+  if(pDE)
+    return pDE->SourceDimstyle();
+  else
+    return ON_nil_uuid;
+}
+
+
+
 
 // This function is temporary and will be removed next time the SDK can be modified.
 class ON_DimStyleExtra* ON_DimStyle::DimStyleExtension()
@@ -2150,8 +2230,8 @@ bool ON_DimStyle::CompareFields(const ON_DimStyle& other) const
      (m_bSuppressExtension2        != other.m_bSuppressExtension2))
     return false;
 
-  const ON_DimStyleExtra* pDEo = ON_DimStyleExtra::DimStyleExtension(&other,false);
-  const ON_DimStyleExtra* pDE  = ON_DimStyleExtra::DimStyleExtension(this,false);
+  const ON_DimStyleExtra* pDEo = ON_DimStyleExtra::DimStyleExtension(&other);
+  const ON_DimStyleExtra* pDE  = ON_DimStyleExtra::DimStyleExtension(this);
   if((pDEo == 0 && pDE != 0) || (pDEo != 0 && pDE == 0))
     return false;
   if(pDE != 0)

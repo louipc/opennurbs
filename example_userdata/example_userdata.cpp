@@ -1,5 +1,7 @@
+// uncomment the "ON_DLL_IMPORTS" define to use opennurbs as a Windows DLL
+//#define ON_DLL_IMPORTS
 #include "../opennurbs.h"
-#include "../opennurbs_staticlib_linking_pragmas.h"
+#include "../examples_linking_pragmas.h"
 
 // This example demonstrates how to attach customized "user data"
 // to any class derived from ON_Object.  In particular, you can

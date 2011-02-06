@@ -28,105 +28,6 @@
 #pragma warning( pop )
 #endif
 
-////////////////////////////////////////////////////////////////////////////////
-//
-// When openNURBS is used as a MS Windows DLL, it is possible 
-// for new/delete to allocate memory in one executable and delete
-// it in another.  Because MS Windows has incompatible memory 
-// managers in its plethora of C libraries and the choice of which
-// C library actually gets used depends on the code generation 
-// options you choose,  we get lots of support questions asking
-// about hard to trace crashes.
-//
-// If you are using openNURBS as a Windows DLL, you are sure you know
-// what you are doing, and you promise never to ask for support, then
-// feel free to delete these overrides.
-//
-//
-#pragma message( " --- OpenNURBS overriding ON_Object new and delete" )
-
-void* ON_Object::operator new(size_t sz)
-{
-  // ON_Object new
-
-  // The else "sz?sz:1" is there because section 3.7.3.1, 
-  // paragraph 2 of the C++ "standard" says something along
-  // the lines of:
-  //
-  //   The function shall return the address of the start of a 
-  //   block of storage whose length in bytes shall be at least
-  //   as large as the requested size. There are no constraints
-  //   on the contents of the allocated storage on return from 
-  //   the allocation function. The order, contiguity, and initial
-  //   value of storage allocated by successive calls to an 
-  //   allocation function is unspecified. The pointer returned 
-  //   shall be suitably aligned so that it can be converted to a 
-  //   pointer of any complete object type and then used to
-  //   access the object or array in the storage allocated (until
-  //   the storage is explicitly deallocated by a call to a 
-  //   corresponding deallocation function). If the size of the 
-  //   space requested is zero, the value returned shall not be a
-  //   null pointer value. The results of dereferencing a pointer
-  //   returned as a request for zero size are undefined.
-  
-  return onmalloc(sz?sz:1);
-}
-
-void ON_Object::operator delete(void* p)
-{
-  // ON_Object delete
-  onfree(p);
-}
-
-void* ON_Object::operator new[] (size_t sz)
-{
-  // ON_Object array new
-
-  // The else "sz?sz:1" is there because section 3.7.3.1, 
-  // paragraph 2 of the C++ "standard" says something along
-  // the lines of:
-  //
-  //   The function shall return the address of the start of a 
-  //   block of storage whose length in bytes shall be at least
-  //   as large as the requested size. There are no constraints
-  //   on the contents of the allocated storage on return from 
-  //   the allocation function. The order, contiguity, and initial
-  //   value of storage allocated by successive calls to an 
-  //   allocation function is unspecified. The pointer returned 
-  //   shall be suitably aligned so that it can be converted to a 
-  //   pointer of any complete object type and then used to
-  //   access the object or array in the storage allocated (until
-  //   the storage is explicitly deallocated by a call to a 
-  //   corresponding deallocation function). If the size of the 
-  //   space requested is zero, the value returned shall not be a
-  //   null pointer value. The results of dereferencing a pointer
-  //   returned as a request for zero size are undefined.
-  
-  return onmalloc(sz?sz:1);
-}
-
-void ON_Object::operator delete[] (void* p)
-{
-  // ON_Object array delete
-  onfree(p);
-}
-
-void* ON_Object::operator new(size_t, void* p)
-{
-  // ON_Object placement new
-  return p;
-}
-
-void ON_Object::operator delete(void*, void*)
-{
-  // ON_Object placement delete
-  return;
-}
-
-//
-//
-////////////////////////////////////////////////////////////////////////////////
-
 #endif
 
 const ON_UUID ON_nil_uuid = {0,0,0,{0,0,0,0,0,0,0,0}};
@@ -598,7 +499,7 @@ void ON::Begin()
 
 
 #if !defined(ON_DLL_EXPORTS)
-  // Some statically linked library optimization discard
+  // Some statically linked library optimizations discard
   // object code that is not explicitly referenced.
   // By explicitly calling all the ON_Object::Cast overrides,
   // we can insure that the class definitions get linked in
@@ -609,58 +510,94 @@ void ON::Begin()
   {
     bRunning = true;
     const ON_Object* p=0;
-    ON_Annotation::Cast(p);
-    ON_Annotation2::Cast(p);
-    ON_Bitmap::Cast(p);
-    ON_Curve::Cast(p);
-    ON_Geometry::Cast(p);
+
     ON_Object::Cast(p);
-    ON_Surface::Cast(p);
-    ON_UserData::Cast(p);
+    ON_3dmObjectAttributes::Cast(p);
+    ON_Bitmap::Cast(p);
+    ON_EmbeddedBitmap::Cast(p);
+    ON_WindowsBitmap::Cast(p);
+    ON_WindowsBitmapEx::Cast(p);
+    ON_DimStyle::Cast(p);
+    ON_DocumentUserStringList::Cast(p);
+    ON_Font::Cast(p);
+    ON_Geometry::Cast(p);
+    ON_Annotation::Cast(p);
+    ON_AngularDimension::Cast(p);
+    ON_Leader::Cast(p);
     ON_LinearDimension::Cast(p);
     ON_RadialDimension::Cast(p);
-    ON_AngularDimension::Cast(p);
     ON_TextEntity::Cast(p);
-    ON_Leader::Cast(p);
-    ON_AnnotationTextDot::Cast(p);
-    ON_AnnotationArrow::Cast(p);
-    ON_LinearDimension2::Cast(p);
-    ON_RadialDimension2::Cast(p);
+    ON_Annotation2::Cast(p);
     ON_AngularDimension2::Cast(p);
-    ON_TextEntity2::Cast(p);
     ON_Leader2::Cast(p);
-    ON_TextDot::Cast(p);
-    ON_ArcCurve::Cast(p);
-    ON_WindowsBitmap::Cast(p);
-    ON_BrepVertex::Cast(p);
-    ON_BrepEdge::Cast(p);
-    ON_BrepTrim::Cast(p);
-    ON_BrepLoop::Cast(p);
-    ON_BrepFace::Cast(p);
+    ON_LinearDimension2::Cast(p);
+    ON_OrdinateDimension2::Cast(p);
+    ON_RadialDimension2::Cast(p);
+    ON_TextEntity2::Cast(p);
+    ON_AnnotationArrow::Cast(p);
     ON_Brep::Cast(p);
+    ON_BrepLoop::Cast(p);
+    ON_Curve::Cast(p);
+    ON_ArcCurve::Cast(p);
+    //ON__OBSOLETE__CircleCurve::Cast(p);
     ON_CurveOnSurface::Cast(p);
     ON_CurveProxy::Cast(p);
-    ON_DimStyle::Cast(p);
-    ON_Font::Cast(p);
-    ON_Group::Cast(p);
-    ON_Layer::Cast(p);
-    ON_Light::Cast(p);
+    ON_BrepEdge::Cast(p);
+    ON_BrepTrim::Cast(p);
+    //ON_PolyEdgeSegment::Cast(p);
     ON_LineCurve::Cast(p);
-    ON_Material::Cast(p);
-    ON_Mesh::Cast(p);
     ON_NurbsCurve::Cast(p);
+    ON_PolyCurve::Cast(p);
+    //ON_PolyEdgeCurve::Cast(p);
+    ON_PolylineCurve::Cast(p);
+    ON_DetailView::Cast(p);
+    ON_Hatch::Cast(p);
+    ON_InstanceDefinition::Cast(p);
+    ON_InstanceRef::Cast(p);
+    ON_Light::Cast(p);
+    ON_Mesh::Cast(p);
+    ON_MeshEdgeRef::Cast(p);
+    ON_MeshFaceRef::Cast(p);
+    ON_MeshVertexRef::Cast(p);
+    ON_MorphControl::Cast(p);
+    ON_NurbsCage::Cast(p);
+    ON_Point::Cast(p);
+    ON_AnnotationTextDot::Cast(p);
+    ON_BrepVertex::Cast(p);
+    ON_PointCloud::Cast(p);
+    ON_PointGrid::Cast(p);
+    ON_Surface::Cast(p);
+    ON_Extrusion::Cast(p);
     ON_NurbsSurface::Cast(p);
     ON_PlaneSurface::Cast(p);
-    ON_PointCloud::Cast(p);
-    ON_Point::Cast(p);
-    ON_PointGrid::Cast(p);
-    ON_PolyCurve::Cast(p);
-    ON_PolylineCurve::Cast(p);
+    ON_ClippingPlaneSurface::Cast(p);
     ON_RevSurface::Cast(p);
     ON_SumSurface::Cast(p);
     ON_SurfaceProxy::Cast(p);
-    ON_UnknownUserData::Cast(p);
+    ON_BrepFace::Cast(p);
+    ON_OffsetSurface::Cast(p);
+    ON_TextDot::Cast(p);
     ON_Viewport::Cast(p);
+    ON_Group::Cast(p);
+    ON_HatchPattern::Cast(p);
+    ON_HistoryRecord::Cast(p);
+    ON_Layer::Cast(p);
+    ON_Linetype::Cast(p);
+    ON_Material::Cast(p);
+    ON_Texture::Cast(p);
+    ON_TextureMapping::Cast(p);
+    ON_UserData::Cast(p);
+    //ON__LayerExtensions::Cast(p);
+    //ON_AngularDimension2Extra::Cast(p);
+    //ON_AnnotationTextFormula::Cast(p);
+    //ON_DimensionExtra::Cast(p);
+    //ON_DimStyleExtra::Cast(p);
+    //ON_HatchExtra::Cast(p);
+    //ON_MeshDoubleVertices::Cast(p);
+    //ON_MeshNgonUserData::Cast(p);
+    ON_TextExtra::Cast(p);
+    ON_UnknownUserData::Cast(p);
+    ON_UserStringList::Cast(p);
   }
 #endif
 }
@@ -1760,27 +1697,21 @@ void ON_Object::DestroyRuntimeCache( bool bDelete )
 
 void ON_Curve::DestroyRuntimeCache( bool bDelete )
 {
-  if ( m_ctree ) 
-  {
 #if defined(OPENNURBS_PLUS_INC_)
-    if ( bDelete )
-      delete m_ctree;
-#endif
-    m_ctree = 0;
+  ON_CurveTree* ctree = ON_PointerSleepLock_Set(ON_CurveTree,m_ctree,0);
+  if ( 0 != ctree && bDelete ) 
+  {
+    delete ctree;
   }
+#else
+  m_ctree = 0;
+#endif
 }
 
 
 void ON_CurveProxy::DestroyRuntimeCache( bool bDelete )
 {
-  if ( m_ctree ) 
-  {
-#if defined(OPENNURBS_PLUS_INC_)
-    if ( bDelete )
-      delete m_ctree;
-#endif
-    m_ctree = 0;
-  }
+  ON_Curve::DestroyRuntimeCache(bDelete);
   if ( 0 != m_real_curve && m_real_curve != this )
   {
     ON_Curve* curve = const_cast<ON_Curve*>(m_real_curve);
@@ -1789,30 +1720,22 @@ void ON_CurveProxy::DestroyRuntimeCache( bool bDelete )
   }
 }
 
-
 void ON_Surface::DestroyRuntimeCache( bool bDelete )
 {
-  if ( m_stree ) 
-  {
 #if defined(OPENNURBS_PLUS_INC_)
-    if ( bDelete )
-      delete m_stree;
-#endif
-    m_stree = 0;
+  ON_SurfaceTree* stree = ON_PointerSleepLock_Set(ON_SurfaceTree,m_stree,0);
+  if ( 0 != stree && bDelete ) 
+  {
+    delete stree;
   }
+#else
+  m_stree = 0;
+#endif
 }
-
 
 void ON_SurfaceProxy::DestroyRuntimeCache( bool bDelete )
 {
-  if ( m_stree ) 
-  {
-#if defined(OPENNURBS_PLUS_INC_)
-    if ( bDelete )
-      delete m_stree;
-#endif
-    m_stree = 0;
-  }
+  ON_Surface::DestroyRuntimeCache( bDelete );
   if ( 0 != m_surface && m_surface != this )
   {
     ON_Surface* surface = const_cast<ON_Surface*>(m_surface);

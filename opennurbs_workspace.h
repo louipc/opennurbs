@@ -341,13 +341,29 @@ public:
     ptr - [in] pointer returned by a Get...() or Grow()
                call to this ON_Workspace.
   Returns:
-    True if the pointer was successfully freed.
+    True if the pointer was successfully found and removed
+    from this ON_Workspace.
   See Also:
     ON_Workspace::~ON_Workspace
     ON_Workspace::GetMemory
-    ON_Workspace::GrowMemory
+    ON_Workspace::KeepAllMemory
   */
   ON_BOOL32 KeepMemory( void* ptr );
+
+  /*
+  Description:
+    Calling KeepAllMemory() has the same effect as calling
+    KeepMemory(p) for every active allocation in the workspace.
+    After calling KeepAllMemory(), you can no longer use
+    Grow...() on the pointers and you are responsible 
+    for using onfree() to release the memory when it is no
+    longer needed.
+  See Also:
+    ON_Workspace::~ON_Workspace
+    ON_Workspace::GetMemory
+    ON_Workspace::KeepMemory
+  */
+  void KeepAllMemory();
 
   /*
   Description:

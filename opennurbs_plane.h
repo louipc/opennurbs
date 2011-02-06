@@ -55,7 +55,7 @@ public:
         determines the xaxis direction.
     y_dir - [in] non-zero vector not parallel to x_dir
         that is used to determine the yaxis direction.
-        y_dir does not have to be perpindicular to x_dir.
+        y_dir does not have to be perpendicular to x_dir.
   */
   ON_Plane(
     const ON_3dPoint& origin,
@@ -124,7 +124,7 @@ public:
         determines the xaxis direction.
     y_dir - [in] non-zero vector not parallel to x_dir
         that is used to determine the yaxis direction.
-        y_dir does not have to be perpindicular to x_dir.
+        y_dir does not have to be perpendicular to x_dir.
   Returns:
     true if valid plane is created.
   */
@@ -286,16 +286,6 @@ public:
 				   double* min,    // min signed dist from plane to box 
            double* max     //max signed dist from plane to box
            ) const;
-
-  // OBSOLETE - use plane_equation.ValueAt()
-  //__declspec(deprecated) double EquationAt( 
-  //      const ON_3dPoint& point
-  //      ) const;
-
-  // OBSOLETE - use plane_equation.ValueAt()
-  //__declspec(deprecated) double EquationAt( 
-  //      const ON_4dPoint& point
-  //      ) const;
 
   /*
   Description:
@@ -489,12 +479,16 @@ public:
 class ON_CLASS ON_ClippingPlaneInfo
 {
 public:
-  // C++ defaults for construction, destruction, copys, and operator=
-  // work fine.
+  // C++ defaults for construction, destruction, copy construction
+  // and operator= work fine.
 
   ON_PlaneEquation m_plane_equation;
   ON_UUID m_plane_id;
   bool m_bEnabled;
+
+  void Default();
+  bool Write( ON_BinaryArchive& ) const;
+  bool Read( ON_BinaryArchive& );
 };
 
 class ON_CLASS ON_ClippingPlane

@@ -63,6 +63,163 @@ ON_BOOL32 ON_Layer::IsValid( ON_TextLog* text_log ) const
 }
 
 
+const wchar_t* ON_Layer::LayerNameReferenceDelimiter()
+{
+  return L" : ";
+}
+
+const wchar_t* ON_Layer::LayerNamePathDelimiter()
+{
+  return L"::";
+}
+
+static const wchar_t* LayerFullName( const wchar_t* s0 )
+{
+  if ( 0 == s0 || 0 == s0[0] )
+    return 0;
+  const wchar_t* t;
+  const wchar_t* d;
+  const wchar_t* d0 = ON_Layer::LayerNameReferenceDelimiter();
+  const wchar_t* s = s0;
+
+  // start at the beginning and look for a reference delimiter
+  while ( 0 != *s )
+  {
+    if ( *s == *d0 )
+    {
+      d = d0;
+      t = s;
+      while ( *t == *d)
+      {
+        t++;
+        d++;
+        if ( 0 == *d )
+        {
+          return ((0 != *t) ? t : 0);
+        }
+      }
+    }
+    s++;
+  }
+  return s0;
+}
+
+
+static const wchar_t* LayerLeafName( const wchar_t* s )
+{
+  // this static helper function assumes s0 does not being with "reference : ".
+  if ( 0 == s || 0 == s[0] )
+    return 0;
+  
+  const wchar_t* t;
+  const wchar_t* d;
+  const wchar_t* d0 = ON_Layer::LayerNamePathDelimiter();
+  const wchar_t* s0 = s;
+  
+  while ( 0 != *s0 )
+  {
+    if ( *s0 == *d0 )
+    {
+      // NOTE:
+      //  This code must work for a delimiter of length one or more
+      //  so the string returned by ON_Layer::LayerNamePathDelimiter()
+      //  can be adjusted as needed.
+      d = d0;
+      t = s0;
+      while ( *t == *d)
+      {
+        t++;
+        d++;
+        if ( 0 == *d )
+        {
+          if ( 0 == *t )
+            return 0;
+          s = t;
+          s0 = t-1;
+          break;
+        }
+      }
+    }
+    s0++;
+  }
+
+  return s;
+}
+
+
+
+bool ON_Layer::GetLeafName( const wchar_t* layer_name, ON_wString& leaf_name)
+{
+  const wchar_t* s0 = LayerFullName(layer_name);
+  const wchar_t* s1 = LayerLeafName( s0 );
+  if ( 0 != s1 && 0 != *s1 )
+  {
+    leaf_name = s1;
+    return true;
+  }
+  leaf_name.Empty();
+  return false;
+}
+
+bool ON_Layer::GetParentName( const wchar_t* layer_name, ON_wString& parent_path_name)
+{
+  const wchar_t* s0 = LayerFullName(layer_name);
+  const wchar_t* s1 = LayerLeafName( s0 );
+  if ( 0 != s1 && 0 != *s1 && s0 < s1 )
+  {
+    // back up over the delimiter
+    const wchar_t* d0 = ON_Layer::LayerNamePathDelimiter();
+    const wchar_t* d = d0;
+    while (*d)
+      d++;
+    while ( d > d0 && s0 < s1 && d[-1] == s1[-1] )
+    {
+      d--;
+      s1--;
+    }
+    if ( s0 < s1 )
+    {
+      parent_path_name = s0;
+      parent_path_name.SetLength(s1-s0);
+      return true;
+    }
+  }
+  parent_path_name.Empty();
+  return false;
+}
+
+bool ON_Layer::RemoveReferenceName( const wchar_t* layer_name, ON_wString& layer_path_name)
+{
+  const wchar_t* s = LayerFullName(layer_name);
+  if ( 0 != s && 0 != *s )
+  {
+    layer_path_name = s;
+    return true;
+  }
+  layer_path_name.Empty();
+  return false;
+}
+
+bool ON_Layer::GetReferenceName( const wchar_t* layer_name, ON_wString& reference_name)
+{
+  const wchar_t* s0 = layer_name;
+  const wchar_t* s1 = LayerFullName(layer_name);
+  if ( 0 != s1 && 0 != *s1 && s0 < s1 )
+  {
+    const wchar_t* d = ON_Layer::LayerNameReferenceDelimiter();
+    while ( *d++ && s0 < s1 )
+      s1--;
+    if ( 0 != *s1 && s0 < s1 )
+    {
+      reference_name = s0;
+      reference_name.SetLength(s1-s0);
+      return true;
+    }
+  }
+  reference_name.Empty();
+  return false;
+}
+
 void ON_Layer::Dump( ON_TextLog& dump ) const
 {
   const wchar_t* sName = LayerName();
@@ -1083,7 +1240,7 @@ double ON_Layer::PlotWeight( const ON_UUID& viewport_id ) const
     return m_plot_weight_mm;
   }
   ON__LayerPerViewSettings* vp_settings = ON__LayerExtensions::ViewportSettings( *this, viewport_id, false );
-  return (vp_settings && vp_settings->m_plot_weight_mm >= 0.0)
+  return (vp_settings && (vp_settings->m_plot_weight_mm >= 0.0 || -1.0 == vp_settings->m_plot_weight_mm) )
          ? vp_settings->m_plot_weight_mm
          : m_plot_weight_mm;
 }

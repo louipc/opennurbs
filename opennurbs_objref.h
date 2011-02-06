@@ -320,6 +320,7 @@ private:
   ON_Object* m__proxy1;
   ON_Object* m__proxy2;
   int* m__proxy_ref_count;
+  //ON__INT_PTR m_reserved;
 };
 
 #if defined(ON_DLL_TEMPLATE)

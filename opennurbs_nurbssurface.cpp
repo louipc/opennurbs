@@ -1393,7 +1393,6 @@ bool ON_NurbsSurface::GetNextDiscontinuity(
                   double curvature_tolerance
                   ) const
 {
-  // 28 Jan 2004 - untested code
   int tmp_hint[2];
   int tmp_dtype=0;
 
@@ -1420,16 +1419,13 @@ bool ON_NurbsSurface::GetNextDiscontinuity(
   if ( !t )
     t = &tmp_t;
   
-  // 20 March 2003 Dale Lear:
-  //     Make this work for locus style queries
-  ON::continuity input_c = c;
   if ( c == ON::C0_continuous )
     return false;
 
   if ( c == ON::C0_locus_continuous )
   {
     return ON_Surface::GetNextDiscontinuity( 
-      dir, input_c, t0, t1, t, hint, dtype, 
+      dir, c, t0, t1, t, hint, dtype, 
       cos_angle_tolerance, curvature_tolerance );
   }
   if ( t0 == t1 )
@@ -1437,12 +1433,14 @@ bool ON_NurbsSurface::GetNextDiscontinuity(
 
   // First test for parametric discontinuities.  If none are found
   // then we will look for locus discontinuities at ends
-  c = ON::ParametricContinuity(c);
+  if ( m_order[dir] <= 2 )
+    c = ON::PolylineContinuity(c);  // no need to look a zero 2nd derivatives
+  const ON::continuity input_c = c; // saved so we can tell if "locus" needs to be dealt with
+  c = ON::ParametricContinuity(c);  // strips "locus" from c
 
-  ON_BOOL32 bEv2ndDer = (    (c == ON::C2_continuous || c == ON::G2_continuous)
-                     && m_order[dir] > 2);
-  ON_BOOL32 bTestKappa = ( bEv2ndDer && c == ON::G2_continuous );
-  ON_BOOL32 bTestTangent = ( bTestKappa || c == ON::G1_continuous || c == ON::G2_continuous );
+  bool bEv2ndDer    = ( c == ON::C2_continuous || c == ON::G2_continuous || c == ON::Gsmooth_continuous );
+  bool bTestKappa   = ( bEv2ndDer && c != ON::C2_continuous );
+  bool bTestTangent = ( bTestKappa || c == ON::G1_continuous );
 
   int delta_ki = 1;
   int delta = ((bEv2ndDer) ? 3 : 2) - m_order[dir];
@@ -1570,8 +1568,10 @@ bool ON_NurbsSurface::GetNextDiscontinuity(
             }
             else if ( bTestKappa )
             {
-              d = (Km-Kp).Length();
-              if ( d > curvature_tolerance )
+              bool bIsCurvatureContinuous = ( ON::Gsmooth_continuous == c)
+                ? ON_IsGsmoothCurvatureContinuous(Km,Kp,cos_angle_tolerance,curvature_tolerance)
+                : ON_IsG2CurvatureContinuous(Km,Kp,cos_angle_tolerance,curvature_tolerance);
+              if ( !bIsCurvatureContinuous )
               {
                 *dtype = 2;
                 *t = m_knot[dir][ki];
@@ -1935,7 +1935,7 @@ bool ON_NurbsSurface::IsContinuous(
     double point_tolerance, // default=ON_ZERO_TOLERANCE
     double d1_tolerance, // default==ON_ZERO_TOLERANCE
     double d2_tolerance, // default==ON_ZERO_TOLERANCE
-    double cos_angle_tolerance, // default==0.99984769515639123915701155881391
+    double cos_angle_tolerance, // default==ON_DEFAULT_ANGLE_TOLERANCE_COSINE
     double curvature_tolerance  // default==ON_SQRT_EPSILON
     ) const
 {

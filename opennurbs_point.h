@@ -904,7 +904,7 @@ ON_WedgeProduct(		// signed area of the parallelagram.  Volume element.
 
 ON_DECL
 bool 
-ON_IsOrthogonalFrame( // true if X, Y are nonzero and mutually perpindicular
+ON_IsOrthogonalFrame( // true if X, Y are nonzero and mutually perpendicular
     const ON_2dVector&, // X
     const ON_2dVector&  // Y
     );
@@ -1179,7 +1179,7 @@ public:
     d = -(x*P.x + y*P.y + z*P.z).
   Parameters:
     P - [in] point on the plane
-    N - [in] vector perpindicular to the plane
+    N - [in] vector perpendicular to the plane
   Returns:
      true if input is valid.
   */
@@ -1197,6 +1197,40 @@ public:
   double ValueAt(ON_4dPoint P) const;
   double ValueAt(ON_3dVector P) const;
   double ValueAt(double x, double y, double z) const;
+
+  /*
+  Description:
+    Evaluate the plane at a list of point values.
+  Parameters:
+    Pcount - [in]
+      number of points
+    P - [in]
+      points
+    value - [in]
+      If not null, value[] must be an array of length at least Pcount.
+      The values will be stored in this array.  If null, the an array
+      will be allocated with onmalloc() and returned.
+    value_range - [out]
+      If not null, the range of values will be returned here.
+  Returns:
+    An array of Pcount values.  If the input parameter value was null,
+    then the array is allocated on the heap using onmalloc() and the 
+    caller is responsible for calling onfree() when finished.  If the 
+    input is not valid, null is returned.
+  */
+  double* ValueAt(
+        int Pcount,
+        const ON_3fPoint* P,
+        double* value,
+        double value_range[2]
+        ) const;
+
+  double* ValueAt(
+        int Pcount,
+        const ON_3dPoint* P,
+        double* value,
+        double value_range[2]
+        ) const;
 
   /*
   Description:
@@ -1476,7 +1510,7 @@ ON_TripleProduct(  // 3d triple product for old fashioned arrays
 
 ON_DECL
 bool 
-ON_IsOrthogonalFrame( // true if X, Y, Z are nonzero and mutually perpindicular
+ON_IsOrthogonalFrame( // true if X, Y, Z are nonzero and mutually perpendicular
     const ON_3dVector&, // X
     const ON_3dVector&, // Y
     const ON_3dVector&  // Z 

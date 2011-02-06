@@ -757,26 +757,26 @@ bool ON_SSX_EVENT::IsValid(
       return false;
 
     A = surfaceA->PointAt( m_pointA.x, m_pointA.y );
-    B = surfaceA->PointAt( m_pointB.x, m_pointB.y );
+    B = surfaceB->PointAt( m_pointB.x, m_pointB.y );
     dist = A.DistanceTo(m_point3d);
     if(dist>xtol)
     {
       if(text_log)
-        text_log->Print(" SurfaceA->PointAt( m_pointA).DistanceTo(m_point3d)=%g > intersection_tolerance = &g.\n", dist, xtol); 
+        text_log->Print(" SurfaceA->PointAt( m_pointA).DistanceTo(m_point3d)=%g > intersection_tolerance = %g.\n", dist, xtol); 
       rc = false;
     }
     dist = B.DistanceTo(m_point3d);
     if(dist>xtol)
     {
       if(text_log)
-        text_log->Print(" SurfaceB->PointAt( m_pointA).DistanceTo(m_point3d)=%g > intersection_tolerance = &g.\n", dist, xtol); 
+        text_log->Print(" SurfaceB->PointAt( m_pointA).DistanceTo(m_point3d)=%g > intersection_tolerance = %g.\n", dist, xtol); 
       rc = false;
     }
     dist = B.DistanceTo(A);
     if(dist>xtol)
     {
       if(text_log)
-        text_log->Print(" SurfaceB->PointAt( m_pointA).DistanceTo(SurfaceB->PointAt( m_pointB))=%g > intersection_tolerance = &g.\n", dist, xtol); 
+        text_log->Print(" SurfaceB->PointAt( m_pointA).DistanceTo(SurfaceB->PointAt( m_pointB))=%g > intersection_tolerance = %g.\n", dist, xtol); 
       rc = false;
     }
     break;
@@ -825,21 +825,21 @@ bool ON_SSX_EVENT::IsValid(
     if(dist>xtol)
     {
       if(text_log)
-        text_log->Print(" SurfaceA->PointAt( m_pointA).DistanceTo(m_point3d)=%g > intersection_tolerance = &g.\n", dist, xtol); 
+        text_log->Print(" SurfaceA->PointAt( m_pointA).DistanceTo(m_point3d)=%g > intersection_tolerance = %g.\n", dist, xtol); 
       rc = false;
     }
     dist = B.DistanceTo(m_point3d);
     if(dist>xtol)
     {
       if(text_log)
-        text_log->Print(" SurfaceB->PointAt( m_pointA).DistanceTo(m_point3d)=%g > intersection_tolerance = &g.\n", dist, xtol); 
+        text_log->Print(" SurfaceB->PointAt( m_pointA).DistanceTo(m_point3d)=%g > intersection_tolerance = %g.\n", dist, xtol); 
       rc = false;
     }
     dist = B.DistanceTo(A);
     if(dist>xtol)
     {
       if(text_log)
-        text_log->Print(" SurfaceB->PointAt( m_pointA).DistanceTo(SurfaceB->PointAt( m_pointB))=%g > intersection_tolerance = &g.\n", dist, xtol); 
+        text_log->Print(" SurfaceB->PointAt( m_pointA).DistanceTo(SurfaceB->PointAt( m_pointB))=%g > intersection_tolerance = %g.\n", dist, xtol); 
       rc = false;
     }
     break;

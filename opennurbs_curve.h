@@ -33,7 +33,7 @@ class ON_CurveTree;
 ////////////////////////////////////////////////////////////////
 
 
-class ON_MeshCurveParameters
+class ON_CLASS ON_MeshCurveParameters
 {
 public:
   ON_MeshCurveParameters();
@@ -334,6 +334,37 @@ public:
         double tolerance = ON_ZERO_TOLERANCE
         ) const;
 
+  /*
+  Description:
+  Parameters:
+    t - [in] curve parameter
+    plane - [in]
+      if not NULL, test is performed in this plane
+    arc - [out]
+      if not NULL and true is returned, then arc parameters
+       are filled in
+    tolerance - [in]
+      tolerance to use when checking
+    t0 - [out]
+      if not NULL, and then *t0 is set to the parameter
+      at the start of the G2 curve segment that was
+      tested.
+    t1 - [out]
+      if not NULL, and then *t0 is set to the parameter
+      at the start of the G2 curve segment that was
+      tested.
+  Returns:
+    True if the paramter t is on a arc segment of the curve.
+  */
+  bool IsArcAt( 
+    double t, 
+    const ON_Plane* plane = 0,
+    ON_Arc* arc = 0,
+    double tolerance = ON_ZERO_TOLERANCE,
+    double* t0 = 0, 
+    double* t1 = 0
+    ) const;
+
   virtual
   bool IsEllipse(
       const ON_Plane* plane = NULL,
@@ -464,7 +495,7 @@ public:
                   double* t,
                   int* hint=NULL,
                   int* dtype=NULL,
-                  double cos_angle_tolerance=0.99984769515639123915701155881391,
+                  double cos_angle_tolerance=ON_DEFAULT_ANGLE_TOLERANCE_COSINE,
                   double curvature_tolerance=ON_SQRT_EPSILON
                   ) const;
 
@@ -487,9 +518,16 @@ public:
         of the angle between two tangent vectors 
         is <= cos_angle_tolerance, then a G1 discontinuity is reported.
     curvature_tolerance - [in] (default = ON_SQRT_EPSILON) Used only when
-        c is ON::G2_continuous.  If K0 and K1 are curvatures evaluated
-        from above and below and |K0 - K1| > curvature_tolerance,
-        then a curvature discontinuity is reported.
+        c is ON::G2_continuous or ON::Gsmooth_continuous.  
+        ON::G2_continuous:
+          If K0 and K1 are curvatures evaluated
+          from above and below and |K0 - K1| > curvature_tolerance,
+          then a curvature discontinuity is reported.
+        ON::Gsmooth_continuous:
+          If K0 and K1 are curvatures evaluated from above and below
+          and the angle between K0 and K1 is at least twice angle tolerance
+          or ||K0| - |K1|| > (max(|K0|,|K1|) > curvature_tolerance,
+          then a curvature discontinuity is reported.
   Returns:
     true if the curve has at least the c type continuity at 
     the parameter t.
@@ -502,7 +540,7 @@ public:
     double point_tolerance=ON_ZERO_TOLERANCE,
     double d1_tolerance=ON_ZERO_TOLERANCE,
     double d2_tolerance=ON_ZERO_TOLERANCE,
-    double cos_angle_tolerance=0.99984769515639123915701155881391,
+    double cos_angle_tolerance=ON_DEFAULT_ANGLE_TOLERANCE_COSINE,
     double curvature_tolerance=ON_SQRT_EPSILON
     ) const;
 
@@ -951,6 +989,49 @@ public:
 
   /*
   Description:
+    Intersect this curve with an infinite plane.
+
+  Parameters:
+    plane_equation - [in]
+
+    x - [out] 
+      Intersection events are appended to this array.
+    intersection_tolerance - [in]  
+      If the distance from a point on this curve to the surface 
+      is <= intersection tolerance, then the point will be part 
+      of an intersection event, or there is an intersection event
+      the point leads to. If the input intersection_tolerance <= 0.0,
+      then 0.001 is used.
+
+    overlap_tolerance - [in] 
+      If the input overlap_tolerance <= 0.0, then 
+      2.0*intersection_tolerance is used.  Otherwise, overlap
+      tolerance must be >= intersection_tolerance.
+      In all cases, the intersection calculation is performed 
+      with an overlap_tolerance that is >= intersection_tolerance.
+      If t1 and t2 are curve parameters of intersection events 
+      and the distance from curve(t) to the surface 
+      is <= overlap_tolerance for every t1 <= t <= t2, then the 
+      event will be returned as an overlap event.
+       
+    curve_domain - [in] 
+      optional restriction on this curve's domain
+
+  Returns:
+    Number of intersection events appended to x.
+  */
+  int IntersectPlane( 
+          ON_PlaneEquation plane_equation,
+          ON_SimpleArray<ON_X_EVENT>& x,
+          double intersection_tolerance = 0.0,
+          double overlap_tolerance = 0.0,
+          const ON_Interval* curve_domain = 0
+          ) const;
+
+
+
+  /*
+  Description:
     Get the length of the curve.
   Parameters:
     length - [out] length returned here.
@@ -976,12 +1057,31 @@ public:
           const ON_Interval* sub_domain = NULL
           ) const;
 
-  // obsolete - use ON_Curve::GetLength
-  //__declspec(deprecated) ON_BOOL32 Length(
-  //        double* length,
-  //        double fractional_tolerance = 1.0e-8,
-  //        const ON_Interval* sub_domain = NULL
-  //        ) const;
+  /*
+  Parameters:
+    min_length -[in]
+      minimum length of a linear span
+    tolerance -[in]
+      distance tolerance to use when checking linearity.
+  Returns 
+    true if the span is a non-degenrate line.  This means:
+    - dimension = 2 or 3
+    - The length of the the line segment from the span's initial 
+      point to the span's control point is >= min_length.
+    - The maximum distance from the line segment to the span
+    is <= tolerance and the span increases monotonically
+    in the direction of the line segment.
+  */
+  bool FirstSpanIsLinear( 
+    double min_length,
+    double tolerance
+    ) const;
+
+  bool LastSpanIsLinear( 
+    double min_length,
+    double tolerance
+    ) const;
+
 
   /*
   Description:
@@ -1285,120 +1385,6 @@ public:
   ON_CurveTree* CreateCurveTree() const;
 
   /*
-  Description:
-    Calculate length mass properties of the curve.
-  Parameters:
-    mp - [out] 
-    bLength - [in] true to calculate length
-    bFirstMoments - [in] true to calculate volume first moments,
-                         length, and length centroid.
-    bSecondMoments - [in] true to calculate length second moments.
-    bProductMoments - [in] true to calculate length product moments.
-  Returns:
-    True if successful.
-  */
-  bool LengthMassProperties(
-    ON_MassProperties& mp, 
-    bool bLength = true,
-    bool bFirstMoments = true,
-    bool bSecondMoments = true,
-    bool bProductMoments = true,
-    double rel_tol = 1.0e-6,
-    double abs_tol = 1.0e-6
-    ) const;
-
-  /*
-  Description:
-    Calculate area mass properties of a curve.  The curve should
-    be planar.
-  Parameters:
-    base_point - [in] 
-      A point on the plane that contians the curve.  To get
-      the best results, the point should be in the near the
-      curve's centroid.
-      
-      When computing the area, area centroid, or area first
-      moments of a planar area whose boundary is defined by 
-      several curves, pass the same base_point and plane_normal
-      to each call to AreaMassProperties.  The base_point must 
-      be in the plane of the curves.  
-      
-      When computing the area second moments or area product
-      moments of a planar area whose boundary is defined by several
-      curves, you MUST pass the entire area's centroid as the
-      base_point and the input mp parameter must contain the
-      results of a previous call to 
-      AreaMassProperties(mp,true,true,false,false,base_point).
-      In particular, in this case, you need to make two sets of
-      calls; use first set to calculate the area centroid and
-      the second set calculate the second moments and product 
-      moments.
-    plane_normal - [in]
-      nonzero unit normal to the plane of integration.  If a closed
-      curve has counter clock-wise orientation with respect to
-      this normal, the area will be positive.  If the a closed curve
-      has clock-wise orientation with respect to this normal, the
-      area will be negative.
-    mp - [out] 
-    bArea - [in] true to calculate volume
-    bFirstMoments - [in] true to calculate area first moments,
-                         area, and area centroid.
-    bSecondMoments - [in] true to calculate area second moments.
-    bProductMoments - [in] true to calculate area product moments.
-  Returns:
-    True if successful.
-  */
-  bool AreaMassProperties(
-    ON_3dPoint base_point,
-    ON_3dVector plane_normal,
-    ON_MassProperties& mp, 
-    bool bArea = true,
-    bool bFirstMoments = true,
-    bool bSecondMoments = true,
-    bool bProductMoments = true,
-    double rel_tol = 1.0e-6,
-    double abs_tol = 1.0e-6
-    ) const;
-
-  /*
-  Description:
-    Mesh a curve into line segments.
-  Parameters:
-    mp - [in] 
-      Parameters that determine how the curve will be
-      approximated by a polyline.
-    polyline - [in]
-      If not NULL, the polyline approximation will be appended
-      to this polyline.
-    bSkipFirstPoint - [in]
-      If true, the starting point of the approximation
-      will not be added to the returned polyline.  This
-      parameter is useful when getting a polyline approximation
-      of a sequence of contiguous curves.
-    domain - [in]
-      If not NULL, the polyline approximation will be restricted
-      to this domain.
-  Returns:
-    A pointer to the polyline approximation.
-  */
-  class ON_PolylineCurve* MeshCurve( 
-    ON_MeshCurveParameters& mp,
-    ON_PolylineCurve* polyline,
-    bool bSkipFirstPoint,
-    const ON_Interval* domain
-    ) const;
-
-  // The non-const version of MeshCurve() exists because a version of the
-  // SDK was shipped with the "const" tag missing.  The non-const
-  // version does not modify this.
-  class ON_PolylineCurve* MeshCurve( 
-    ON_MeshCurveParameters& mp,
-    ON_PolylineCurve* polyline,
-    bool bSkipFirstPoint,
-    const ON_Interval* domain
-    );
-
-  /*
 	Description:
 		Lookup a parameter in the m_t array, optionally using a built in snap tolerance to 
 		snap a parameter value to an element of m_t.
@@ -1425,14 +1411,13 @@ public:
 		true if the t is exactly equal to (bEnableSnap==false), or within tolerance of
 		(bEnableSnap==true) m_t[index]. 
   */
-  protected:
+protected:
   bool ParameterSearch( double t, int& index, bool bEnableSnap, const ON_SimpleArray<double>& m_t, 
 															double RelTol=ON_SQRT_EPSILON) const;
 
-protected:
+private:
   // Runtime only - ignored by Read()/Write()
-  ON_CurveTree* CurveTreeHelper();
-  ON_CurveTree* m_ctree;
+  volatile ON_CurveTree* m_ctree;
 };
 
 #if defined(ON_DLL_TEMPLATE)

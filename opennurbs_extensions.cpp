@@ -2897,6 +2897,12 @@ bool ONX_Model::Read(
   // you can store anything you want in a user table.
   for(count=0;true;count++)
   {
+    if ( archive.Archive3dmVersion() <= 1 )
+    {
+      // no user tables in version 1 archives.
+      break;
+    }
+
     {
       ON__UINT32 tcode = 0;
       ON__INT64 big_value = 0;
@@ -3700,6 +3706,150 @@ void ONX_Model::GetUnusedLayerName( ON_wString& layer_name ) const
   layer_name = "Layer";
   return;
 }
+
+
+
+bool ONX_Model::SetDocumentUserString( const wchar_t* key, const wchar_t* string_value )
+{
+  // This is a slow and stupid way to set a single string,
+  // but I cannot modify the ONX_Model class to transparently
+  // store document user string information until I can break
+  // the public SDK in V6.
+  bool rc = false;
+  if ( 0 != key && 0 != key[0] )
+  {
+    ON_UUID doc_userstring_id = ON_DocumentUserStringList::m_ON_DocumentUserStringList_class_id.Uuid();
+    for (int i = 0; i < m_userdata_table.Count(); i++ )
+    {
+      ONX_Model_UserData& ud = m_userdata_table[i];
+      if ( ud.m_uuid == doc_userstring_id )
+      {
+        if ( TCODE_USER_RECORD == ud.m_goo.m_typecode && ud.m_goo.m_value != 0 )
+        {
+          ON_Read3dmBufferArchive ba( 
+            (unsigned int)ud.m_goo.m_value,
+            ud.m_goo.m_goo, 
+            false,
+            m_3dm_file_version,
+            m_3dm_opennurbs_version
+            );
+          ON_Object* p = 0;
+          if ( ba.ReadObject(&p) )
+          {
+            ON_DocumentUserStringList* sl = ON_DocumentUserStringList::Cast(p);
+            if ( 0 != sl )
+            {
+              // modify the user string information
+              rc = sl->SetUserString(key,string_value);
+              if ( rc )
+              {
+                // write the new informtion to a memory buffer
+                ON_Write3dmBufferArchive newgoo(ud.m_goo.m_value+1024,0,m_3dm_file_version,ON::Version());
+                if (    newgoo.BeginWrite3dmUserTable(doc_userstring_id,false,0,0)
+                     && newgoo.WriteObject(sl) 
+                     && newgoo.EndWrite3dmUserTable()
+                     )
+                {
+                  if (    newgoo.SizeOfArchive() > 0 
+                       && newgoo.SizeOfArchive() <= 0xFFFFFFFF // max goo size if 4GB because we used an unsigned int back in the ice ages
+                     )
+                  {
+                    // update the "goo"
+                    unsigned char* goo = (unsigned char*)newgoo.HarvestBuffer();
+                    unsigned int value = (unsigned int)newgoo.SizeOfArchive();
+                    if ( 0 != goo && value > 0 )
+                    {
+                      onfree(ud.m_goo.m_goo); // delete old "goo"
+                      ud.m_goo.m_value = (int)value;
+                      ud.m_goo.m_goo = goo;
+                    }
+                  }
+                }
+              }
+            }
+          }
+          if ( 0 != p )
+          {
+            delete p;
+            p = 0;
+          }
+        }
+        break;
+      }
+    }
+  }
+  return rc;
+}
+
+
+bool ONX_Model::GetDocumentUserString( const wchar_t* key, ON_wString& string_value ) const
+{
+  const wchar_t* s = 0;
+  if ( 0 != key && 0 != key[0] )
+  {
+    // This is a slow and stupid way to get a single string,
+    // but I cannot modify the ONX_Model class to transparently
+    // store document user string information until I can break
+    // the public SDK in V6.
+    ON_ClassArray<ON_UserString> user_strings;
+    GetDocumentUserStrings( user_strings );
+    for ( int i = 0; i < user_strings.Count(); i++ )
+    {
+      if ( !user_strings[i].m_key.CompareNoCase(key) )
+      {
+        s = user_strings[i].m_string_value;
+        break;
+      }
+    }
+  }
+  string_value = s;
+  return (0 != s);
+}
+
+
+int ONX_Model::GetDocumentUserStrings( ON_ClassArray<ON_UserString>& user_strings ) const
+{
+  int rc = 0;
+  // user strings are stored as ON_Object user strings on
+  // an ON_DocumentUserStringList object in a user table 
+  // with id = doc_userstring_id.
+  ON_UUID doc_userstring_id = ON_DocumentUserStringList::m_ON_DocumentUserStringList_class_id.Uuid();
+  for (int i = 0; i < m_userdata_table.Count(); i++ )
+  {
+    const ONX_Model_UserData& ud = m_userdata_table[i];
+    if ( ud.m_uuid == doc_userstring_id )
+    {
+      if ( TCODE_USER_RECORD == ud.m_goo.m_typecode && ud.m_goo.m_value != 0 )
+      {
+        ON_Read3dmBufferArchive ba( 
+          (unsigned int)ud.m_goo.m_value,
+          ud.m_goo.m_goo, 
+          false,
+          m_3dm_file_version,
+          m_3dm_opennurbs_version
+          );
+
+        ON_Object* p = 0;
+        if ( ba.ReadObject(&p) )
+        {
+          const ON_DocumentUserStringList* sl = ON_DocumentUserStringList::Cast(p);
+          if ( 0 != sl )
+          {
+            rc = sl->GetUserStrings(user_strings);
+          }
+        }
+        if ( 0 != p )
+        {
+          delete p;
+          p = 0;
+        }
+      }
+      break;
+    }
+  }
+  return rc;
+}
+
 
 static int AuditTextureMappingTableHelper( 
       ONX_Model& model,

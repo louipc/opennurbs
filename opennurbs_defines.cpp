@@ -1370,6 +1370,8 @@ ON::continuity ON::Continuity(int i)
   case G2_locus_continuous: c = G2_locus_continuous; break;
 
   case Cinfinity_continuous: c = Cinfinity_continuous; break;
+
+  case Gsmooth_continuous: c = Gsmooth_continuous; break;
   };
 
   return c;
@@ -1377,6 +1379,7 @@ ON::continuity ON::Continuity(int i)
 
 ON::continuity ON::ParametricContinuity(int i)
 {
+  // "erase" the locus setting.
   continuity c = unknown_continuity;
 
   switch(i)
@@ -1393,10 +1396,37 @@ ON::continuity ON::ParametricContinuity(int i)
   case G1_locus_continuous: c = G1_continuous; break;
   case G2_locus_continuous: c = G2_continuous; break;
   case Cinfinity_continuous: c = Cinfinity_continuous; break;
+  case Gsmooth_continuous: c = Gsmooth_continuous; break;
   };
 
   return c;
 }
+
+
+ON::continuity ON::PolylineContinuity(int i)
+{
+  continuity c = unknown_continuity;
+
+  switch(i)
+  {
+  case unknown_continuity: c = unknown_continuity; break;
+  case C0_continuous: c = C0_continuous; break;
+  case C1_continuous: c = C1_continuous; break;
+  case C2_continuous: c = C1_continuous; break;
+  case G1_continuous: c = G1_continuous; break;
+  case G2_continuous: c = G1_continuous; break;
+  case C0_locus_continuous: c = C0_locus_continuous; break;
+  case C1_locus_continuous: c = C1_locus_continuous; break;
+  case C2_locus_continuous: c = C1_locus_continuous; break;
+  case G1_locus_continuous: c = G1_locus_continuous; break;
+  case G2_locus_continuous: c = G1_locus_continuous; break;
+  case Cinfinity_continuous: c = C1_continuous; break;
+  case Gsmooth_continuous: c = G1_continuous; break;
+  };
+
+  return c;
+}
+
 
 ON::curve_style ON::CurveStyle(int i)
 {

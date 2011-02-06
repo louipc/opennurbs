@@ -33,6 +33,12 @@ ON_Color::ON_Color(int r, int g, int b, int a) : m_color(0)
   SetRGBA(r,g,b,a);
 }
 
+unsigned int ON_Color::WindowsRGB() const
+{
+  unsigned int RGB = ON_Color(Red(),Green(),Blue());
+  return RGB;
+}
+
 ON_Color::operator unsigned int() const
 {
   return m_color;

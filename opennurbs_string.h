@@ -356,6 +356,8 @@ public:
   */
   unsigned int SizeOf() const;
 
+  ON__UINT32 DataCRC(ON__UINT32 current_remainder) const;
+
 // Implementation
 public:
 	~ON_String();
@@ -658,6 +660,19 @@ public:
     (For use in ON_Object::SizeOf() overrides.
   */
   unsigned int SizeOf() const;
+
+  /*
+  Returns:
+    CRC of the string.
+  */
+  ON__UINT32 DataCRC(ON__UINT32 current_remainder) const;
+
+  /*
+  Returns:
+    CRC of the lower case version of the string. Useful
+    for case insensitive CRCs and hash codes.
+  */
+  ON__UINT32 DataCRCLower(ON__UINT32 current_remainder) const;
 
 // Implementation
 public:

@@ -21,6 +21,10 @@ extern "C" {
 #endif
 
 ON_DECL
+size_t ON_MemoryPageSize();
+
+
+ON_DECL
 void ON_MemoryManagerBegin(void);
 
 ON_DECL
@@ -189,129 +193,25 @@ void ON_MemoryManagerEnd(void);
 //   1: The call to malloc()/calloc()/realloc()/msize() is repeated.
 //  
 */
-/* error handling */
-typedef int (*ON_memory_error_handler)(int);
-ON_DECL
-ON_memory_error_handler ON_memory_error_register_handler( ON_memory_error_handler );
 
 /*
 /////////////////////////////////////////////////////////////
 //
-// Memory pool managment - by default these do nothing
-// See opennurbs_memory.c for instructions on using
-// custom memory managers
+// Heap tools
+//
 */
-
-typedef struct tagON_MEMORY_POOL ON_MEMORY_POOL;
-struct tagON_MEMORY_POOL
-{
-  char m__s[16]; // used to store the string "ON_MEMORY_POOL" so
-                 // we know what this chunk of memory contains
-                 // when debugging complex multi-pool memory leaks.
-  /*
-  // The default memory managment doesn't use pools.
-  // If you provide custom memory managment, you can use these fields.
-  //
-  // The comments below indicate how Rhino uses these fields.
-  */
-
-  /*
-  // If nonzero, points to a heap.  If zero, pool uses CRT
-  // malloc/calloc/realloc/free.
-  */
-  void* m_heap;
-
-  void (*m_EndThreadFunction)(ON_MEMORY_POOL* pThisPool);
-
-  /*
-  // If nonzero, this pool is associated with an active
-  // worker thead and m_thread_id is the thread's id.
-  */
-  unsigned long m_thread_id;
-
-  /*
-  // If nonzero, this pool is temporarily disabled and the
-  // main pool should be used for allocation requests that
-  // are sent to this pool.
-  // onmalloc(), oncalloc(), and onrealloc(0,sz).
-  */
-  unsigned long m_disabled;
-
-  /*
-  // Pool ID.
-  //  =  0: invalid value.
-  //  = -1: invalid value.
-  //  =  1: main application pool
-  //  >  1: pool is or was a worker thread pool.  
-  //        If m_thread_id is nonzero, then the worker thread 
-  //        is still active.  If m_thread_id is zero, the
-  //        worker thread successfully completed its task 
-  //        and created objects that use memory from this pool.
-  //  < -1: pool was a worker thread pool and the pool is no longer
-  //        in use.  If This can happen because the worker thread was
-  //        canceled or the worker thread finished and didn't leave
-  //        any memory allocated in the pool.  The value is the 
-  //        negative of the original pool id.
-  */
-  int   m_pool_id;
-
-  /*
-  // Worker thread flag.
-  //   If m_h is nonzero, m_i > 1, and m_j is nonzero, then
-  //   then a worker thread is running and will be canceled.
-  */
-  int   m_j;
-
-  /*
-  // If pool is a worker thread pool, this value is passed
-  // to ExitThread().
-  */
-  int   m_k;
-
-  /*
-  // Reserved for future use.
-  */
-  int   m_n;
-};
-
-ON_DECL
-ON_MEMORY_POOL* ON_CreateMemoryPool( void );
-
-ON_DECL
-void ON_DestroyMemoryPool( ON_MEMORY_POOL* );
-
-ON_DECL
-void ON_CompactMemoryPool( ON_MEMORY_POOL* );
-
-ON_DECL
-ON_MEMORY_POOL* ON_MainMemoryPool(void);
-
-ON_DECL
-ON_MEMORY_POOL* ON_WorkerMemoryPool(void);
-
-ON_DECL
-void ON_SetWorkerMemoryPool( ON_MEMORY_POOL* );
 
 ON_DECL
 void*  onmalloc( size_t );
 
 ON_DECL
-void*  onmalloc_from_pool( ON_MEMORY_POOL*, size_t );
-
-ON_DECL
 void*  oncalloc( size_t, size_t );
-
-ON_DECL
-void*  oncalloc_from_pool( ON_MEMORY_POOL*, size_t, size_t );
 
 ON_DECL
 void   onfree( void* );
 
 ON_DECL
 void*  onrealloc( void*, size_t );
-
-ON_DECL
-void*  onrealloc_from_pool( ON_MEMORY_POOL*, void*, size_t );
 
 ON_DECL
 size_t onmsize( const void* );
@@ -329,15 +229,6 @@ wchar_t* onwcsdup( const wchar_t* );
 
 ON_DECL
 unsigned char* onmbsdup( const unsigned char* );
-
-ON_DECL
-size_t onmemoryusecount(
-          size_t* malloc_count, 
-          size_t* realloc_count, 
-          size_t* free_count, 
-          size_t* pool_count 
-          );
-
 
 /* define to handle _TCHAR* ontcsdup( const _TCHAR* ) */
 #if defined(_UNICODE)

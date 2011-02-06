@@ -785,7 +785,7 @@ ON_3dVector ON_Light::Direction() const
 
 ON_3dVector ON_Light::PerpindicularDirection() const
 {
-  // returns a consistent vector perpindicular to the
+  // returns a consistent vector perpendicular to the
   // light's direction.  This vector is useful for
   // user interface display.
   ON_3dVector dir = m_direction;

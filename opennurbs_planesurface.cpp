@@ -305,7 +305,7 @@ bool ON_PlaneSurface::IsContinuous(
     double point_tolerance, // default=ON_ZERO_TOLERANCE
     double d1_tolerance, // default==ON_ZERO_TOLERANCE
     double d2_tolerance, // default==ON_ZERO_TOLERANCE
-    double cos_angle_tolerance, // default==0.99984769515639123915701155881391
+    double cos_angle_tolerance, // default==ON_DEFAULT_ANGLE_TOLERANCE_COSINE
     double curvature_tolerance  // default==ON_SQRT_EPSILON
     ) const
 {
@@ -1429,6 +1429,86 @@ ON_Interval ON_PlaneSurface::Extents(
   return dir ? m_extents[1] : m_extents[0];
 }
 
+bool ON_PlaneSurface::CreatePseudoInfinitePlane( 
+        ON_PlaneEquation plane_equation,
+        const ON_BoundingBox& bbox,
+        double padding
+        )
+{
+  ON_Plane plane(&plane_equation.x);
+  return CreatePseudoInfinitePlane(plane,bbox,padding);
+}
+
+bool ON_PlaneSurface::CreatePseudoInfinitePlane( 
+        const ON_Plane& plane,
+        const ON_BoundingBox& bbox,
+        double padding
+        )
+{
+  ON_3dPoint bbox_corners[8];
+  if ( !bbox.GetCorners(bbox_corners) )
+    return false;
+  return CreatePseudoInfinitePlane(plane,8,bbox_corners,padding);
+}
+
+bool ON_PlaneSurface::CreatePseudoInfinitePlane( 
+        const ON_Plane& plane,
+        int point_count,
+        const ON_3dPoint* point_list,
+        double padding
+        )
+{
+  if ( !plane.IsValid() )
+    return false;
+  if ( point_count < 1 )
+    return false;
+  if ( 0 == point_list )
+    return false;
+  if ( !ON_IsValid(padding) || padding < 0.0 )
+    return false;
+
+  ON_Interval plane_domain[2];
+  double s, t;
+  s = ON_UNSET_VALUE;
+  t = ON_UNSET_VALUE;
+  if ( !plane.ClosestPointTo( point_list[0], &s, &t ) || !ON_IsValid(s) || !ON_IsValid(t) )
+    return 0;
+  plane_domain[0].m_t[1] = plane_domain[0].m_t[0] = s;
+  plane_domain[1].m_t[1] = plane_domain[1].m_t[0] = t;
+  
+  for ( int i = 1; i < point_count; i++ )
+  {
+    s = ON_UNSET_VALUE;
+    t = ON_UNSET_VALUE;
+    if ( !plane.ClosestPointTo( point_list[i], &s, &t ) || !ON_IsValid(s) || !ON_IsValid(t) )
+      return 0;
+    if ( s < plane_domain[0].m_t[0] ) plane_domain[0].m_t[0] = s; else if ( s > plane_domain[0].m_t[1] ) plane_domain[0].m_t[1] = s;
+    if ( t < plane_domain[1].m_t[0] ) plane_domain[1].m_t[0] = t; else if ( t > plane_domain[1].m_t[1] ) plane_domain[1].m_t[1] = t;
+  }
+
+  s = padding*plane_domain[0].Length() + padding;
+  if ( !(s > 0.0) && !plane_domain[0].IsIncreasing() )
+    s = 1.0;
+  plane_domain[0].m_t[0] -= s;
+  plane_domain[0].m_t[1] += s;
+
+  t = padding*plane_domain[1].Length() + padding;
+  if ( !(t > 0.0) && !plane_domain[1].IsIncreasing() )
+    t = 1.0;
+  plane_domain[1].m_t[0] -= t;
+  plane_domain[1].m_t[1] += t;
+
+  m_plane = plane;
+  m_domain[0] = plane_domain[0];
+  m_domain[1] = plane_domain[1];
+  m_extents[0] = plane_domain[0];
+  m_extents[1] = plane_domain[1];
+
+  return IsValid()?true:false;
+}
+
+
+
 ON_BOOL32 ON_PlaneSurface::SetDomain( 
   int dir, 
   double t0, 
@@ -1444,6 +1524,71 @@ ON_BOOL32 ON_PlaneSurface::SetDomain(
   }
   return rc;
 }
+
+void ON_ClippingPlaneInfo::Default()
+{
+  memset(this,0,sizeof(*this));
+}
+
+bool ON_ClippingPlaneInfo::Write( ON_BinaryArchive& file ) const
+{
+  bool rc = file.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,0);
+  if (!rc)
+    return false;
+  
+  for(;;)
+  {
+    rc = file.WritePlaneEquation(m_plane_equation);
+    if (!rc) break;
+
+    rc = file.WriteUuid(m_plane_id);
+    if (!rc) break;
+
+    rc = file.WriteBool(m_bEnabled);
+    if (!rc) break;
+
+    break;
+  }
+
+  if ( !file.EndWrite3dmChunk() )
+    rc = false;
+
+  return rc;
+}
+
+bool ON_ClippingPlaneInfo::Read( ON_BinaryArchive& file )
+{
+  Default();
+
+  int major_version = 0;
+  int minor_version = 0;
+  bool rc = file.BeginRead3dmChunk(TCODE_ANONYMOUS_CHUNK,&major_version,&minor_version);
+  if (!rc)
+    return false;
+  
+  for(;;)
+  {
+    rc = (1 == major_version);
+    if (!rc) break;
+
+    rc = file.ReadPlaneEquation(m_plane_equation);
+    if (!rc) break;
+
+    rc = file.ReadUuid(m_plane_id);
+    if (!rc) break;
+
+    rc = file.ReadBool(&m_bEnabled);
+    if (!rc) break;
+
+    break;
+  }
+
+  if ( !file.EndRead3dmChunk() )
+    rc = false;
+
+  return rc;
+}
+
 
 void ON_ClippingPlane::Default()
 {

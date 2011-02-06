@@ -154,12 +154,30 @@ public:
   double     m_shine;        // 0.0 = none to GetMaxShine()=maximum
   double     m_transparency; // 0.0 = opaque to 1.0 = transparent (1.0-alpha)
 
-  bool       m_bShared;  // True means this material can be shared.  When an
-                         // object that uses this material is copied,
-                         // the new object will share the material.
-                         // False means this material is not shared.
-                         // When an object that uses this material is
-                         // duplicated.
+  bool m_bShared; // default = false.
+  // True means this material can be shared.  When an
+  // object that uses this material is copied,
+  // the new object will share the material.
+  // False means this material is not shared.
+  // When an object that uses this material is
+  // duplicated.
+
+  bool m_bDisableLighting; // default = false.
+  // True means render this object without
+  // applying any modulation based on lights.
+  // Basically, the diffuse, ambient, specular and
+  // emissive channels get combined additively, clamped,
+  // and then get treated as an emissive channel.
+  // Another way to think about it is when
+  // m_bDisableLighting is true, render the same way
+  // OpenGL does when ::glDisable( GL_LIGHTING ) is called.
+
+private:
+  unsigned char m_reserved1[2];
+#if defined(ON_64BIT_POINTER)
+  unsigned char m_reserved2[4];
+#endif
+public:
 
   /*
   Description:
@@ -301,6 +319,7 @@ public:
   ON_SimpleArray<ON_UuidIndex> m_material_channel;
 
   ON_UUID m_plugin_id; // ID of the last plug-in to modify this material
+
 private:
   static double m_max_shine;
   bool ReadV3Helper( ON_BinaryArchive& file, int minor_version );

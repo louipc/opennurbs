@@ -49,8 +49,14 @@ ON_COMPONENT_INDEX::TYPE ON_COMPONENT_INDEX::Type(int i)
   case polycurve_segment:  t = polycurve_segment;  break;
   case pointcloud_point:   t = pointcloud_point;   break;
   case group_member:       t = group_member;       break;
+
   case extrusion_bottom_profile: t = extrusion_bottom_profile; break;
   case extrusion_top_profile:    t = extrusion_top_profile;    break;
+  case extrusion_wall_edge:      t = extrusion_wall_edge;      break;
+  case extrusion_wall_surface:   t = extrusion_wall_surface;   break;
+  case extrusion_cap_surface:    t = extrusion_cap_surface;    break;
+  case extrusion_path:           t = extrusion_path;           break;
+
   case dim_linear_point:   t = dim_linear_point;   break;
   case dim_radial_point:   t = dim_radial_point;   break;
   case dim_angular_point:  t = dim_angular_point;  break;
@@ -158,7 +164,35 @@ bool  ON_COMPONENT_INDEX::IsGroupMemberComponentIndex() const
 
 bool  ON_COMPONENT_INDEX::IsExtrusionProfileComponentIndex() const
 {
-  return ( (ON_COMPONENT_INDEX::extrusion_bottom_profile  == m_type || ON_COMPONENT_INDEX::extrusion_top_profile == m_type) && m_index >= 0 );
+  return ( (   ON_COMPONENT_INDEX::extrusion_bottom_profile  == m_type 
+            || ON_COMPONENT_INDEX::extrusion_top_profile     == m_type
+            )
+            && m_index >= 0 
+         );
+}
+
+bool  ON_COMPONENT_INDEX::IsExtrusionPathComponentIndex() const
+{
+  return ( ON_COMPONENT_INDEX::extrusion_path  == m_type 
+           && m_index >= -1 
+           && m_index <= 1
+         );
+}
+
+bool  ON_COMPONENT_INDEX::IsExtrusionComponentIndex() const
+{
+  return ( (   ON_COMPONENT_INDEX::extrusion_bottom_profile  == m_type 
+            || ON_COMPONENT_INDEX::extrusion_top_profile     == m_type
+            || ON_COMPONENT_INDEX::extrusion_wall_edge       == m_type
+            || ON_COMPONENT_INDEX::extrusion_wall_surface    == m_type
+            || ON_COMPONENT_INDEX::extrusion_cap_surface     == m_type
+            || ON_COMPONENT_INDEX::extrusion_path            == m_type
+            )
+            && 
+            (  m_index >= 0 
+              || (-1 == m_index && ON_COMPONENT_INDEX::extrusion_path == m_type)
+            )
+         );
 }
 
 bool  ON_COMPONENT_INDEX::IsPointCloudComponentIndex() const
@@ -921,8 +955,7 @@ void ON_ObjRef::SetProxy(
   m__proxy2 = proxy2;
   if ( bCountReferences && (m__proxy1 || m__proxy2) )
   {
-    m__proxy_ref_count = (int*)onmalloc_from_pool( 
-          ON_MainMemoryPool(), 
+    m__proxy_ref_count = (int*)onmalloc( 
           sizeof(*m__proxy_ref_count) 
           );
     *m__proxy_ref_count = 1;

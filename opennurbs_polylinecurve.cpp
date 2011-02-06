@@ -539,6 +539,7 @@ bool ON_PolylineCurve::GetNextDiscontinuity(
 
       if ( dtype )
         *dtype = 0;
+      c = ON::PolylineContinuity(c);
       ON::continuity parametric_c = ON::ParametricContinuity(c);
       if ( segment_count >= 2 && parametric_c != ON::C0_continuous ) 
       {
@@ -586,7 +587,7 @@ bool ON_PolylineCurve::GetNextDiscontinuity(
             if ( !(D1m-D1p).IsTiny(D1m.MaximumCoordinate()*ON_SQRT_EPSILON) )
               rc = true;
           }
-          else if ( parametric_c == ON::G1_continuous || parametric_c == ON::G2_continuous )
+          else if ( parametric_c == ON::G1_continuous || parametric_c == ON::G2_continuous || parametric_c == ON::Gsmooth_continuous )
           {
             Tm = D1m;
             Tp = D1p;
@@ -618,6 +619,7 @@ bool ON_PolylineCurve::GetNextDiscontinuity(
   return rc;
 }
 
+
 bool ON_PolylineCurve::IsContinuous(
     ON::continuity desired_continuity,
     double t, 
@@ -625,7 +627,7 @@ bool ON_PolylineCurve::IsContinuous(
     double point_tolerance, // default=ON_ZERO_TOLERANCE
     double d1_tolerance, // default==ON_ZERO_TOLERANCE
     double d2_tolerance, // default==ON_ZERO_TOLERANCE
-    double cos_angle_tolerance, // default==0.99984769515639123915701155881391
+    double cos_angle_tolerance, // default==ON_DEFAULT_ANGLE_TOLERANCE_COSINE
     double curvature_tolerance  // default==ON_SQRT_EPSILON
     ) const
 {
@@ -635,29 +637,7 @@ bool ON_PolylineCurve::IsContinuous(
   if ( segment_count >= 1 )
   {
     bool bPerformTest = false;
-
-    switch(desired_continuity)
-    {
-    case ON::C2_continuous: 
-      // on a polyline C1 impiles C2
-      desired_continuity = ON::C1_continuous; 
-      break;
-    case ON::G2_continuous: 
-      // on a polyline G1 impiles G2
-      desired_continuity = ON::G1_continuous; 
-      break;
-    case ON::C2_locus_continuous: 
-      // on a polyline C1 impiles C2
-      desired_continuity = ON::C1_locus_continuous; 
-      break;
-    case ON::G2_locus_continuous: 
-      // on a polyline G1 impiles G2
-      desired_continuity = ON::G1_locus_continuous; 
-      break;
-    default:
-      // intentionally ignoring other ON::continuity enum values
-      break;
-    }
+    desired_continuity = ON::PolylineContinuity(desired_continuity);
 
     if ( t <= m_t[0] || t >= m_t[segment_count] )
     {
@@ -816,8 +796,26 @@ ON_PolylineCurve::Evaluate( // returns false if unable to evaluate
 {
   ON_BOOL32 rc = false;
   const int count = PointCount();
-  if ( count >= 2 ) {
-    const int segment_index = ON_NurbsSpanIndex(2,count,m_t,t,side,(hint)?*hint:0);
+  if ( count >= 2 ) 
+  {
+    int segment_index = ON_NurbsSpanIndex(2,count,m_t,t,side,(hint)?*hint:0);
+
+    if ( -2 == side || 2 == side )
+    {
+      // 9 November 2010 Dale Lear - ON_TuneupEvaluationParameter fix
+      //   When evluation passes through ON_CurveProxy or ON_PolyCurve reparamterization
+      //   and the original side parameter was -1 or +1, it is changed to -2 or +2
+      //   to indicate that if t is numerically closed to an end paramter, then
+      //   it should be tuned up to be at the end paramter.
+      double a = t;
+      if ( ON_TuneupEvaluationParameter( side, m_t[segment_index], m_t[segment_index+1], &a) )
+      {
+        // recalculate segment index
+        t = a;
+        segment_index = ON_NurbsSpanIndex(2,count,m_t,t,side,segment_index);
+      }
+    }
+
     const double t0 = m_t[segment_index];
     const double t1 = m_t[segment_index+1];
     double s = (t == t1) ? 1.0 : (t-t0)/(t1-t0);
@@ -915,26 +913,37 @@ ON_BOOL32 ON_PolylineCurve::GetLocalClosestPoint( const ON_3dPoint& test_point,
   else
   {
     // Use the local closest point finder for nurbs curves
-    ON_NurbsCurve nurbs_curve;
-    nurbs_curve.m_dim = m_dim;
-    nurbs_curve.m_is_rat = 0;
-    nurbs_curve.m_order = 2;
-    nurbs_curve.m_cv_count = m_pline.Count();
-    nurbs_curve.m_cv_stride = 3;
-    nurbs_curve.m_cv_capacity = 0;
-    nurbs_curve.m_knot_capacity = 0;
+
+    // NOTE: 18 May 2010 Dale Lear
+    //   When an ON_NurbsCurve is class is simply on then stack, C++
+    //   does not use the vtable to call GetLocalClosestPoint() and
+    //   this code fails to work right in Rhino.  Using the in-place
+    //   new causes the compiler to generate the vtable call we desire.
+    
+    //  ON_NurbsCurve nurbs_curve; // do no use class on the stack
+    char buffer[sizeof(ON_NurbsCurve)];
+    ON_NurbsCurve* nurbs_curve = new(&buffer[0]) ON_NurbsCurve();
+
+    nurbs_curve->m_dim = m_dim;
+    nurbs_curve->m_is_rat = 0;
+    nurbs_curve->m_order = 2;
+    nurbs_curve->m_cv_count = m_pline.Count();
+    nurbs_curve->m_cv_stride = 3;
+    nurbs_curve->m_cv_capacity = 0;
+    nurbs_curve->m_knot_capacity = 0;
 
     // share the point and parameter memory
-    nurbs_curve.m_cv = const_cast<double*>(&m_pline[0].x);
-    nurbs_curve.m_knot = const_cast<double*>(&m_t[0]);
+    nurbs_curve->m_cv = const_cast<double*>(&m_pline[0].x);
+    nurbs_curve->m_knot = const_cast<double*>(&m_t[0]);
 
-    rc = nurbs_curve.GetLocalClosestPoint(test_point,seed_parameter,t,sub_domain);
+    rc = nurbs_curve->GetLocalClosestPoint(test_point,seed_parameter,t,sub_domain);
 
     // Prevent ~ON_NurbsCurve from deleting of this polyline's 
-    // points and knots. Setting the nurbs_curve.m_*_capacity = 0
+    // points and knots. Setting the nurbs_curve->m_*_capacity = 0
     // should be enough, but this is fast and bulletproof.
-    nurbs_curve.m_cv = 0;
-    nurbs_curve.m_knot = 0;
+    nurbs_curve->m_cv = 0;
+    nurbs_curve->m_knot = 0;
+    nurbs_curve->~ON_NurbsCurve();
   }
 
   return rc;

@@ -721,26 +721,28 @@ int ON_BrepExtrudeEdge(
   if ( !ON_BrepExtrudeHelper_CheckPathCurve(path_curve,path_vector) )
     return false;
 
+
   // make sides
+  bool bRev = false;
   ON_SumSurface* sum_srf = ON_BrepExtrudeHelper_MakeSumSrf( 
-                              path_curve, brep.m_E[edge_index], false );
+                              path_curve, brep.m_E[edge_index], bRev );
 
   if ( !sum_srf )
     return false;
 
   int vid[4], eid[4], bRev3d[4];
 
-  vid[0] = brep.m_E[edge_index].m_vi[0];
-  vid[1] = brep.m_E[edge_index].m_vi[1];
+  vid[0] = brep.m_E[edge_index].m_vi[bRev?0:1];
+  vid[1] = brep.m_E[edge_index].m_vi[bRev?1:0];
   vid[2] = -1;
   vid[3] = -1;
 
-  eid[0] = edge_index;
+  eid[0] = edge_index; // "south side edge"
   eid[1] = -1;
   eid[2] = -1;
   eid[3] = -1;
 
-  bRev3d[0] = 0;
+  bRev3d[0] = bRev?0:1;
   bRev3d[1] = 0;
   bRev3d[2] = 0;
   bRev3d[3] = 0;

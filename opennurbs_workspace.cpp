@@ -81,6 +81,20 @@ void* ON_Workspace::GrowMemory( void* p, size_t size )
   return newp;
 }
 
+void ON_Workspace::KeepAllMemory()
+{
+  struct MBLK* p;
+  struct MBLK* pNext = m_pMemBlk;
+  m_pMemBlk = 0;
+  while ( pNext )
+  {
+    p = pNext;
+    pNext = pNext->pNext;
+    p->pMem = 0; // caller want to manage this heap
+    onfree( p );
+  }
+}
+
 int ON_Workspace::KeepMemory( void* p )
 {
   int rc = false;

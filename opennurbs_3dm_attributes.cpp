@@ -149,8 +149,9 @@ void ON_3dmObjectAttributes::Default()
   m_name.Destroy();
   m_url.Destroy();
   m_layer_index = 0;
-  m_material_index = -1; // white diffuse
   m_linetype_index = -1; // continuous
+  m_material_index = -1; // white diffuse
+  m_rendering_attributes.Default();
   m_color = ON_Color(0,0,0);
   m_plot_color = ON_Color(0,0,0); // Do not change to ON_UNSET_COLOR
   m_display_order = 0;
@@ -589,6 +590,7 @@ bool ON_3dmObjectAttributes::WriteV5Helper( ON_BinaryArchive& file ) const
          || m_rendering_attributes.m_materials.Count() > 0
          || true != m_rendering_attributes.m_bCastsShadows
          || true != m_rendering_attributes.m_bReceivesShadows
+         || false != m_rendering_attributes.AdvancedTexturePreview()
          )
     {
       c = 5;

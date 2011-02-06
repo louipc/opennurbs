@@ -116,11 +116,10 @@ static ON__UINT16 IdCRC(const ON_UUID* id)
   return current_remainder;
 }
 
-ON_SerialNumberMap::ON_SerialNumberMap(ON_MEMORY_POOL* pool)
+ON_SerialNumberMap::ON_SerialNumberMap()
 {
   m_maxsn = 0;
   m_reserved = 0;
-  m_pool = pool;
   m_sn_count = 0;
   m_sn_purged = 0;
   m_snblk_list = 0;
@@ -1347,7 +1346,7 @@ void ON_SerialNumberMap::GarbageCollectHelper()
     // have the lowest serial numbers and m_sn_block0.m_sn[] contains
     // the largest.
     size_t snarray_count = 0;
-    struct SN_ELEMENT* snarray = (struct SN_ELEMENT*)onmalloc_from_pool(m_pool,2*SN_BLOCK_CAPACITY*sizeof(snarray[0]));
+    struct SN_ELEMENT* snarray = (struct SN_ELEMENT*)onmalloc(2*SN_BLOCK_CAPACITY*sizeof(snarray[0]));
     for ( i = 0; i < m_snblk_list_count && m_sn_block0.m_count > 0; i++ )
     {
       if ( m_snblk_list[i]->m_sn1 < m_sn_block0.m_sn0 )
@@ -1459,7 +1458,7 @@ void ON_SerialNumberMap::GarbageCollectHelper()
         m_snblk_list_capacity += 32;
         n = m_snblk_list_capacity*sizeof(m_snblk_list[0]);
         m_snblk_list = (SN_BLOCK**)((0 == m_snblk_list)
-                     ? onmalloc_from_pool(m_pool,n)
+                     ? onmalloc(n)
                      : onrealloc(m_snblk_list,n));
         while ( i < m_snblk_list_capacity )
           m_snblk_list[i++] = 0;
@@ -1467,7 +1466,7 @@ void ON_SerialNumberMap::GarbageCollectHelper()
       if ( 0 == m_snblk_list[m_snblk_list_count] )
       {
         // add room to store at more serial numbers
-        m_snblk_list[m_snblk_list_count] = (SN_BLOCK*)onmalloc_from_pool(m_pool,sizeof(*(m_snblk_list[m_snblk_list_count])));
+        m_snblk_list[m_snblk_list_count] = (SN_BLOCK*)onmalloc(sizeof(*(m_snblk_list[m_snblk_list_count])));
       }
       *m_snblk_list[m_snblk_list_count++] = m_sn_block0;
       m_sn_block0.EmptyBlock();

@@ -765,10 +765,17 @@ bool ON_Mesh::Morph( const ON_SpaceMorph& morph )
 {
   if ( m_V.Count() > 0 )
   {
+    bool bHasDoubles = HasDoublePrecisionVertices();
+    bool bDoublesInSynch = bHasDoubles && HasSynchronizedDoubleAndSinglePrecisionVertices();
+
+    const bool bIsValid_fV = bHasDoubles && SinglePrecisionVerticesAreValid();
+    const bool bIsValid_dV = bHasDoubles && DoublePrecisionVerticesAreValid();
+
     bool bHasFaceNormals = HasFaceNormals();
     bool bHasVertexNormals = HasVertexNormals();
 
     int i, count = m_V.Count();
+
     if ( bHasVertexNormals )
     {
       for ( i = 0; i < count; i++ )
@@ -778,7 +785,25 @@ bool ON_Mesh::Morph( const ON_SpaceMorph& morph )
       morph.MorphPointList( 3, 0, count, 3, &m_N[0].x );
     }
 
-    morph.MorphPointList( 3, 0, count, 3, &m_V[0].x );
+    if ( bHasDoubles )
+    {
+      ON_3dPointArray& dV = DoublePrecisionVertices();
+      morph.MorphPointList( 3, 0, dV.Count(), 3, &dV[0].x );
+      if ( bDoublesInSynch )
+        UpdateSinglePrecisionVertices();
+    }
+
+    if ( !bDoublesInSynch )
+    {
+      // need to morph single precision vertices
+      morph.MorphPointList( 3, 0, count, 3, &m_V[0].x );
+    }
+
+    if ( bIsValid_fV || bDoublesInSynch )
+      SetSinglePrecisionVerticesAsValid();
+
+    if ( bIsValid_dV || bDoublesInSynch )
+      SetDoublePrecisionVerticesAsValid();
 
     if ( bHasVertexNormals )
     {

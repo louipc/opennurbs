@@ -342,6 +342,46 @@ public:
   //   Length of the arc = radius*(subtended angle in radians).
   double Length() const;
 
+  /*
+  Returns:
+    Area of the arc's sector.  
+  Remarks:
+    The arc's sector is the region bounded by the arc,
+    the line segment from the arc's end to the center,
+    and the line segment from the center to the arc's
+    start.
+  */
+  double SectorArea() const;
+
+  /*
+  Returns:
+    Area centroid of the arc's sector.  
+  Remarks:
+    The arc's sector is the region bounded by the arc,
+    the line segment from the arc's end to the center,
+    and the line segment from the center to the arc's
+    start.
+  */
+  ON_3dPoint SectorAreaCentroid() const;
+
+  /*
+  Returns:
+    Area of the arc's segment.
+  Remarks:
+    The arc's segment is the region bounded by the arc and
+    the line segment from the arc's end to the arc's start.
+  */
+  double SegmentArea() const;
+
+  /*
+  Returns:
+    Area centroid of the arc's segment.  
+  Remarks:
+    The arc's segment is the region bounded by the arc and
+    the line segment from the arc's end to the arc's start.
+  */
+  ON_3dPoint SegmentAreaCentroid() const;
+
   // Description:
   //   Reverse the orientation of the arc.  Changes the domain
   //   from [a,b] to [-b.-a].

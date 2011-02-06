@@ -33,8 +33,38 @@ class ON_CLASS ON_MeshParameters
 {
   // surface meshing perameters
 public:
+  /*
+  Description:
+    Get a value to use for tolerance based on the relative_tolerance
+    and actual size.
+  Parameters:
+    relative_tolerance - [in] 
+      See m_relative_tolerance field
+    actual_size - [in]
+      Diagonal ov object bounding box or some similar measure of
+      an object's 3d size.
+  Returns:
+    A value that can be used for m_tolerance if no
+    user specified value is available.
+  */
   static
   double Tolerance( double relative_tolerance, double actual_size );
+
+  /*
+  Description:
+    Get a value to use for minimum edge length base on max_edge_length
+    and tolerance settings.
+  Parameters:
+    max_edge_length - [in] 
+      3d maximum edge length used to create mesh.
+    tolerance - [in]
+      3d distance tolerance used to create mesh.
+  Returns:
+    A value that can be used for m_min_edge_length if no
+    user specified value is available.
+  */
+  static
+  double MinEdgeLength( double max_edge_length, double tolerance );
 
   ON_MeshParameters();
   ~ON_MeshParameters();
@@ -125,8 +155,13 @@ public:
                              //          This is faster but results in gaps and
                              //          "T" joints along seams between faces.
 
+  bool m_bDoublePrecision;   // false - (default) the mesh vertices will be 
+                             //         float precision values in the m_V[] array.
+                             // true -  The mesh vertices will be double precision
+                             //         values in the DoublePrecisionVertices()
+                             //         array.  Float precision values will also
+                             //         be returned in the m_V[] array.
   unsigned char m_reserved1;
-  unsigned char m_reserved2;
   unsigned char m_mesher;    // 0 = slow mesher, 1 = fast mesher
     
   int m_texture_range;       // 1: normalized
@@ -347,6 +382,15 @@ public:
           int // number of vertices in mesh
         ) const;
   void Flip();
+};
+
+struct ON_MeshFaceSide
+{
+  int vi[2]; // vertex indices
+  int fi;    // mesh m_F[] array face index
+  unsigned char  side;  // edge connects mesh m_V[m_F[fi].vi[side]] and m_V[m_F[fi].vi[(side+1)%4]]
+  unsigned char  dir;   // 0 = counterclockwise, 1 = clockwise (reversed)
+  unsigned short value; // Set to zero by ON_Mesh::GetFaceSideList(). Can be used as needed.
 };
 
 struct ON_MeshPart
@@ -598,7 +642,10 @@ private:
   {
     struct memchunk* next;
   } *m_memchunk;
-  bool m_bIsValid;
+
+  // NOTE: this field is a bool with valid values of 0 and 1.
+  int m_b32IsValid; //    0: Not Valid
+                    //    1: Valid
 
 private:
   // no implementation
@@ -797,10 +844,10 @@ class ON_CLASS ON_Mesh : public ON_Geometry
 public:
   ON_Mesh();
   ON_Mesh(
-    int,  // initial face array capacity
-    int,  // initial vertex array capacity
-    bool, // true if mesh has vertex normals
-    bool  // true if mesh has texture coordinates
+    int   initial_face_array_capacity,   // initial face array capacity
+    int   initial_vertex_array_capacity, // initial vertex array capacity
+    bool  has_vertex_normals,            // true if mesh has vertex normals
+    bool  has_texture_coordinates        // true if mesh has texture coordinates
     );
   ON_Mesh( const ON_Mesh& );
   ON_Mesh& operator=( const ON_Mesh& );
@@ -1190,13 +1237,40 @@ public:
   void Append( const ON_Mesh& ); // appends a copy of mesh to this and updates
                                  // indices of appended mesh parts
 
-  void SetClosed(int);
+  /*
+  Description:
+    Expert user function to set m_is_closed member.  
+    Setting this value correctly after a mesh is constructed 
+    can save time when IsClosed() is called.
+    This function sets the private member variable m_is_closed.
+  Paramters:
+    closed - [in]
+      0: The mesh is not closed.  There is at least one face with an 
+         edge that is geometrically distinct (as an unoriented line segment)
+         from all other edges.
+      1: The mesh is closed.  Every geometrically distict edge is used
+         by two or more faces.
+  */
+  void SetClosed(int closed);
 
   /*
   Returns:
     True if every mesh "edge" has two or more faces.
   */
   bool IsClosed() const;
+
+  /*
+  Returns:
+    True if every mesh "edge" has at most two faces.
+  */
+  bool IsManifold() const;
+
+  /*
+  Returns:
+    True if the mesh is manifold and every pair of faces
+    that share an "edge" have compatible orientations.
+  */
+  bool IsOriented() const;
 
   /*
   Description:
@@ -1224,6 +1298,50 @@ public:
     bool* pbIsOriented = NULL,
     bool* pbHasBoundary = NULL
     ) const;
+
+  /*
+  Description:
+    Expert user function to set m_is_solid member.  
+    Setting this value correctly after a mesh is constructed 
+    can save time when IsSolid() is called.
+    This function sets the private member variable m_is_solid.
+    If solid is nonzero, it will set m_is_closed to 1.
+  Paramters:
+    solid - [in]
+      0: The mesh is not an oriented manifold solid mesh. Either
+         the mesh is not closed, not manifold, or the faces are
+         not oriented compatibly.
+      1: The mesh is an oriented manifold solid whose face normals
+         point outwards.
+     -1: The mesh is an oriented manifold solid whose face normals
+         point inwards.
+  */
+  void SetSolidOrientation(int solid_orientation);
+
+  /*
+  Description:
+    Determine orientation of a mesh.
+  Returns:
+    +1     mesh is a solid with outward facing normals
+    -1     mesh is a solid with inward facing normals
+     0     mesh is not a solid
+  See Also:
+    ON_Mesh::IsSolid
+  */
+  int SolidOrientation() const;
+
+  /*
+  Description:
+    Test mesh to see if it is a solid.  (A "solid" is
+    a closed oriented manifold.)
+  Returns:
+    true       mesh is a solid
+    fals       mesh is not a solid
+  See Also:
+    ON_Mesh::SolidOrientation
+    ON_Mesh::IsManifold
+  */
+  bool IsSolid() const;
 
   /*
   Description:
@@ -1272,6 +1390,142 @@ public:
   int GetMeshEdges( 
     ON_SimpleArray<ON_2dex>& edges
     ) const;
+
+  /*
+  Description:
+    Assign a unique id to each vertex location.  Coincident vertices
+    get the same id.
+  Parameters:
+    first_vid - [in]
+      Initial vertex id.  Typically 1 or 0.
+    Vid - [out]
+      If not null, then Vid[] sould be an array of length VertexCount().
+      and the vertex ids will be stored in this array.  If null,
+      the array will be allocated by calling onmalloc().  The returned
+      array Vid[i] is the id of the vertex m_V[i].  If m_V[i] and
+      m_V[j] are the same 3d point, then Vid[i] and Vid[j] will have
+      the same value.
+    Vindex - [out] (can be null)
+      If Vindex is not null, then it must have length at least m_V.Count()
+      and the returned array will be a permutation of (0,1,...,m_V.Count()-1)
+      such (Vid[Vindex[0]], Vid[Vindex[1]], ..., Vid[Vindex[m_V.Count()-1]])
+      is an increasing list of value.
+  Returns:
+    null if the mesh has no vertices.
+    An array of length VertexCount(). If vertices m_V[i] and m_V[j]
+    are coincident, then Vid[i] = Vid[j].  The id values begin at first_vid.
+    The maximum vertex id is Vid[Vindex[m_V.Count()-1]].  The number of
+    unique vertex locations is (Vid[Vindex[m_V.Count()-1]] - first_vid + 1).
+  */
+  int* GetVertexLocationIds( 
+    int first_vid, 
+    int* Vid, 
+    int* Vindex
+    ) const;
+
+  /*
+  Description:
+    Get a list of the sides of every face.
+  Parameters:
+    Vid - [in] (can be null)
+      If Vid is null, then the mesh m_V[] index values are used to set
+      the ON_MeshFaceSide::vi[] values.
+      If Vid is not null, then it must be an array of length VertexCount().
+      The value Vid[mesh m_V[] index] will be used to set the
+      ON_MeshFaceSide::vi[] values.
+    sides - [out]
+      If the input value of sides is not null, then sides[] must be long 
+      enough to hold the returned side list.  The maximum posssible length
+      is 4*FaceCount() for a mesh contining FaceCount() nondegenerate quads.
+      If the input value of sides is null, memory will be allocated using
+      onmalloc() and the caller is responsible for calling onfree() at an
+      appropriate time.  This function fills in the sides[] array
+      with face side information.  The returned list is sorted by sides[].fi
+      and the sides[].side and each element has vi[0] <= vi[1].  
+      The function ON_SortMeshFaceSidesByVertexIndex() can be used to sort the 
+      list by the sides[].vi[] values.
+  Returns:
+    Number of elements added to sides[].
+  Remarks:
+    Faces with out of range ON_MeshFace.vi[] values are skipped. 
+    Degenerate faces are processed, but degenerate sides (equal vertex indices)
+    are not added to the list.
+  */
+  int GetMeshFaceSideList( 
+      const int* Vid,
+      struct ON_MeshFaceSide*& sides
+      ) const;
+
+
+  /*
+  Description:
+    Get a list of the geometrically uniqued edges in a mesh.
+  Parameters:
+    edge_list - [out]
+      The edge list for this mesh is appended to edge_list[].  
+      The ON_2dex i and j values are mesh->m_V[] array indices.
+      There is exactly one element in edge_list[] for each
+      unoriented 3d line segment in the mesh. The edges are 
+      oriented the same way the corresponding ON_MeshTopology
+      edge is oriented.
+    ci_meshtop_edge_map - [out]
+      If you call the verson of GetMeshEdgeList() with the ci_meshtop_edge_map[],
+      parameter, then the edge in edge_list[i] cooresponds to the edge
+      in ON_MeshTopology.m_tope[ci_meshtop_edge_map[i]]. The value
+      ci_meshtop_edge_map[i] is useful if you need to convert an edge_list[]
+      index into an ON_COMPONENT_INDEX with type meshtop_edge.
+    ci_meshtop_vertex_map - [out]
+      If you call the verson of GetMeshEdgeList() with the ci_meshtop_vertex_map[],
+      parameter, then the vertex m_V[i] cooresponds to the vertex
+      in ON_MeshTopology.m_topv[ci_meshtop_vertex_map[i]]. The value
+      ci_meshtop_vertex_map[i] is useful if you need to convert an m_V[]
+      index into an ON_COMPONENT_INDEX with type meshtop_vertex.
+    edge_list_partition - [out] (can be null)
+      The edge_list[] is always ordered so that edge_types
+      are partitioned into contiguous regions. The edge_list_partition[5]
+      values report the edge type regions.
+      * If edge_type_partition[0] <= ei < edge_type_partition[1], then
+        edge_list[ei] is an edge of exactly two faces and the vertices
+        used by the faces are identical.  These are also called
+        "manifold edges".
+      * If edge_type_partition[1] <= ei < edge_type_partition[2], then
+        edge_list[ei] is an edge of exactly two faces, but at least
+        one of the vertices is duplicated.  These are also called
+        "crease edges".
+      * If edge_type_partition[2] <= ei < edge_type_partition[3], then
+        edge_list[ei] is an edge of 3 or more faces. These are also called
+        "nonmanifold edges".
+      * If edge_type_partition[3] <= ei < edge_type_partition[4], 
+        then edge_list[ei] is a boundary edge of exactly one mesh face.
+        These are also called "naked edges".
+  Returns:
+    Number of edges added to edge_list[].
+  Remarks:
+    This calculation also sets m_closed.  If you modify the mesh's
+    m_V or m_F information after calling this function, be sure to
+    clear m_is_closed.
+  */
+  int GetMeshEdgeList( 
+      ON_SimpleArray<ON_2dex>& edge_list, 
+      int edge_type_partition[5] 
+      ) const;
+
+  int GetMeshEdgeList( 
+      ON_SimpleArray<ON_2dex>& edge_list, 
+      ON_SimpleArray<int>& ci_meshtop_edge_map,
+      int edge_type_partition[5] 
+      ) const;
+
+  int GetMeshEdgeList( 
+      ON_SimpleArray<ON_2dex>& edge_list, 
+      ON_SimpleArray<int>& ci_meshtop_edge_map,
+      ON_SimpleArray<int>& ci_meshtop_vertex_map,
+      int edge_type_partition[5] 
+      ) const;
+
+
+
+
 
 #if defined(OPENNURBS_PLUS)
 
@@ -1341,167 +1595,24 @@ public:
           double overlap_tolerance = 0.0
           ) const;
 
+
+  /*
+  Description:
+    Intersect this mesh with an infinite plane.
+  Parameters:
+    plane_equation - [in]
+    lines - [out] Intersection lines are appended to
+                  this list.
+  Returns:
+    number of lines appended to lines[] array.
+  */
+  int IntersectPlane( 
+          ON_PlaneEquation plane_equation,
+          ON_SimpleArray<ON_Line>& lines
+          ) const;
+
+
 #endif
-
-  /*
-  Description:
-    Compute area of the mesh.
-  Parameters:
-    error_estimate - [out]  if not NULL, an upper bound on the error
-        in the area calculation is returned.
-  Example:
-
-            ON_Mesh mesh = ...;
-            double area, error_estimate;
-            area = mesh.Area(&error_estimate);
-            printf("mesh area = %g (+/- %g)\n",area,error_estimate);
-
-  Returns:
-    Area of the mesh.
-  */
-  double Area( double* error_estimate = NULL ) const;
-
-  /*
-  Description:
-    Compute area centroid of the mesh.
-  Parameters:
-    area - [out] it not NULL, area of the mesh
-  Returns:
-    Location of area centroid.
-  See Also:
-    ON_Mesh::AreaMassProperties
-  */
-  ON_3dPoint AreaCentroid( 
-          double* area = NULL
-          ) const;
-
-  /*
-  Description:
-    Calculate area mass properties of the mesh.
-  Parameters:
-    mp - [out] 
-    bArea - [in] true to calculate area
-    bFirstMoments - [in] true to calculate area first moments,
-                         area and area centroid.
-    bSecondMoments - [in] true to calculate area second moments.
-    bProductMoments - [in] true to calculate area product moments.
-  Returns:
-    True if successful.
-  */
-  bool AreaMassProperties(
-    ON_MassProperties& mp,
-    bool bArea = true,
-    bool bFirstMoments = true,
-    bool bSecondMoments = true,
-    bool bProductMoments = true
-    ) const;
-
-
-  /*
-  Description:
-    Compute volume of the mesh.
-  Parameters:
-    base_point - [in] optional base point When computing the volume of
-      solid defined by several meshes, pass the same base_point to each call
-      to volume.  When computing the volume of a solid defined by a single
-      mesh, the center of the bounding box is a good choice for base_point.
-    error_estimate - [out]  if not NULL, an upper bound on the error
-        in the volume calculation is returned.
-  Returns:
-    volume of the mesh.
-  Example:
-
-            // Assume a solid is enclosed by 3 meshes, mesh1, mesh2, and mesh3.
-            // The volume of the solid can be computed as follows.
-            ON_Mesh mesh1=..., mesh2=..., mesh3=...;
-            // use the center of the solid's bounding box as a common base point.
-            ON_BoundingBox bbox = mesh1.BoundingBox();
-            mesh2.GetBoundingBox(bbox,true);
-            mesh3.GetBoundingBox(bbox,true);
-            ON_3dPoint base_point = bbox.Center()
-            double vol1_err, vol2_err, vol3_err;
-            double vol1 = mesh1.Volume(base_point,&vol1_err);
-            double vol2 = mesh2.Volume(base_point,&vol2_err);
-            double vol3 = mesh3.Volume(base_point,&vol3_err);
-            double volume = vol1 + vol2 + vol3;
-            double error_estimate = vol1_err + vol2_err + vol3_err;
-            printf("mesh volumd = %g (+/- %g)\n",volume,error_estimate);
-  */
-  double Volume( 
-              ON_3dPoint base_point = ON_origin, 
-              double* error_estimate = NULL 
-              ) const;
-
-
-  /*
-  Description:
-    Compute volume centroid of the mesh.
-  Parameters:
-    base_point - [in] When computing the centroid of a solid
-      volume defined by several meshes, pass the same base_point 
-      to each call to GetVolumeCentroid() and add the answers.
-      When computing the centroid of a solid defined by a single
-      mesh, the center of the bounding box is a good choice for base_point.
-    volume - [out] it not NULL, Volume of the mesh
-  Returns:
-    Location of the volume centroid.
-  */
-  ON_3dPoint VolumeCentroid( 
-          ON_3dPoint base_point = ON_origin,
-          double* volume = NULL
-          ) const;
-
-  /*
-  Description:
-    Calculate volume mass properties of the mesh.
-  Parameters:
-    base_point - [in] When computing the volume mass properties
-      of a solid volume defined by several meshes, pass the same
-      base_point to each call to VolumeMassProperties() and add 
-      the answers.  When computing the volume mass properties of
-      a solid defined by a single mesh, the center of the 
-      bounding box is a good choice for base_point. If the mesh
-      is closed, you can pass ON_UNSET_POINT and the
-      center of the bounding box will be used.
-    mp - [out] 
-    bVolume - [in] true to calculate volume
-    bFirstMoments - [in] true to calculate volume first moments,
-                         volume, and volume centroid.
-    bSecondMoments - [in] true to calculate volume second moments.
-    bProductMoments - [in] true to calculate volume product moments.
-    base_point - [in] 
-      If the surface is closed, then pass ON_UNSET_VALUE.
-
-      This parameter is for expert users who are computing a
-      volume whose boundary is defined by several non-closed
-      breps, surfaces, and meshes.
-
-      When computing the volume, volume centroid, or volume
-      first moments of a volume whose boundary is defined by 
-      several breps, surfaces, and meshes, pass the same 
-      base_point to each call to VolumeMassProperties.  
-
-      When computing the volume second moments or volume product
-      moments of a volume whose boundary is defined by several
-      breps, surfaces, and meshes, you MUST pass the entire 
-      volume's centroid as the base_point and the input mp 
-      parameter must contain the results of a previous call
-      to VolumeMassProperties(mp,true,true,false,false,base_point).
-      In particular, in this case, you need to make two sets of
-      calls; use first set to calculate the volume centroid and
-      the second set calculate the second moments and product 
-      moments.
-  Returns:
-    True if successful.
-  */
-  bool VolumeMassProperties(
-    ON_MassProperties& mp, 
-    bool bVolume = true,
-    bool bFirstMoments = true,
-    bool bSecondMoments = true,
-    bool bProductMoments = true,
-    ON_3dPoint base_point = ON_UNSET_POINT
-    ) const;
 
   ///////////////////////////////////////////////////////////////////////
   //
@@ -1631,6 +1742,16 @@ public:
   // values, then you must call DestroyTopology().
   void DestroyTopology();
 
+  /*
+  Returns:
+    This is an expert user function that returns true if the topology
+    information is already calculated and cached.  It can be used to
+    to avoid calling the Topology() function when the expensive creation
+    step will be performed.
+  */
+  bool TopologyExists() const;
+
+
   ///////////////////////////////////////////////////////////////////////
   //
   // mesh partitions
@@ -1701,16 +1822,180 @@ public:
   */
   void DestroyNgonList();
 
+  /////////////////////////////////////////////////////////////////
+  // 
+  // Double precision vertex support
+  // 
+
+  /*
+  Returns:
+    True if the mesh has single and double precision
+    vertices, and the values of the two sets are synchronized.
+  */
+  bool HasSynchronizedDoubleAndSinglePrecisionVertices() const;
+
+  /*
+  Returns:
+    True if the mesh has double precision vertices.
+  Remarks:
+    This function returns true if a mesh has double
+    precision vertex information, even if it is not
+    updated. 
+    
+    Use ON_Mesh::DoublePrecisionVerticesAreValid()
+    and ON_Mesh::SinglePrecisionVerticesAreValid() to 
+    check the validity.  
+    
+    Use ON_Mesh::UpdateDoublePrecisionVertices()
+    or ON_Mesh::UpdateSinglePrecisionVertices() to synchronize
+    values of single and double precision vertices.
+  */
+  bool HasDoublePrecisionVertices() const;
+
+  /*
+  Parameters:
+    bEnableDoublePrecisionVertices - [in]
+      True to enable use of double precision vertices.
+      False to destroy any existing precision vertices.
+  */
+  void EnableDoublePrecisionVertices(bool bEnableDoublePrecisionVertices);
+
+  /*
+  Description:
+    If you modify the values of double precision vertices,
+    then you must call UpdateSinglePrecisonVertices().
+  Remarks:
+    If double precision vertices are not present, this function
+    does nothing.
+  */
+  void UpdateSinglePrecisionVertices();
+
+  /*
+  Description:
+    If you modify the values of the single precision vertices
+    in m_V[], then you must call UpdateDoublePrecisionVertices().
+  Remarks:
+    If double precision vertices are not present, this function
+    does nothing.
+  */
+  void UpdateDoublePrecisionVertices();
+
+  /*
+  Description:
+    If you have modified the single precision vertices
+    and are certain they are valid, then call this 
+    function to update crc information.
+  Remarks:
+    If double precision vertices are not present, this function
+    does nothing.
+  */
+  void SetSinglePrecisionVerticesAsValid();
+
+  /*
+  Description:
+    If you have modified the double precision vertices
+    and are certain they are valid, then call this 
+    function to update crc information.
+  Remarks:
+    If double precision vertices are not present, this function
+    does nothing.
+  */
+  void SetDoublePrecisionVerticesAsValid();
+
+  /*
+  Description:
+    The functions UpdateSinglePrecisionVertices(), 
+    UpdateDoublePrecisionVertices(), and 
+    SetSinglePrecisionVerticesAsValid() save
+    the count and crc of the single precision vertex
+    array. True is returned if there are no
+    double precision vertices or the current
+    count and crc of the single precision
+    vertex array match the saved values.
+  Remarks:
+    If double precision vertices are not present, this function
+    does nothing and returns true.
+  */
+  bool SinglePrecisionVerticesAreValid() const;
+
+  /*
+  Description:
+    The functions UpdateSinglePrecisionVertices(), 
+    UpdateDoublePrecisionVertices(), and 
+    SetDoublePrecisionVerticesAsValid() save
+    the count and crc of the double precision vertex
+    array. True is returned if the current
+    count and crc of the double precision
+    vertex array match the saved values.
+  Remarks:
+    If double precision vertices are not present, this function
+    does nothing and returns true.
+  */
+  bool DoublePrecisionVerticesAreValid() const;
+
+  /*
+  Description:
+    The function removes all double precision vertex information.
+  */
+  void DestroyDoublePrecisionVertices();
+
 
   /////////////////////////////////////////////////////////////////
   // Implementation - mesh geometry
 
-  // m_V[] - vertex locations
-  // In a case where adjacent facets share a vertex
-  // location but have distinct normals or texture
-  // coordinates at that location, the vertex must
-  // be duplicated.
+  // Vertex locations
+  //   In a case where adjacent facets share a vertex
+  //   location but have distinct normals or texture
+  //   coordinates at that location, the vertex must
+  //   be duplicated.
+
+  /*
+  Description:
+    Get double precision vertices.  If they do not exist,
+    they will be created and match the existing single
+    precision vertices.
+  Returns:
+    Array of double precision vertices.  If you modify the
+    values in this array, you must make the same modifications
+    to the single precision vertices, or call 
+    UpdateSinglePrecisonVertices().
+  */
+  ON_3dPointArray& DoublePrecisionVertices();
+  const ON_3dPointArray& DoublePrecisionVertices() const;
+
+  /*
+  Description:
+    Get single precision vertices.
+  Returns:
+    Array of float precision vertices.  If you modify the
+    values in this array, you must make the same modifications
+    to the double precision vertices, or call 
+    UpdateSinglePrecisonVertices().
+  */
+  ON_3fPointArray& SinglePrecisionVertices();
+  const ON_3fPointArray& SinglePrecisionVertices() const;
+
+  /*
+  Description:
+    In general,use one of
+    ON_Mesh::SinglePrecisionVertices()
+    or
+    ON_Mesh::DoublePrecisionVertices()
+    to get the array of vertex locations.  If you modify
+    m_V[] directly and HasDoublePrecisionVertices() is true,
+    then you must make the same modifications to the array
+    returned by DoublePrecisionVertices().
+  */
   ON_3fPointArray m_V;
+
+  /*
+  Returns:
+    Location of the vertex.  If double precision vertices
+    are present, the double precision vertex location is
+    returned.  If vertex_index is out of range,
+    ON_UNSET_VALUE is returned.
+  */
+  ON_3dPoint Vertex(int vertex_index) const;
 
   // m_F[] facets (triangles or quads)
   ON_SimpleArray<ON_MeshFace> m_F;
@@ -1879,8 +2164,13 @@ protected:
   int                         m_quad_count;
   int                         m_triangle_count;
 
-  int m_closed; // -1=unknown 0=mesh is not closed, 1 = mesh is closed, 2 = closed with duplicate vertices
+private:
+  char m_mesh_is_closed;   // 0 = unset, 1 = all edges have 2 or more faces, 2 = at least one boundary edge 
+  char m_mesh_is_manifold; // 0 = unset, 1 = all edges have 1 or 2 faces, 2 = not manifold
+  char m_mesh_is_oriented; // 0 = unset, 1 = faces normals agree across all edges that have 2 faces, 2 = not oriented
+  char m_mesh_is_solid;    // 0 = unset, 1 = solid with outward face normals, 2 = solid with inward face normals, 3 = not solid
 
+protected:
   // The bounding boxes are valid if m_?box[0][0] <= m_?box[0][1];
   float m_vbox[2][3]; // 3d bounding box of all referenced vertices
   float m_nbox[2][3]; // 3d bounding box of all referenced unit normals 
@@ -2284,70 +2574,6 @@ ON_3dVector ON_TriangleNormal(
         const ON_3dPoint& B,
         const ON_3dPoint& C
         );
-
-/*
-Description:
-  Triangulate a 2D simple closed polygon.
-Parameters:
-  point_count - [in] number of points in polygon ( >= 3 )
-  point_stride - [in]
-  P - [in] 
-    i-th point = (P[i*point_stride], P[i*point_stride+1])
-  tri_stride - [in]
-  triangle - [out]
-    array of (point_count-2)*tri_stride integers
-Returns:
-  True if successful.  In this case, the polygon is trianglulated into 
-  point_count-2 triangles.  The indices of the 3 points that are the 
-  corner of the i-th (0<= i < point_count-2) triangle are
-    (triangle[i*tri_stride], triangle[i*tri_stride+1], triangle[i*tri_stride+2]).
-Remarks:
-  Do NOT duplicate the start/end point; i.e., a triangle will have
-  a point count of 3 and P will specify 3 distinct non-collinear points.
-*/
-ON_DECL
-bool ON_Mesh2dPolygon( 
-          int point_count,
-          int point_stride,
-          const double* P,
-          int tri_stride,
-          int* triangle 
-          );
-
-/*
-Description:
-  Fill in a 2d region with triangles.
-Parameters:
-  point_count - [in] number of 2d points.
-  point_stride - [in] i-th point = (point[j],point[j+1]), where
-                      j = i*point_stride.
-  point - [in] 2d point locations.  It is ok to include points that are inside the region
-               but not at the ednd of an edge.  Duplicate points are not permitted.
-  edge_count - [in] number of edges (if 0, then the input list of point
-                    is treated as a counterclockwise closed polyline.
-  edge_stride - [in] i-th edge connects points (edge[j],edge[j+1]) where
-                     j = i*edge_stride.
-  edge - [in] indices of edge ends.  Edges can intersect only at shared end points.
-  edge_side - [in] if NULL, the triangles are built on the left side
-                   of the edges.  If not NULL, then
-                   edge[i] determines which side(s) of the edge need
-                   triangles.  1 = left side only, 2 = right side only, 3 = both sides
-  triangles - [out]  triangles are appended to this list.  The (i,j,k) are
-                     vertex indices.
-Returns:
-  Number of triangles appended to triangles[] array.
-*/
-ON_DECL
-int ON_Mesh2dRegion(
-          int point_count,
-          int point_stride,
-          const double* point,
-          int edge_count,
-          int edge_stride,
-          const int* edge,
-          const int* edge_side,
-          ON_SimpleArray<ON_3dex>& triangles
-          );
 
 #endif
 

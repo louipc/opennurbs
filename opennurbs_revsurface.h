@@ -156,11 +156,6 @@ public:
   // overrides of virtual ON_Surface functions
   //
   
-  ON_Mesh* CreateMesh( 
-             const ON_MeshParameters& mp,
-             ON_Mesh* mesh = NULL
-             ) const;
-
   ON_BOOL32 SetDomain( 
     int dir, // 0 sets first parameter's domain, 1 gets second parameter's domain
     double t0, 
@@ -348,7 +343,7 @@ public:
                   double* t,
                   int* hint=NULL,
                   int* dtype=NULL,
-                  double cos_angle_tolerance=0.99984769515639123915701155881391,
+                  double cos_angle_tolerance=ON_DEFAULT_ANGLE_TOLERANCE_COSINE,
                   double curvature_tolerance=ON_SQRT_EPSILON
                   ) const;
 
@@ -387,7 +382,7 @@ public:
     double point_tolerance=ON_ZERO_TOLERANCE,
     double d1_tolerance=ON_ZERO_TOLERANCE,
     double d2_tolerance=ON_ZERO_TOLERANCE,
-    double cos_angle_tolerance=0.99984769515639123915701155881391,
+    double cos_angle_tolerance=ON_DEFAULT_ANGLE_TOLERANCE_COSINE,
     double curvature_tolerance=ON_SQRT_EPSILON
     ) const;
 
@@ -537,6 +532,22 @@ public:
           double maximum_distance = 0.0,
           const ON_Interval* sdomain = 0,
           const ON_Interval* tdomain = 0
+          ) const;
+
+  //////////
+  // Find parameters of the point on a surface that is locally closest to 
+  // the test_point.  The search for a local close point starts at 
+  // seed parameters. If a sub_domain parameter is not NULL, then
+  // the search is restricted to the specified portion of the surface.
+  //
+  // true if returned if the search is successful.  false is returned if
+  // the search fails.
+  ON_BOOL32 GetLocalClosestPoint( 
+          const ON_3dPoint&, // test_point
+          double,double,     // seed_parameters
+          double*,double*,   // parameters of local closest point returned here
+          const ON_Interval* = NULL, // first parameter sub_domain
+          const ON_Interval* = NULL  // second parameter sub_domain
           ) const;
 
   int GetNurbForm( // returns 0: unable to create NURBS representation

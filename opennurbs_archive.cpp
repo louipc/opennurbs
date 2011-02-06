@@ -1042,11 +1042,11 @@ ON_BinaryArchive::ReadString( ON_wString& s )
       // gcc's wchar_t is an unsigned long.
       wchar_t* w = s.Array();
       int i;
-      ON__INT16 i16;
+      ON__UINT16 u16;
       for ( i = 0; i < isizeof_string && rc; i++ ) 
       {
-        rc = ReadInt16(1,&i16);
-        w[i] = (wchar_t)i16;
+        rc = ReadInt16(1,(ON__INT16*)&u16);
+        w[i] = (wchar_t)u16;
       }
     }
     s.SetLength( isizeof_string-1 );
@@ -1779,6 +1779,27 @@ ON_BinaryArchive::ReadArray( ON_SimpleArray<ON_SurfaceCurvature>& a )
   return rc;
 }
 
+
+bool
+ON_BinaryArchive::ReadArray( ON_SimpleArray<ON_ClippingPlaneInfo>& a )
+{
+  a.Empty();
+  int count = 0;
+  bool rc = ReadInt( &count );
+  if ( rc && count > 0 ) 
+  {
+    a.SetCapacity(count);
+    for ( int i = 0; i < count && rc ; i++ )
+    {
+      rc = a.AppendNew().Read(*this);
+      if (!rc)
+        a.Remove();
+    }
+  }
+  return rc;
+}
+
+
 bool ON_BinaryArchive::WriteBool( bool b )
 {
   unsigned char c = (b?1:0);
@@ -2468,12 +2489,12 @@ ON_BinaryArchive::WriteString( const ON_wString& s )
       // unsigned 2 byte integers.  This code is used on systems 
       // where wchar_t is not a 2 byte integer.
       size_t i;
-      ON__INT16 i16; // assumes unsigned shorts are 2 bytes
+      ON__UINT16 u16; // assumes unsigned shorts are 2 bytes
       const wchar_t* w = s.Array();
       for ( i = 0; i < sizeof_string && rc; i++ ) 
       {
-        i16 = (ON__INT16)(w[i]);
-        rc = WriteInt16(1,&i16);
+        u16 = (ON__UINT16)(w[i]);
+        rc = WriteInt16(1,(const ON__INT16*)&u16);
       }
     }
   }
@@ -2770,6 +2791,21 @@ ON_BinaryArchive::WriteArray( const ON_SimpleArray<ON_SurfaceCurvature>& a )
   return rc;
 }
 
+bool
+ON_BinaryArchive::WriteArray( const ON_SimpleArray<ON_ClippingPlaneInfo>& a )
+{
+  int count = a.Count();
+  if ( count < 0 )
+    count = 0;
+  bool rc = WriteInt( count );
+  for ( int i = 0; i < count && rc ; i++ )
+  {
+    rc = a[i].Write(*this);
+  }
+  return rc;
+}
+
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
@@ -2889,6 +2925,40 @@ ON_BinaryArchive::WriteObject( const ON_Object& o )
     }
   }
 
+  if ( m_3dm_version <= 4 && ON::extrusion_object == o.ObjectType() )
+  {
+    // 29 September 2010 Dale Lear
+    //   ON_Extrusion was added in V5.  It must be translated
+    //   to a brep or surface to save it in a V4 file.
+    const ON_Extrusion* extrusion = ON_Extrusion::Cast(&o);
+    if ( 0 != extrusion )
+    {
+      ON_Object* v4object = 0;
+      if ( extrusion->IsCapped() || extrusion->ProfileCount() >= 2 )
+        v4object = extrusion->BrepForm(0);
+      if ( 0 == v4object )
+        v4object = extrusion->SumSurfaceForm(0);
+      if ( 0 == v4object )
+        v4object = extrusion->NurbsSurface(0);
+      if ( 0 != v4object 
+           && ON::extrusion_object != v4object->ObjectType() // no infinte recursion!
+         )
+      {
+        // Some plug-in userdata code is not robust enough to check 
+        // archive version numbers and correctly handle save as v4 
+        // changes.  The upshot is that, extrusion user data
+        // has to be lost when saving as V4.
+        //v4object->MoveUserData(const_cast<ON_Object&>(o));
+        rc = WriteObject( v4object );
+        //const_cast<ON_Object&>(o).MoveUserData(*v4object);
+        delete v4object;
+        return rc;
+      }
+      if ( 0 != v4object )
+        delete v4object;
+    }
+  }
+
   rc = BeginWrite3dmChunk( TCODE_OPENNURBS_CLASS, 0 );
   if (rc) {
 
@@ -2903,7 +2973,8 @@ ON_BinaryArchive::WriteObject( const ON_Object& o )
     // TCODE_OPENNURBS_CLASS_DATA chunk contains definition of class
     if ( rc ) {
       rc = BeginWrite3dmChunk( TCODE_OPENNURBS_CLASS_DATA, 0 );
-      if (rc) {
+      if (rc)
+      {
         rc = o.Write( *this )?true:false;
         if ( !rc ) {
           ON_ERROR("ON_BinaryArchive::WriteObject() o.Write() failed.");
@@ -4369,7 +4440,14 @@ ON_BinaryArchive::BeginRead3dmChunk(
   }
   return rc;
 }
+
+
 bool ON_BinaryArchive::EndRead3dmChunk()
+{
+  return EndRead3dmChunk(false);
+}
+
+bool ON_BinaryArchive::EndRead3dmChunk(bool bSupressPartiallyReadChunkWarning)  
 {
   //int length = 0;
   bool rc = false;
@@ -4491,7 +4569,10 @@ bool ON_BinaryArchive::EndRead3dmChunk()
             // We are reading a file written by this version or an
             // earlier version of opennurbs.  
             // There should not be any partially read chunks.
-            ON_WARNING("ON_BinaryArchive::EndRead3dmChunk: partially read chunk - skipping bytes at end of current chunk.");
+            if (!bSupressPartiallyReadChunkWarning)
+            {
+              ON_WARNING("ON_BinaryArchive::EndRead3dmChunk: partially read chunk - skipping bytes at end of current chunk.");
+            }
           }
         }
       }
@@ -12264,7 +12345,11 @@ ON_BinaryArchive::ReadByte( size_t count, void* p )
         if ( c )
         {
           ON__UINT64 file_offset = CurrentPosition();
-          if ( file_offset < c->m_big_offset || c->m_big_offset + c->Length() < file_offset + count )
+          if ( file_offset < c->m_big_offset )
+          {
+            ON_ERROR("ON_BinaryArchive::ReadByte will read before the start of the chunk.");
+          }
+          else if (c->m_big_offset + c->Length() < file_offset + count )
           {
             ON_ERROR("ON_BinaryArchive::ReadByte will read past end of the chunk");
           }
@@ -12845,15 +12930,16 @@ void Dump3dmChunk_ErrorReportHelper( size_t offset, const char* msg, ON_TextLog&
   dump.Print("** ERROR near offset %d ** %s\n",ioffset,msg);
 }
 static
-bool DumpChunk_PrintHeaderInfo( size_t offset0, ON__UINT32 typecode, ON__INT64 big_value, ON_TextLog& dump)
+bool DumpChunk_PrintHeaderInfo( size_t offset0, ON__UINT32 typecode, ON__INT64 big_value, const char* typecode_name, ON_TextLog& dump)
 {
   bool bShortChunk = (0 != (typecode & TCODE_SHORT));
-  const char* typecode_name = ON_BinaryArchive::TypecodeName(typecode);
+  if ( 0 == typecode_name )
+    typecode_name = ON_BinaryArchive::TypecodeName(typecode);
   if ( 0 == typecode_name )
     typecode_name = "unknown tcode";
   if ( bShortChunk )
   {
-    dump.Print("%6d: %08X %s: value = %I64d (%016I64X)\n", offset0, typecode, typecode_name, big_value, big_value );
+    dump.Print("%6d: %08X %s: value = %lld (%016llX)\n", offset0, typecode, typecode_name, big_value, big_value );
   }
   else 
   {
@@ -12863,7 +12949,7 @@ bool DumpChunk_PrintHeaderInfo( size_t offset0, ON__UINT32 typecode, ON__INT64 b
       Dump3dmChunk_ErrorReportHelper(offset0,"BeginRead3dmChunk() returned length < 0.",dump);
       return false;
     }
-    dump.Print("%6d: %08X %s: length = %I64d bytes\n", offset0, typecode, typecode_name, big_value );
+    dump.Print("%6d: %08X %s: length = %lld bytes\n", offset0, typecode, typecode_name, big_value );
   }
   return true;
 }
@@ -13390,11 +13476,42 @@ bool Dump3dmChunk_UserDataHeaderHelper( size_t offset, ON_BinaryArchive& file,
   return rc;
 }
 
-
+//static void Dump3dmChunk_SkipPartiallyReadChunk( 
+//  ON_BinaryArchive& file,
+//  size_t offset0,
+//  ON__INT64 big_value,
+//  ON_TextLog& dump
+//  )
+//{
+//  // used to skip to ends of partially read chunks.
+//  const size_t sizeof_chunk_header = 4 + file.SizeofChunkLength();
+//  const size_t offset1 = file.CurrentPosition();
+//  if ( offset1 < offset0 )
+//  {
+//    Dump3dmChunk_ErrorReportHelper(offset0,"BeginRead3dmChunk() current postion is before start of chunk header.",dump);
+//  }
+//  else
+//  {
+//    ON__INT64 delta = ((ON__INT64)(((ON__UINT64)offset1) - ((ON__UINT64)offset0))) - ((ON__INT64)sizeof_chunk_header);
+//    if ( delta < 0 )
+//    {
+//      Dump3dmChunk_ErrorReportHelper(offset0,"BeginRead3dmChunk() current postion is before end of chunk header.",dump);
+//    }
+//    else if ( delta > 0 )
+//    {
+//      if ( !file.BigSeekFromCurrentPosition(delta) )
+//      {
+//        Dump3dmChunk_ErrorReportHelper(offset0,"BeginRead3dmChunk() failed to skip to end of partially read chunk.",dump);
+//      }
+//    }
+//  }
+//}
+//
 unsigned int 
 ON_BinaryArchive::Dump3dmChunk( ON_TextLog& dump, int recursion_depth )
 {
   //ON_BinaryArchive& file = *this;
+  const char* typecode_name = 0;
   bool bShortChunk = false;
   const size_t offset0 = CurrentPosition();
   unsigned int typecode = 0;
@@ -13419,26 +13536,9 @@ ON_BinaryArchive::Dump3dmChunk( ON_TextLog& dump, int recursion_depth )
       }
 
       ////bShortChunk = (0 != (typecode & TCODE_SHORT));
-      ////const char* typecode_name = ON_BinaryArchive::TypecodeName(typecode);
-      ////if ( 0 == typecode_name )
-      ////  typecode_name = "unknown tcode";
-      ////if ( bShortChunk )
-      ////{
-      ////  dump.Print("%6d: %08X %s: value = %I64d (%016I64X)\n", offset0, typecode, typecode_name, big_value, big_value );
-      ////}
-      ////else 
-      ////{
-      ////  // long chunk value = length of chunk data
-      ////  if ( big_value < 0 ) 
-      ////  {
-      ////    Dump3dmChunk_ErrorReportHelper(offset0,"BeginRead3dmChunk() returned length < 0.",dump);
-      ////    EndRead3dmChunk();
-      ////    return 0;
-      ////  }
-      ////  dump.Print("%6d: %08X %s: length = %I64d bytes\n", offset0, typecode, typecode_name, big_value );
-      ////}
+      typecode_name = ON_BinaryArchive::TypecodeName(typecode);
       bShortChunk = (0 != (typecode & TCODE_SHORT));
-      if ( !DumpChunk_PrintHeaderInfo(offset0,typecode,big_value,dump) )
+      if ( !DumpChunk_PrintHeaderInfo(offset0,typecode,big_value,typecode_name,dump) )
       {
         EndRead3dmChunk();
         return 0;
@@ -13458,6 +13558,10 @@ ON_BinaryArchive::Dump3dmChunk( ON_TextLog& dump, int recursion_depth )
       case TCODE_LIGHT_TABLE:
       case TCODE_FONT_TABLE:
       case TCODE_DIMSTYLE_TABLE:
+      case TCODE_HATCHPATTERN_TABLE:
+      case TCODE_LINETYPE_TABLE:
+      case TCODE_TEXTURE_MAPPING_TABLE:
+      case TCODE_HISTORYRECORD_TABLE:
       case TCODE_USER_TABLE:
       case TCODE_INSTANCE_DEFINITION_TABLE:
       case TCODE_OBJECT_TABLE:
@@ -13481,7 +13585,7 @@ ON_BinaryArchive::Dump3dmChunk( ON_TextLog& dump, int recursion_depth )
       case TCODE_PROPERTIES_OPENNURBS_VERSION:
         {
           dump.PushIndent();
-          dump.Print("Version of opennurbs that wrote this file: %I64d\n",big_value);
+          dump.Print("Version of opennurbs that wrote this file: %lld\n",big_value);
           dump.PopIndent();           
           if ( 0 == m_3dm_opennurbs_version && big_value > 0 && big_value <= 299999999 )
             ON_SetBinaryArchiveOpenNURBSVersion(*this,(ON__INT32)big_value);
@@ -13551,9 +13655,57 @@ ON_BinaryArchive::Dump3dmChunk( ON_TextLog& dump, int recursion_depth )
       case TCODE_LIGHT_RECORD:
         {
           dump.PushIndent();
-          unsigned int light_chunk_typecode = Dump3dmChunk( dump, recursion_depth+1 );
-          if ( 0 == typecode )
-            typecode = light_chunk_typecode;
+          unsigned int light_chunk_typecode = 0;
+          for (;;) {
+            light_chunk_typecode = Dump3dmChunk( dump, recursion_depth+1 );
+            if ( !light_chunk_typecode ) {
+              break;
+            }
+            if ( TCODE_LIGHT_RECORD_END == light_chunk_typecode ) {
+              break;
+            }
+            switch( light_chunk_typecode ) {
+            //case TCODE_OBJECT_RECORD_TYPE:
+            case TCODE_LIGHT_RECORD_ATTRIBUTES:
+            case TCODE_LIGHT_RECORD_ATTRIBUTES_USERDATA:
+            case TCODE_OPENNURBS_CLASS:
+              break;
+            default:
+              {
+                Dump3dmChunk_ErrorReportHelper(offset0,"Rogue chunk in light record.",dump);
+              }
+            }
+          }
+          dump.PopIndent();
+        }
+        break;
+
+      case TCODE_TEXTURE_MAPPING_RECORD:
+        {
+          dump.PushIndent();
+          unsigned int mapping_chunk_typecode = Dump3dmChunk( dump, recursion_depth+1 );
+          if ( !typecode )
+            typecode = mapping_chunk_typecode;
+          dump.PopIndent();
+        }
+        break;
+
+      case TCODE_HISTORYRECORD_RECORD:
+        {
+          dump.PushIndent();
+          unsigned int history_chunk_typecode = Dump3dmChunk( dump, recursion_depth+1 );
+          if ( !typecode )
+            typecode = history_chunk_typecode;
+          dump.PopIndent();
+        }
+        break;
+
+      case TCODE_HATCHPATTERN_RECORD:
+        {
+          dump.PushIndent();
+          unsigned int hatch_chunk_typecode = Dump3dmChunk( dump, recursion_depth+1 );
+          if ( !typecode )
+            typecode = hatch_chunk_typecode;
           dump.PopIndent();
         }
         break;
@@ -13583,6 +13735,7 @@ ON_BinaryArchive::Dump3dmChunk( ON_TextLog& dump, int recursion_depth )
             switch( object_chunk_typecode ) {
             case TCODE_OBJECT_RECORD_TYPE:
             case TCODE_OBJECT_RECORD_ATTRIBUTES:
+            case TCODE_OBJECT_RECORD_ATTRIBUTES_USERDATA:
             case TCODE_OPENNURBS_CLASS:
               break;
             default:
@@ -13598,15 +13751,14 @@ ON_BinaryArchive::Dump3dmChunk( ON_TextLog& dump, int recursion_depth )
       case TCODE_OBJECT_RECORD_ATTRIBUTES:
         {
           dump.PushIndent();
-          if ( big_value < 48 )
+          if ( big_value < 14 )
           {
-            Dump3dmChunk_ErrorReportHelper(offset0,"Length of chunk is too small.  Should be >= 48.",dump);
+            Dump3dmChunk_ErrorReportHelper(offset0,"Length of chunk is too small.  Should be >= 14.",dump);
           }
           else
           {
             ON_UUID uuid = ON_nil_uuid;
             int layer_index = -99;
-            int material_index = -99;
             int mj = -1;
             int mn = -1;
             if ( !Read3dmChunkVersion(&mj,&mn))
@@ -13621,17 +13773,12 @@ ON_BinaryArchive::Dump3dmChunk( ON_TextLog& dump, int recursion_depth )
             {
               Dump3dmChunk_ErrorReportHelper(offset0,"ReadInt() failed to read layer index.",dump);
             }
-            else if ( !ReadInt(&material_index) )
-            {
-              Dump3dmChunk_ErrorReportHelper(offset0,"ReadInt() failed to read material index.",dump);
-            }
             else
             {
               dump.Print("Rhino object uuid: ");
               dump.Print(uuid);
               dump.Print("\n");
               dump.Print("layer index: %d\n",layer_index);
-              dump.Print("material index: %d\n",material_index);
             }
           }
           dump.PopIndent();
@@ -13782,7 +13929,7 @@ ON_BinaryArchive::Dump3dmChunk( ON_TextLog& dump, int recursion_depth )
           else {
             ON__UINT64 sizeof_file = 0;
             ReadEOFSizeOfFile(&sizeof_file);
-            dump.Print("current position = %d  stored size = %I64u\n",
+            dump.Print("current position = %d  stored size = %llu\n",
                        CurrentPosition(), 
                        sizeof_file
                        );
@@ -13795,7 +13942,7 @@ ON_BinaryArchive::Dump3dmChunk( ON_TextLog& dump, int recursion_depth )
     }
 
     const size_t offset1 = CurrentPosition();
-    if ( !EndRead3dmChunk() ) 
+    if ( !EndRead3dmChunk(true) ) 
     {
       Dump3dmChunk_ErrorReportHelper(offset1,"EndRead3dmChunk() failed.",dump);
       rc = false;
@@ -13905,7 +14052,7 @@ bool ON_Read3dmBufferArchive::AtEnd() const
 
 size_t ON_Read3dmBufferArchive::Read( size_t count, void* buffer )
 {
-  if ( 0 == buffer )
+  if ( count <= 0 || 0 == buffer )
     return 0;
 
   size_t maxcount = ( m_sizeof_buffer > m_buffer_position ) 
@@ -13944,6 +14091,186 @@ size_t ON_Read3dmBufferArchive::SizeOfBuffer() const
 const void* ON_Read3dmBufferArchive::Buffer() const
 {
   return (const void*)m_buffer;
+}
+
+
+
+
+
+ON_Write3dmBufferArchive::ON_Write3dmBufferArchive( 
+          size_t initial_sizeof_buffer, 
+          size_t max_sizeof_buffer, 
+          int archive_3dm_version,
+          int archive_opennurbs_version
+          )
+: ON_BinaryArchive(ON::write3dm)
+, m_p(0)
+, m_buffer(0)
+, m_sizeof_buffer(0)
+, m_max_sizeof_buffer(max_sizeof_buffer)
+, m_sizeof_archive(0)
+, m_buffer_position(0)
+, m_reserved1(0)
+, m_reserved2(0)
+, m_reserved3(0)
+, m_reserved4(0)
+{
+  if ( initial_sizeof_buffer > 0 )
+    AllocBuffer(initial_sizeof_buffer);
+  SetArchive3dmVersion(archive_3dm_version);
+  ON_SetBinaryArchiveOpenNURBSVersion(*this,archive_opennurbs_version);
+}
+
+ON_Write3dmBufferArchive::~ON_Write3dmBufferArchive()
+{
+  if ( m_p )
+    onfree(m_p);
+}
+
+void ON_Write3dmBufferArchive::AllocBuffer( size_t sz )
+{
+  if ( sz > m_sizeof_buffer 
+       && (m_max_sizeof_buffer <= 0 || sz <= m_max_sizeof_buffer) 
+     )
+  {
+    if ( sz < 2*m_sizeof_buffer )
+    {
+      sz = 2*m_sizeof_buffer;
+      if ( sz > m_max_sizeof_buffer )
+        sz = m_max_sizeof_buffer;
+    }
+
+    m_p = onrealloc(m_p,sz);
+    m_buffer = (unsigned char*)m_p;
+
+    if ( 0 != m_buffer )
+    {
+      memset( m_buffer + m_sizeof_buffer, 0, sz - m_sizeof_buffer );
+      m_sizeof_buffer = sz;
+    }
+    else
+    {
+      m_sizeof_buffer = 0;
+    }
+
+  }
+}
+
+// ON_BinaryArchive overrides
+size_t ON_Write3dmBufferArchive::CurrentPosition() const
+{
+  return m_buffer_position;
+}
+
+bool ON_Write3dmBufferArchive::SeekFromCurrentPosition( int offset )
+{
+  bool rc = false;
+  if ( m_buffer )
+  {
+    if (offset >= 0 )
+    {
+      m_buffer_position += offset;
+      rc = true;
+    }
+    else if ( size_t(-offset) <= m_buffer_position )
+    {
+      m_buffer_position -= (size_t(-offset));
+      rc = true;
+    }
+  }
+  return rc;
+}
+
+bool ON_Write3dmBufferArchive::SeekFromStart( size_t offset )
+{
+  bool rc = false;
+  if ( m_buffer && offset >= 0 ) 
+  {
+    m_buffer_position = offset;
+    rc = true;
+  }
+  return rc;
+}
+
+bool ON_Write3dmBufferArchive::AtEnd() const
+{
+  return (m_buffer_position >= m_sizeof_buffer) ? true : false;
+}
+
+size_t ON_Write3dmBufferArchive::Read( size_t count, void* buffer )
+{
+  if ( count <= 0 || 0 == buffer )
+    return 0;
+
+  size_t maxcount = ( m_sizeof_buffer > m_buffer_position ) 
+                  ? (m_sizeof_buffer - m_buffer_position)
+                  : 0;
+  if ( count > maxcount )
+    count = maxcount;
+
+  if ( count > 0 ) 
+  {
+    memcpy( buffer, m_buffer+m_buffer_position, count );
+    m_buffer_position += count;
+  }
+
+  return count;
+}
+
+size_t ON_Write3dmBufferArchive::Write( size_t sz, const void* buffer )
+{
+  if ( sz <= 0 || 0 == buffer )
+    return 0;
+
+  if ( m_buffer_position + sz > m_sizeof_buffer )
+  {
+    AllocBuffer(m_buffer_position + sz);
+  }
+
+  if ( m_buffer_position + sz > m_sizeof_buffer )
+    return 0;
+
+  memcpy( m_buffer + m_sizeof_buffer, buffer, sz );
+  m_sizeof_buffer += sz;
+  if ( m_sizeof_buffer > m_sizeof_archive )
+    m_sizeof_archive = m_sizeof_buffer;
+
+  return sz;
+}
+
+bool ON_Write3dmBufferArchive::Flush()
+{
+  // Nothing to flush
+  return true;
+}
+
+
+size_t ON_Write3dmBufferArchive::SizeOfBuffer() const
+{
+  return m_sizeof_buffer;
+}
+
+const void* ON_Write3dmBufferArchive::Buffer() const
+{
+  return (const void*)m_buffer;
+}
+
+void* ON_Write3dmBufferArchive::HarvestBuffer()
+{
+  void* buffer = m_buffer;
+
+  m_p = 0;
+  m_buffer = 0;
+  m_sizeof_buffer = 0;
+  m_sizeof_archive = 0;
+  m_buffer_position = 0;
+
+  return buffer;
+}
+
+size_t ON_Write3dmBufferArchive::SizeOfArchive() const
+{
+  return m_sizeof_archive;
 }
 
 

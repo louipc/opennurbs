@@ -53,11 +53,20 @@ void ON_Material::Default()
   m_shine = 0.0;
   m_transparency = 0.0;
 
+  m_bShared = false;
+  m_bDisableLighting = false;
+  m_reserved1[0] = 0;
+  m_reserved1[1] = 0;
+#if defined(ON_64BIT_POINTER)
+  m_reserved2[0] = 0;
+  m_reserved2[1] = 0;
+  m_reserved2[2] = 0;
+  m_reserved2[3] = 0;
+#endif
+
   m_textures.Destroy();
 
   m_plugin_id = ON_nil_uuid;
-
-  m_bShared = false;
 
   m_material_channel.Destroy();
 }
@@ -140,7 +149,9 @@ ON_BOOL32 ON_Material::Write( ON_BinaryArchive& file ) const
     rc = file.Write3dmChunkVersion(2,0); // never change the 2,0
 
 
-    if (rc) rc = file.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,2);
+    // version 1.2 field (20061113*)
+    // version 1.3 fields (20100917*)
+    if (rc) rc = file.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,3);
     if (rc)
     {
       for(;;)
@@ -186,6 +197,12 @@ ON_BOOL32 ON_Material::Write( ON_BinaryArchive& file ) const
         // version 1.2 field (20061113)
         if (rc) rc = file.WriteArray(m_material_channel);
 
+        // version 1.3 fields (20100917*)
+        rc = file.WriteBool(m_bShared);
+        if (!rc) break;
+        rc = file.WriteBool(m_bDisableLighting);
+        if (!rc) break;
+
         break;
       }
       if (!file.EndWrite3dmChunk() )
@@ -206,7 +223,7 @@ bool ON_Material::WriteV3Helper( ON_BinaryArchive& file ) const
   if ( rc ) rc = file.WriteColor( m_emission );
   if ( rc ) rc = file.WriteColor( m_specular );
   if ( rc ) rc = file.WriteDouble( Shine() );
-  if ( rc ) rc = file.WriteDouble( Transparency() );
+  if ( rc ) rc = file.WriteDouble( m_transparency );
 
   if ( rc ) rc = file.WriteChar( (unsigned char)1 ); // OBSOLETE // m_casts_shadows
   if ( rc ) rc = file.WriteChar( (unsigned char)1 ); // OBSOLETE // m_shows_shadows
@@ -398,6 +415,16 @@ ON_BOOL32 ON_Material::Read( ON_BinaryArchive& file )
             {
               // version 1.2 field (20061113)
               rc = file.ReadArray(m_material_channel);
+              if (!rc) break;
+
+              if ( minor_version >= 3 )
+              {
+                // version 1.3 fields (20100917*)
+                rc = file.ReadBool(&m_bShared);
+                if (!rc) break;
+                rc = file.ReadBool(&m_bDisableLighting);
+                if (!rc) break;
+              }
             }
 
           }
@@ -2172,9 +2199,41 @@ int ON_TextureMapping::EvaluateBoxMapping(
   return side0;
 }
 
+static bool TC_AtSrfp(ON_Interval srf_domain[2], ON_Interval packed_tex_domain[2], bool packed_tex_rotate, const ON_2dPoint & ptSrfp, ON_3dPoint& uv)
+{
+	const double a = srf_domain[0].NormalizedParameterAt(ptSrfp.x);
+	const double b = srf_domain[1].NormalizedParameterAt(ptSrfp.y);
+	if (packed_tex_rotate)
+	{
+		uv.x = packed_tex_domain[0].ParameterAt(1 - b);
+		uv.y = packed_tex_domain[1].ParameterAt(a);
+	}
+	else
+	{
+		uv.x = packed_tex_domain[0].ParameterAt(a);
+		uv.y = packed_tex_domain[1].ParameterAt(b);
+	}
+	return true;
+}
+
+static bool TC_AtSrfp(const ON_Surface& surface, const ON_2dPoint & ptSrfp, ON_3dPoint& uv)
+{
+	ON_Interval srf_domain[2];
+	srf_domain[0] = surface.Domain(0);
+	srf_domain[1] = surface.Domain(1);
+
+	ON_Interval packed_tex_domain[2];
+	packed_tex_domain[0].Set(0.0, 1.0);
+	packed_tex_domain[1].Set(0.0, 1.0);
+
+	bool packed_tex_rotate = false;
+
+	return TC_AtSrfp(srf_domain, packed_tex_domain, packed_tex_rotate, ptSrfp, uv);
+}
+
 int ON_TextureMapping::EvaluateMeshMapping(const ON_3dPoint& P, const ON_3dVector& N, const ON_Mesh* mesh, ON_3dPoint* T) const
 {
-  return 0;
+	return 0;
 }
 
 int ON_TextureMapping::EvaluateSurfaceMapping( 
@@ -2184,16 +2243,100 @@ int ON_TextureMapping::EvaluateSurfaceMapping(
   ON_3dPoint* T
   ) const
 {
-  return 0;
+	ON_3dPoint rst(m_Pxyz*P);
+
+	if ( srf )
+	{
+		ON_3dPoint uv(ON_UNSET_VALUE,ON_UNSET_VALUE,0.0);
+		
+		if ( ray_projection == m_projection )
+		{
+			ON_3dVector n(m_Nxyz*N);
+			if ( n.Unitize() )
+			{
+				ON_Line L(rst,rst+n);
+				ON_SimpleArray<ON_X_EVENT> x;
+				if ( L.IntersectSurface(srf,x) > 0 )
+				{
+					double t0, t1;
+					int i;
+					const ON_X_EVENT& e0 = x[0];
+					t0 = e0.m_a[0];
+					uv.x = e0.m_b[0];
+					uv.y = e0.m_b[1];
+					for ( i = 1; i < x.Count() && t0 < 0.0; i++ )
+					{
+						const ON_X_EVENT& e = x[i];
+						t1 = e.m_a[0];
+						if ( 1 == BestHitHelper(t0,t1) )
+						{
+							t0 = t1;
+							uv.x = e.m_b[0];
+							uv.y = e.m_b[1];
+						}
+					}
+				}
+			}
+		}
+		if (!uv.IsValid())
+		{
+			srf->GetClosestPoint(rst, &uv.x, &uv.y);
+		}
+
+		if ( uv.IsValid() )
+		{
+			// Convert surface paramters to texture coordinates
+			const ON_2dPoint ptSrfp(uv.x, uv.y);
+			if (true == TC_AtSrfp(*srf, ptSrfp, uv))
+				rst = uv;
+		}
+	}
+	*T = m_uvw*rst;
+	return 1;
 }
 
-void ON_TextureMapping::SetAdvancedBrepMappingToolFunctions(TEXMAP_INTERSECT_LINE_SURFACE pFnILS, TEXMAP_BREP_FACE_CLOSEST_POINT pFnBFCP)
+class CBrepFaceMappingData
 {
-}
+public:
+	void Set(const ON_Mesh& mesh)
+	{
+		m_srf_domain[0] = mesh.m_srf_domain[0];
+		m_srf_domain[1] = mesh.m_srf_domain[1];
+		m_packed_tex_domain[0] = mesh.m_packed_tex_domain[0];
+		m_packed_tex_domain[1] = mesh.m_packed_tex_domain[1];
+		m_packed_tex_rotate = mesh.m_packed_tex_rotate;
+	}
+	ON_Interval m_srf_domain[2];
+	ON_Interval m_packed_tex_domain[2];
+	bool m_packed_tex_rotate;
+};
+
+class CBrepMappingData
+{
+public:
+	CBrepMappingData(ON__UINT32 brepDataCRC = 0, ON_UUID brepModelObjectId = ON_nil_uuid) { m_brepDataCRC = brepDataCRC; m_brepModelObjectId = brepModelObjectId; }
+
+	static int Compare(const CBrepMappingData * pA, const CBrepMappingData * pB)
+	{
+		if (pA->m_brepDataCRC < pB->m_brepDataCRC)
+		{
+			return -1;
+		}
+		if (pA->m_brepDataCRC > pB->m_brepDataCRC)
+		{
+			return 1;
+		}
+		return ON_UuidCompare(pA->m_brepModelObjectId, pB->m_brepModelObjectId);
+	}
+
+	ON_SimpleArray<CBrepFaceMappingData> m_faceData;
+	ON__UINT32 m_brepDataCRC;
+	ON_UUID m_brepModelObjectId;
+};
 
 int ON_TextureMapping::EvaluateBrepMapping( const ON_3dPoint& P, const ON_3dVector& N, const ON_Brep* brep,	ON_3dPoint* T) const
 {
-	return 0;
+  return 0;
 }
 
 int ON_TextureMapping::Evaluate(
@@ -2274,14 +2417,61 @@ ON__UINT32 ON_TextureMapping::MappingCRC() const
     crc32 = ON_CRC32(crc32,sizeof(m_Pxyz),          &m_Pxyz);
     // do not include m_Nxyz here - it won't help and may hurt
 
-	if (m_mapping_primitive != NULL)
-	{
-      if ((mesh_mapping_primitive == m_type) || (brep_mapping_primitive == m_type) || (srf_mapping_primitive == m_type))
+	  if ( 0 != m_mapping_primitive )
+	  {
+      switch( m_type )
       {
-	    crc32 = m_mapping_primitive->DataCRC(crc32);
-	  }
+      case ON_TextureMapping::mesh_mapping_primitive:
+        {
+          const ON_Mesh* mesh = ON_Mesh::Cast(m_mapping_primitive);
+          if ( 0 == mesh )
+            break;
+          crc32 = mesh->DataCRC(crc32);
+          if ( mesh->HasTextureCoordinates() )
+          {
+            // 25 August 2010 Dale Lear
+            //   Including m_T[] in crc32 per Jussi and Andy email discussion.
+            //   This is probably correct because users will expect the
+            //   "picture" on the mesh to be applied to the target in
+            //   a visual way.
+            const ON_2fPoint* tex = mesh->m_T.Array();
+            crc32 = ON_CRC32(crc32,mesh->m_T.Count()*sizeof(tex[0]),tex);
+          }
+        }
+        break;
+
+      case ON_TextureMapping::brep_mapping_primitive:
+        {
+          const ON_Brep* brep = ON_Brep::Cast(m_mapping_primitive);
+          if ( 0 == brep )
+            break;
+          crc32 = brep->DataCRC(crc32);
+          // 25 August 2010 Dale Lear
+          //   Should brep's render meshes be included in the crc?
+          //   The texture that is being mapped is actually
+          //   being applied to the brep by the render mesh's
+          //   m_T[] values and some users will want to see 
+          //   the "picture" on the brep mapped to the 
+          //   "picture" on the
+          //   target.
+        }
+        break;
+
+      case ON_TextureMapping::srf_mapping_primitive:
+        {
+          const ON_Surface* surface = ON_Surface::Cast(m_mapping_primitive);
+          if ( 0 == surface )
+            break;
+          crc32 = surface->DataCRC(crc32);
+        }
+        break;
+      default:
+        // Intentionally ignoring other ON_TextureMapping::TYPE values
+        break;
+      }
     }
   }
+
   crc32 = ON_CRC32(crc32,sizeof(m_uvw), &m_uvw);
   return crc32;
 }
@@ -2417,13 +2607,26 @@ bool GetSPTCHelper(
   {
     // Packed textures are not compatible with the use 
     // of m_uvw.  m_uvw is ignored in this block
-    // of code on purpose.
+    // of code on purpose.  //SEE BELOW
     const ON_Interval tex_udom = mesh.m_packed_tex_domain[0];
     const ON_Interval tex_vdom = mesh.m_packed_tex_domain[1];
     for ( i = 0; i < vcnt; i++)
     {
-	    u = S[i].x;
-	    v = S[i].y;
+		//ALB 2011.01.14
+		//Added support for m_uvw in packed textures.  Even though this conceptually makes
+		//very little sense, it's one of the most requested features for the texture mapping
+		//system, so I grudgingly add it.
+		if (bHaveUVWXform)
+		{
+			const ON_2dPoint si = mapping.m_uvw*S[i];
+			u = si.x;
+			v = si.y;
+		}
+		else
+		{
+			u = S[i].x;
+			v = S[i].y;
+		}
 
 	    // (u, v) = known surface parameter
 	    if ( mesh.m_packed_tex_rotate ) 
@@ -2543,7 +2746,7 @@ bool ON_TextureMapping::GetTextureCoordinates(
     T.SetCount(vcnt);
     T.Zero();
     rc = GetSPTCHelper(mesh,*this,&T[0].x,3);
-  }
+	}
   else
   {
     ON_3dPoint  P, tc;
@@ -2591,11 +2794,15 @@ bool ON_TextureMapping::GetTextureCoordinates(
     double w;
     int sd;
 
-    if ( mesh_N &&
+		if (clspt_projection == m_projection && ON_TextureMapping::mesh_mapping_primitive == m_type && NULL != m_mapping_primitive)
+		{
+		}
+		else if ( mesh_N &&
           (   ray_projection == m_projection 
            || ON_TextureMapping::box_mapping == m_type 
-           || ON_TextureMapping::cylinder_mapping == m_type 
-           )
+           || ON_TextureMapping::cylinder_mapping == m_type
+           || ON_TextureMapping::mesh_mapping_primitive == m_type
+		   )
         )
   	{
 			// calculation uses mesh vertex normal
@@ -2622,7 +2829,7 @@ bool ON_TextureMapping::GetTextureCoordinates(
           if ( Tsd ) Tsd[i] = sd;
 			  }
       }
-      else
+			else
       {
         // mesh vertex and normal are ok
 			  for (i = 0; i < vcnt; i++)
@@ -2654,16 +2861,16 @@ bool ON_TextureMapping::GetTextureCoordinates(
 		  }
     }
     else
-    {
-      // normal is not used and mesh vertex is ok
-      for ( i = 0; i < vcnt; i++ )
-      {
-        P = mesh_V[i];
-        sd = Evaluate(P,N,&tc);
-			  T[i] = tc;
-        if ( Tsd )
-          Tsd[i] = sd;
-		  }
+		{
+			// normal is not used and mesh vertex is ok
+			for ( i = 0; i < vcnt; i++ )
+			{
+				P = mesh_V[i];
+				sd = Evaluate(P,N,&tc);
+				T[i] = tc;
+				if ( Tsd )
+					Tsd[i] = sd;
+			}
     }
     rc = true;
 	}
@@ -4249,13 +4456,26 @@ void ON_ObjectRenderingAttributes::Default()
   m_mappings.Destroy();
   m_bCastsShadows = true;
   m_bReceivesShadows = true;
-  m_bReserved1 = false;
-  m_bReserved2 = false;
+  m_bits = 0;
+  m_reserved1 = 0;
 }
 
 void ON_RenderingAttributes::Default()
 {
   m_materials.Destroy();
+}
+
+void ON_ObjectRenderingAttributes::EnableAdvancedTexturePreview(bool b)
+{
+  if ( b )
+    m_bits |= 1;    // set bit 1
+  else 
+    m_bits &= 0xFE; // clear bit 1
+}
+
+bool ON_ObjectRenderingAttributes::AdvancedTexturePreview() const
+{
+  return (0 != (1 & m_bits)) ? true : false;
 }
 
 bool ON_RenderingAttributes::IsValid( ON_TextLog* text_log ) const
@@ -4366,6 +4586,10 @@ int ON_ObjectRenderingAttributes::Compare( const ON_ObjectRenderingAttributes& o
       {
         rc = ((int)(m_bReceivesShadows?1:0)) - ((int)(other.m_bReceivesShadows?1:0));
       }
+	  if ( !rc )
+	  {
+	    rc = ((int)(AdvancedTexturePreview()?1:0)) - ((int)(other.AdvancedTexturePreview()?1:0));
+	  }
     }
   }
   return rc;
@@ -4659,7 +4883,7 @@ bool ON_RenderingAttributes::Read( ON_BinaryArchive& archive )
 
 bool ON_ObjectRenderingAttributes::Write( ON_BinaryArchive& archive ) const
 {
-  bool rc = archive.BeginWrite3dmChunk( TCODE_ANONYMOUS_CHUNK, 1, 2 );
+  bool rc = archive.BeginWrite3dmChunk( TCODE_ANONYMOUS_CHUNK, 1, 3 );
   if ( !rc )
     return false;
   for(;;)
@@ -4674,6 +4898,11 @@ bool ON_ObjectRenderingAttributes::Write( ON_BinaryArchive& archive ) const
     rc = archive.WriteBool(m_bCastsShadows);
     if ( !rc ) break;
     rc = archive.WriteBool(m_bReceivesShadows);
+    if ( !rc ) break;
+
+    // version 1.3 fields added 20101019
+    bool b = AdvancedTexturePreview();
+    rc = archive.WriteBool(b);
     if ( !rc ) break;
 
     break;
@@ -4710,6 +4939,15 @@ bool ON_ObjectRenderingAttributes::Read( ON_BinaryArchive& archive )
     if ( !rc ) break;
     rc = archive.ReadBool(&m_bReceivesShadows);
     if ( !rc ) break;
+
+    if ( minor_version <= 2 )
+      break;
+
+    // version 1.3 fields added 20101019
+    bool b = AdvancedTexturePreview();
+    rc = archive.ReadBool(&b);
+    if ( !rc ) break;
+    EnableAdvancedTexturePreview(b);
 
     break;
   }

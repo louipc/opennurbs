@@ -101,11 +101,6 @@ public:
   /////////////////////////////////////////////////////////////////
   // ON_Surface overrides
 
-  ON_Mesh* CreateMesh( 
-             const ON_MeshParameters& mp,
-             ON_Mesh* mesh = NULL
-             ) const;
-
   /*
   Description:
     Sets the evaluation domains.  Does not change the geometry.
@@ -258,7 +253,7 @@ public:
                   double* t,
                   int* hint=NULL,
                   int* dtype=NULL,
-                  double cos_angle_tolerance=0.99984769515639123915701155881391,
+                  double cos_angle_tolerance=ON_DEFAULT_ANGLE_TOLERANCE_COSINE,
                   double curvature_tolerance=ON_SQRT_EPSILON
                   ) const;
 
@@ -297,7 +292,7 @@ public:
     double point_tolerance=ON_ZERO_TOLERANCE,
     double d1_tolerance=ON_ZERO_TOLERANCE,
     double d2_tolerance=ON_ZERO_TOLERANCE,
-    double cos_angle_tolerance=0.99984769515639123915701155881391,
+    double cos_angle_tolerance=ON_DEFAULT_ANGLE_TOLERANCE_COSINE,
     double curvature_tolerance=ON_SQRT_EPSILON
     ) const;
 
@@ -601,6 +596,62 @@ public:
   ON_Interval Extents(
          int dir
          ) const;
+
+  /*
+  Description:
+    Create a plane that contains the projection of a bounding box.
+  Parameters:
+    plane_equation - [in]
+    bbox - [in]
+    padding - [in]
+      amount of extra padding to add around the edges of the
+      plane.  Default is 0.0625
+  Returns:
+    true if successful
+  */
+  bool CreatePseudoInfinitePlane( 
+          ON_PlaneEquation plane_equation,
+          const ON_BoundingBox& bbox,
+          double padding = 0.0625
+          );
+
+  /*
+  Description:
+    Create a plane that contains the projection of a bounding box.
+  Parameters:
+    plane - [in]
+    bbox - [in]
+    padding - [in]
+      amount of extra padding to add around the edges of the
+      plane.  Default is 0.0625
+  Returns:
+    true if successful
+  */
+  bool CreatePseudoInfinitePlane( 
+          const ON_Plane& plane,
+          const ON_BoundingBox& bbox,
+          double padding = 0.0625
+          );
+
+  /*
+  Description:
+    Create a plane that contains the projection of a list of points.
+  Parameters:
+    plane - [in]
+    point_count - [in]
+    point_list - [in]
+    padding - [in]
+      amount of extra padding to add around the edges of the
+      plane.  Default is 0.0625
+  Returns:
+    true if successful
+  */
+  bool CreatePseudoInfinitePlane( 
+          const ON_Plane& plane,
+          int point_count,
+          const ON_3dPoint* point_list,
+          double padding = 0.0625
+          );
 
 protected:
   // evaluation domain (always increasing)

@@ -384,6 +384,18 @@ ON_DLL_TEMPLATE template class ON_CLASS ON_ClassArray<ON_UserString>;
 #pragma warning( pop )
 #endif
 
+/*
+Description:
+  When ON_Object::IsValid() fails and returns false, ON_IsNotValid()
+  is called.  This way, a developer can put a breakpoint in
+  ON_IsNotValid() and stop execution at the exact place IsValid()
+  fails.
+Returns:
+  false;
+*/
+ON_DECL
+bool ON_IsNotValid();
+
 ////////////////////////////////////////////////////////////////
 
 // Description:
@@ -425,22 +437,6 @@ public:
   bool CopyFrom( const ON_Object* src );
 
 public:
-
-#if defined(ON_DLL_EXPORTS) || defined(ON_DLL_IMPORTS)
-  // See comments at the top of opennurbs_object.cpp for details.
-
-  // new/delete
-  void* operator new(size_t);
-  void  operator delete(void*);
-
-  // array new/delete
-  void* operator new[] (size_t);
-  void  operator delete[] (void*);
-
-  // in place new/delete
-  void* operator new(size_t,void*);
-  void  operator delete(void*,void*);
-#endif
 
   ON_Object();
   ON_Object( const ON_Object& );
@@ -649,7 +645,7 @@ public:
 
   /*
   Description:
-    Attach a user string to an object.  This information will
+    Attach a user string to the object.  This information will
     perisist through copy construction, operator=, and file IO.
   Parameters:
     key - [in] id used to retrieve this string.
@@ -665,7 +661,24 @@ public:
 
   /*
   Description:
-    Get user string from an object.
+    Append entries to the user string list
+  Parameters:
+    count - [in]
+      number of element in us[] array
+    user_strings - [in]
+      entries to append.
+    bReplace - [in]
+      If bReplace is true, then existing entries with the same key are
+      updated with the new entry's value.  If bReplace is false, then
+      existing entries are not updated.
+  Returns:
+    Number of entries added, deleted, or modified.
+  */
+  int SetUserStrings( int count, const ON_UserString* user_strings, bool bReplace );
+
+  /*
+  Description:
+    Get user string from the object.
   Parameters:
     key - [in] id used to retrieve the string.
     string_value - [out]
@@ -679,7 +692,7 @@ public:
 
   /*
   Description:
-    Get a list of all user strings on an object.
+    Get a list of all user strings on the object.
   Parameters:
     user_strings - [out]
       user strings are appended to this list.
@@ -692,7 +705,7 @@ public:
 
   /*
   Description:
-    Get a list of all user string keys on an object.
+    Get a list of all user string keys on the object.
   Parameters:
     user_string_keys - [out]
       user string keys are appended to this list.
@@ -702,6 +715,12 @@ public:
   int GetUserStringKeys( 
     ON_ClassArray<ON_wString>& user_string_keys 
     ) const;
+
+  /*
+  Returns:
+    Number of user strings on the object.
+  */
+  int UserStringCount() const;
 
   /*
   Description:
@@ -843,7 +862,7 @@ public:
   virtual
   void DestroyRuntimeCache( bool bDelete = true );
 
-  ON_MEMORY_POOL* m_mempool; // memory pool for this object (typically null)
+  void* m_mempool; // null
 private:
   friend int ON_BinaryArchive::ReadObject( ON_Object** );
   friend bool ON_BinaryArchive::WriteObject( const ON_Object& );

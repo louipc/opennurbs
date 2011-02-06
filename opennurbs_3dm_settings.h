@@ -98,9 +98,106 @@ public:
   double m_arrowwidth;
   double m_centermark;
 
-  // added 12/28/05 LW
-  double m_dimdle;
-  double m_dimgap;
+  /*
+  Returns:
+    Value of m_world_view_text_scale;
+  */
+  double WorldViewTextScale() const;
+
+  /*
+  Parameters:
+    world_view_text_scale - [in]
+      Sets value of m_world_view_text_scale.
+  */
+  void SetWorldViewTextScale(double world_view_text_scale );
+
+  /*
+  Returns:
+    Value of m_world_view_hatch_scale;
+  */
+  double WorldViewHatchScale() const;
+
+  /*
+  Parameters:
+    world_view_hatch_scale - [in]
+      Sets value of m_world_view_hatch_scale.
+  */
+  void SetWorldViewHatchScale(double world_view_hatch_scale );
+
+
+  /*
+  Returns:
+    Value of m_bEnableAnnotationScaling;
+  */
+  bool IsAnnotationScalingEnabled() const;
+
+  /*
+  Parameters:
+    bEnable - [in]
+      Sets value of m_bEnableAnnotationScaling.
+  */
+  void EnableAnnotationScaling( bool bEnable );
+
+  /*
+  Returns:
+    Value of m_bEnableHatchScaling;
+  */
+  bool IsHatchScalingEnabled() const;
+
+  /*
+  Parameters:
+    bEnable - [in]
+      Sets value of m_bEnableHatchScaling.
+  */
+  void EnableHatchScaling( bool bEnable );
+
+  // Present but not used in V4 or V5 - removed 5 August 2010 to make room
+  // for m_world_view_text_scale and m_bEnableAnnotationScaling
+  //// added 12/28/05 LW
+  //double m_dimdle;
+  //double m_dimgap;
+private:
+  // If m_bEnableAnnotationScaling is true,
+  // and ON_Annotation2::m_annotative_scale is true,
+  // and ON_Annotation2::m_type == ON::dtTextBlock,
+  // and the text object is being displayed in a world
+  // view (not a detail view and not a page view),
+  // then the text will be scaled by m_world_view_text_scale.
+  // The default is 1.0. Values <= 0.0 are not valid.
+  float m_world_view_text_scale;
+  float m_world_view_hatch_scale;
+  
+private:
+  // If m_bEnableAnnotationScaling is false:
+  //   * m_world_view_text_scale is ignored.
+  //   * text is not scaled.
+  //   * ON_DimStyle::DimScale() determines the scale 
+  //     applied to all other annotation objects in all 
+  //     types of views.
+  //   * The value of ON_DetailView::m_page_per_model_ratio
+  //     is applied to all objects (annotation and geometry)
+  //     in the detail view.
+  //
+  // If m_bEnableAnnotationScaling is true:
+  //   * m_world_view_text_scale is used as described above.
+  //   * ON_DimStyle::DimScale() determines the scale 
+  //     applied to all non text annotation objects in 
+  //     world views. 
+  //   * ON_DimStyle::DimScale() is ignored in page and 
+  //     detail views. 
+  //   * ON_DetailView::m_page_per_model_ratio is ingored
+  //     for annotation objects in detail views, other
+  //     geometry is scaled.
+  //
+  // Default is true.
+  unsigned char m_bEnableAnnotationScaling;
+
+  unsigned char m_bEnableHatchScaling;
+
+private:
+  unsigned char m_reserved[6];
+
+public:
 
   ON::unit_system m_dimunits;  // units used to measure the dimension
   int m_arrowtype;     // 0: filled narrow triangular arrow
@@ -347,7 +444,8 @@ public:
   ON_Viewport m_vp;
 
   // clipping planes
-  // These are not saved with the view. They are set up and used during runtime
+  // Prior to Dec 14, 2010 m_clipping_planes was not saved with the view. 
+  // After Dec 14, 2010 m_clipping_planes is saved.
   ON_SimpleArray<ON_ClippingPlaneInfo> m_clipping_planes;
 
   // If true, the the camera location, camera direction,
@@ -468,12 +566,21 @@ public:
 
   void Dump( ON_TextLog& text_log ) const;
 
+  bool ScaleBackgroundToFit() const;
+  void SetScaleBackgroundToFit( bool bScaleBackgroundToFit );
+
   //////////
   // false: image pixel size = current viewport size
   // true:  image pixel size = m_image_width X m_image_height pixels
   ON_BOOL32 m_bCustomImageSize;
   int  m_image_width;   // image width in pixels
   int  m_image_height;  // image height in pixels
+
+private:
+  bool m_bScaleBackgroundToFit;
+  unsigned char m_reserved1[3];
+public:
+
   ////////
   // Number of dots/inch (dots=pixels) to use when printing and 
   // saving bitmaps. The default is 72.0 dots/inch.
@@ -525,6 +632,9 @@ public:
   bool    m_bUsesMeshEdgesAttr;
   bool    m_bUsesAnnotationAttr;
   bool    m_bUsesHiddenLightsAttr;
+
+private:
+  unsigned char m_reserved2[3];
 };
 
 

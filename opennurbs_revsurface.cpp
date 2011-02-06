@@ -1106,7 +1106,7 @@ bool ON_RevSurface::IsContinuous(
     double point_tolerance, // default=ON_ZERO_TOLERANCE
     double d1_tolerance, // default==ON_ZERO_TOLERANCE
     double d2_tolerance, // default==ON_ZERO_TOLERANCE
-    double cos_angle_tolerance, // default==0.99984769515639123915701155881391
+    double cos_angle_tolerance, // default==ON_DEFAULT_ANGLE_TOLERANCE_COSINE
     double curvature_tolerance  // default==ON_SQRT_EPSILON
     ) const
 {
@@ -1493,7 +1493,9 @@ ON_BOOL32 ON_RevSurface::GetBBox(    // returns true if successful
     rc = m_curve->GetBoundingBox( cbox );
     if (rc)
     {
-      bbox = cbox;
+      //Dec 16 2010 - Chuck - if the angle range does not include 0, m_curve is not part of the surface.
+      //bbox = cbox;
+
       ON_3dPointArray corners;
       cbox.GetCorners(corners);
       ON_3dPoint P;
@@ -2381,14 +2383,13 @@ ON_BOOL32 ON_RevSurface::IsConical(
   return c.IsValid();
 }
 
-double ON_ClosestPointAngle( 
+static
+double ON_ClosestPointAngleHelper( 
             const ON_Line& axis, 
             const ON_Curve& curve, 
             ON_Interval angle_domain,
             const ON_3dPoint& test_point,
-            ON_3dPoint& curve_test_point, 
-            double* sine_angle, 
-            double* cosine_angle 
+            ON_3dPoint& curve_test_point
             )
 {
   // this assumes curve (revolute) is coplanar with axis and midpoint of curve is
@@ -2405,8 +2406,11 @@ double ON_ClosestPointAngle(
   ON_3dPoint Apt = axis.ClosestPointTo( Cpt );
   ON_3dVector v0 = Cpt - Apt;
   ON_3dVector v1 = test_point - axis.ClosestPointTo( test_point );
-  v0.Unitize();
-  v1.Unitize();
+  if ( !v0.Unitize() || !v1.Unitize() )
+  {
+    // point is on the axis - see bug 42808 pick cyl first.
+    return ON_UNSET_VALUE;
+  }
   double angle = angle_domain[0];
   double cos_angle = v0*v1;
   ON_3dVector Cross = ON_CrossProduct( v0, v1 );
@@ -2484,8 +2488,146 @@ double ON_ClosestPointAngle(
   sin_angle = sin(angle);
   cos_angle = cos(angle);
 
-  *sine_angle = sin_angle;
-  *cosine_angle = cos_angle;
   return angle;
+}
+
+double ON_ClosestPointAngle( 
+            const ON_Line& axis, 
+            const ON_Curve& curve, 
+            ON_Interval angle_domain,
+            const ON_3dPoint& test_point,
+            ON_3dPoint& curve_test_point, 
+            double* sine_angle, 
+            double* cosine_angle 
+            )
+{
+  double angle = ON_ClosestPointAngleHelper(axis,curve,angle_domain,test_point,curve_test_point);
+  if ( !ON_IsValid(angle) )
+  {
+    // happens when test point is on the axis of revolution.
+    // For example, bug 42808 when the cyl is picked first and the sphere second.
+    // This behavior is long standing.
+    angle = angle_domain.Min();
+  }
+  if ( 0 != sine_angle )
+    *sine_angle = sin(angle);
+  if ( 0 != cosine_angle )
+    *cosine_angle = cos(angle);
+  return angle;
+}
+
+static double LocalClsPtAngle(const ON_Line& axis, 
+                              const ON_Curve& curve, 
+                              double angle_seed,
+                              const ON_Interval angle_domain,
+                              const ON_3dPoint& test_point,
+                              ON_3dPoint& curve_test_point)
+
+{
+
+  // this assumes revolute is coplanar with axis and midpoint of curve is
+  // not on the axis.
+
+  if (angle_seed < angle_domain[0]) 
+    angle_seed = angle_domain[0];
+  else if (angle_seed > angle_domain[1]) 
+    angle_seed = angle_domain[1];
+
+  ON_Interval whole_circle(angle_domain[0], angle_domain[0]+2.0*ON_PI);
+
+  // 3 Jan 2011 Dale Lear
+  //   If ON_ClosestPointAngleHelper(), then use the seed value.
+  //   This Chuck's fix for bug 42808.
+  double angle = ON_ClosestPointAngleHelper(axis, curve, whole_circle, test_point, curve_test_point);
+  if ( !ON_IsValid(angle) )
+    angle = angle_seed;
+
+  if (angle >= whole_circle.Mid()){
+    if (angle_seed <= angle - ON_PI) 
+      angle = angle_domain[0];
+  }
+  else if (angle_seed > angle + ON_PI) 
+    //angle = 2.0*ON_PI;
+    angle = angle_domain[1];
+
+  if (angle > angle_domain[1]) angle = angle_domain[1];
+
+  return angle;
+
+}
+
+
+ON_BOOL32 ON_RevSurface::GetLocalClosestPoint( const ON_3dPoint& test_point,
+        double angle_seed, double curve_seed,
+        double* angle_t, double* curve_t,
+        const ON_Interval* angle_sub_domain, // can be NULL
+        const ON_Interval* curve_sub_domain  // can be NULL
+        ) const
+{
+  bool rc = false;
+
+  if ( m_bTransposed )
+  {
+    double x = angle_seed;
+    angle_seed = curve_seed;
+    curve_seed = x;
+    double* ptr = angle_t;
+    angle_t = curve_t;
+    curve_t = ptr;
+
+    // GBA 28-March-2008 if transposed we need to swap domain restrictions also
+    const ON_Interval* pint = angle_sub_domain;
+    angle_sub_domain = curve_sub_domain;
+    curve_sub_domain = pint;
+  }
+
+  if ( m_curve )
+  {
+    // this assumes revolute is coplanar with axis and midpoint of curve is
+    // not on the axis
+    ON_Interval angle_domain; // in radians
+    if ( angle_sub_domain )
+    {
+      if ( m_t != m_angle )
+      {
+        angle_domain[0] = m_angle.ParameterAt( m_t.NormalizedParameterAt(angle_sub_domain->Min()) );
+        angle_domain[1] = m_angle.ParameterAt( m_t.NormalizedParameterAt(angle_sub_domain->Max()) );
+      }
+      else
+      {
+        angle_domain[0] = angle_sub_domain->Min();
+        angle_domain[1] = angle_sub_domain->Max();
+      }
+      angle_domain.Intersection(m_angle);
+    }
+    else
+      angle_domain = m_angle;
+
+    ON_3dPoint curve_test_point;
+    double angle;
+    double aseed = (m_t != m_angle) ? m_angle.ParameterAt(m_t.NormalizedParameterAt(angle_seed)) : angle_seed;
+    angle = LocalClsPtAngle( m_axis, *m_curve, aseed, angle_domain, test_point, curve_test_point);
+    *angle_t = (m_t != m_angle) ? m_t.ParameterAt( m_angle.NormalizedParameterAt(angle) ) : angle;
+    rc = m_curve->GetLocalClosestPoint( curve_test_point, curve_seed, curve_t, curve_sub_domain )?true:false;
+    
+    if (rc)
+    {
+      //if at curve end and singularity, use angle_seed.
+      double sing_tol = 0.001*m_curve->Domain().Length();
+      if (sing_tol > ON_ZERO_TOLERANCE) sing_tol = ON_ZERO_TOLERANCE;
+      if ((IsSingular(0) && *curve_t - Domain(1)[0] < sing_tol) ||
+        (IsSingular(2) && Domain(1)[1] - *curve_t < sing_tol))
+      {
+
+        if (aseed < angle_domain[0]) 
+          *angle_t = m_t.ParameterAt(m_angle.NormalizedParameterAt(angle_domain[0]));
+        else if (aseed > angle_domain[1])  
+          *angle_t = m_t.ParameterAt(m_angle.NormalizedParameterAt(angle_domain[1]));
+        else 
+          *angle_t = angle_seed;
+      }
+    }
+  }
+  return rc;
 }
 

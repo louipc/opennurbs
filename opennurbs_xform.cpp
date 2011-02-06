@@ -1146,14 +1146,41 @@ void ON_Xform::Rotation(
   else if ( fabs(cos_angle*cos_angle + sin_angle*sin_angle - 1.0) > ON_SQRT_EPSILON )
   {
     ON_2dVector cs(cos_angle,sin_angle);
-    cs.Unitize();
-    cos_angle = cs.x;
-    sin_angle = cs.y;
+    if ( cs.Unitize() )
+    {
+      cos_angle = cs.x;
+      sin_angle = cs.y;
+    }
+    else
+    {
+      ON_ERROR("sin_angle and cos_angle are both zero.");
+      cos_angle = 1.0;
+      sin_angle = 0.0;
+    }
   }
   else
   {
-    if ( cos_angle > 1.0 ) cos_angle = 1.0; else if (cos_angle < -1.0) cos_angle = -1.0;
-    if ( sin_angle > 1.0 ) sin_angle = 1.0; else if (sin_angle < -1.0) sin_angle = -1.0;
+    if ( cos_angle >= 1.0 ) 
+    {
+      sin_angle = 0.0;
+      cos_angle = 1.0; 
+    }
+    else if (cos_angle <= -1.0)
+    {
+      sin_angle = 0.0;
+      cos_angle = -1.0; 
+    }
+
+    if ( sin_angle >= 1.0 )
+    {
+      sin_angle = 1.0;
+      cos_angle = 0.0;
+    }
+    else if (sin_angle <= -1.0)
+    {
+      sin_angle = -1.0;
+      cos_angle = 0.0;
+    }
   }
 
   if (sin_angle != 0.0 || cos_angle != 1.0) 

@@ -544,6 +544,37 @@ bool ON_Surface::GetNextDiscontinuity(
   return rc;
 }
 
+static 
+bool PrincipalCurvaturesAreContinuous( 
+    bool bSmoothTest, 
+    double k1a, double k2a, // side "a" principal curvatures
+    double k1b, double k2b, // side "b" principal curvatures 
+    double curvature_tolerance 
+    )
+{
+  ON_3dVector K[2];
+  K[0].x = k1a;
+  K[0].y = 0.0;
+  K[0].z = 0.0;
+  K[1].x = k1b;
+  K[1].y = 0.0;
+  K[1].z = 0.0;
+  // compare the first principal curvatures
+  bool rc = ( bSmoothTest )
+            ? ON_IsGsmoothCurvatureContinuous(K[0],K[1],0.0,curvature_tolerance)
+            : ON_IsG2CurvatureContinuous(K[0],K[1],0.0,curvature_tolerance);
+  if ( rc )
+  {
+    // compare the second principal curvatures
+    K[0].x = k2a;
+    K[1].x = k2b;
+    rc = ( bSmoothTest )
+       ? ON_IsGsmoothCurvatureContinuous(K[0],K[1],0.0,curvature_tolerance)
+       : ON_IsG2CurvatureContinuous(K[0],K[1],0.0,curvature_tolerance);
+  }
+  return rc;
+}
+
 bool ON_Surface::IsContinuous(
     ON::continuity desired_continuity,
     double s, 
@@ -552,7 +583,7 @@ bool ON_Surface::IsContinuous(
     double point_tolerance, // default=ON_ZERO_TOLERANCE
     double d1_tolerance, // default==ON_ZERO_TOLERANCE
     double d2_tolerance, // default==ON_ZERO_TOLERANCE
-    double cos_angle_tolerance, // default==0.99984769515639123915701155881391
+    double cos_angle_tolerance, // default==ON_DEFAULT_ANGLE_TOLERANCE_COSINE
     double curvature_tolerance  // default==ON_SQRT_EPSILON
     ) const
 {
@@ -724,34 +755,34 @@ bool ON_Surface::IsContinuous(
     break;
 
   case ON::G2_continuous:
-    for ( qi = 0; qi < 4; qi++ )
+  case ON::Gsmooth_continuous:
     {
-      if ( !Ev2Der( sq[qi], tq[qi], P[qi], Ds[qi], Dt[qi], 
-                    Dss[qi], Dst[qi], Dtt[qi], 
-                    qi+1, hint ) )
-        return false;
-      ON_EvPrincipalCurvatures( Ds[qi], Dt[qi], Dss[qi], Dst[qi], Dtt[qi], N[qi],
-                                &gauss[qi], &mean[qi], &kappa1[qi], &kappa2[qi], 
-                                K1[qi], K2[qi] );
-      if ( qi )
+      bool bSmoothCon = (ON::Gsmooth_continuous == desired_continuity);
+      for ( qi = 0; qi < 4; qi++ )
       {
-        if ( !(P[qi]-P[qi-1]).IsTiny(point_tolerance) )
+        if ( !Ev2Der( sq[qi], tq[qi], P[qi], Ds[qi], Dt[qi], 
+                      Dss[qi], Dst[qi], Dtt[qi], 
+                      qi+1, hint ) )
           return false;
-        if ( N[qi]*N[qi-1] < cos_angle_tolerance )
+        ON_EvPrincipalCurvatures( Ds[qi], Dt[qi], Dss[qi], Dst[qi], Dtt[qi], N[qi],
+                                  &gauss[qi], &mean[qi], &kappa1[qi], &kappa2[qi], 
+                                  K1[qi], K2[qi] );
+        if ( qi )
+        {
+          if ( !(P[qi]-P[qi-1]).IsTiny(point_tolerance) )
+            return false;
+          if ( N[qi]*N[qi-1] < cos_angle_tolerance )
+            return false;
+          if ( !PrincipalCurvaturesAreContinuous(bSmoothCon,kappa1[qi],kappa2[qi],kappa1[qi-1],kappa2[qi-1],curvature_tolerance) )
+            return false;
+        }
+        if ( !(P[3]-P[0]).IsTiny(point_tolerance) )
           return false;
-        if ( fabs(kappa1[qi] - kappa1[qi-1]) > curvature_tolerance )
+        if ( N[3]*N[0] < cos_angle_tolerance )
           return false;
-        if ( fabs(kappa2[qi] - kappa2[qi-1]) > curvature_tolerance )
+        if ( !PrincipalCurvaturesAreContinuous(bSmoothCon,kappa1[3],kappa2[3],kappa1[0],kappa2[0],curvature_tolerance) )
           return false;
       }
-      if ( !(P[3]-P[0]).IsTiny(point_tolerance) )
-        return false;
-      if ( N[3]*N[0] < cos_angle_tolerance )
-        return false;
-      if ( fabs(kappa1[3] - kappa1[0]) > curvature_tolerance )
-        return false;
-      if ( fabs(kappa2[3] - kappa2[0]) > curvature_tolerance )
-        return false;
     }
     break;
 
@@ -1212,26 +1243,26 @@ ON_Surface::EvNormal( // returns false if unable to evaluate
 //virtual
 ON_Curve* ON_Surface::IsoCurve(
        int dir,    // 0 first parameter varies and second parameter is constant
-                   //   e.g., point on IsoCurve(0,c) at t is srf(t,c)
+                   //   e.g., point on IsoCurve(0,c) at t is srf(t,c) - Horizontal
                    // 1 first parameter is constant and second parameter varies
-                   //   e.g., point on IsoCurve(1,c) at t is srf(c,t)
+                   //   e.g., point on IsoCurve(1,c) at t is srf(c,t) - Vertical
        double c    // value of constant parameter 
        ) const
 {
   return NULL;
 }
 
-ON_Curve* ON_Surface::Pushup( const ON_Curve& curve_2d,
+int ON_Surface::GetIsoPushupDirection( 
+                  const ON_Curve& curve_2d,
                   double tolerance,
-                  const ON_Interval* curve_2d_subdomain
+                  const ON_Interval* curve_2d_subdomain,
+                  double* c,
+                  ON_Interval* c3_dom
                   ) const
 {
-  // virtual overrides do the real work
-
   // if the 2d curve is an isocurve, then ON_Surface::Pushup
   // will return the answer.  Otherwise, the virtual override
   // will have to do the real work.
-  ON_Curve* curve = NULL;
   ISO iso = IsIsoparametric(curve_2d,curve_2d_subdomain);
   int dir = -1;
   switch (iso)
@@ -1252,24 +1283,50 @@ ON_Curve* ON_Surface::Pushup( const ON_Curve& curve_2d,
   }
   if ( dir >= 0 )
   {
-    double c;
     ON_Interval c2_dom = curve_2d.Domain();
     if ( !curve_2d_subdomain )
       curve_2d_subdomain = &c2_dom;
     ON_3dPoint p0 = curve_2d.PointAt( curve_2d_subdomain->Min() );
     ON_3dPoint p1 = curve_2d.PointAt( curve_2d_subdomain->Max() );
-    ON_Interval c3_dom( p0[dir], p1[dir] );
-    ON_BOOL32 bRev = c3_dom.IsDecreasing();
+    if ( !ON_IsValid(p0[dir]) || !ON_IsValid(p1[dir]) || p0[dir] == p1[dir] )
+      return -1;
+    if ( 0 != c )
+    {
+      if ( p0[1-dir] == p1[1-dir] )
+        *c = p0[1-dir];
+      else
+        *c = 0.5*(p0[1-dir] + p1[1-dir]);
+    }
+    if ( c3_dom )
+      c3_dom->Set( p0[dir], p1[dir] );
+  }
+  return dir;
+}
+
+
+ON_Curve* ON_Surface::Pushup( const ON_Curve& curve_2d,
+                  double tolerance,
+                  const ON_Interval* curve_2d_subdomain
+                  ) const
+{
+  // virtual overrides do the real work
+
+  // if the 2d curve is an isocurve, then ON_Surface::Pushup
+  // will return the answer.  Otherwise, the virtual override
+  // will have to do the real work.
+  double c;
+  ON_Interval c3_dom;
+  ON_Curve* curve = 0;
+  int dir = GetIsoPushupDirection(curve_2d,tolerance,curve_2d_subdomain,&c,&c3_dom);
+  if ( 0 == dir || 1 == dir )
+  {
+    bool bRev = c3_dom.IsDecreasing();
     if ( bRev )
       c3_dom.Swap();
     if ( c3_dom.IsIncreasing() )
     {
-      if ( p0[1-dir] == p1[1-dir] )
-        c = p0[1-dir];
-      else
-        c = 0.5*(p0[1-dir] + p1[1-dir]);
       curve = IsoCurve( dir, c );
-      if ( curve && curve->Domain() != c3_dom )
+      if ( 0 != curve && curve->Domain() != c3_dom )
       {
         if ( !curve->Trim( c3_dom ) )
         {
@@ -1277,10 +1334,15 @@ ON_Curve* ON_Surface::Pushup( const ON_Curve& curve_2d,
           curve = 0;
         }
       }
-      if ( curve ) {
+      if ( 0 != curve ) 
+      {
         if ( bRev )
           curve->Reverse();
-        curve->SetDomain( curve_2d_subdomain->Min(), curve_2d_subdomain->Max() );
+
+        if ( curve_2d_subdomain )
+          curve->SetDomain( curve_2d_subdomain->Min(), curve_2d_subdomain->Max() );
+        else
+          curve->SetDomain( curve_2d.Domain() );
       }
     }
   }
@@ -2212,16 +2274,19 @@ ON_BOOL32 ON_SurfaceArray::Write( ON_BinaryArchive& file ) const
 {
   ON_BOOL32 rc = file.BeginWrite3dmChunk( TCODE_ANONYMOUS_CHUNK, 0 );
   if (rc) rc = file.Write3dmChunkVersion(1,0);
-  if (rc ) {
+  if (rc ) 
+  {
     int i;
     rc = file.WriteInt( Count() );
     for ( i = 0; rc && i < Count(); i++ ) {
-      if ( m_a[i] ) {
+      if ( m_a[i] ) 
+      {
         rc = file.WriteInt(1);
         if ( rc ) 
           rc = file.WriteObject( *m_a[i] ); // polymorphic surfaces
       }
-      else {
+      else 
+      {
         // NULL surface
         rc = file.WriteInt(0);
       }
@@ -2319,12 +2384,43 @@ void ON_Surface::DestroySurfaceTree()
 
 const ON_SurfaceTree* ON_Surface::SurfaceTree() const
 {
-  if ( !m_stree ) 
+#if !defined(OPENNURBS_PLUS_INC_)
+  return 0;
+#else
+  // This is a sleeplock to make surface tree creation thread safe.
+  //
+  // ON_PointerSleepLock_Test() returns the input value of m_stree.
+  // In addition, if the input value of m_stree is 0, then m_stree
+  // is set to 1.  Using ON_PointerSleepLock_Test() insures this 
+  // compare and set happens as an atomic operation, so multi-threaded
+  // applications run as expected.
+  ON_SurfaceTree* stree = ON_PointerSleepLock_Test(ON_SurfaceTree,m_stree);
+  // At this point, m_stree is either a valid pointer or m_stree = 1.
+  while ( ((ON_SurfaceTree*)1) == stree )
   {
-    const_cast<ON_Surface*>(this)->m_stree = CreateSurfaceTree();
+    // The code in this loop is executed when two or more threads
+    // try to create a tree at the same time and is rarely used.
+    // If the same tree is constantly created and destroyed, then
+    // this approach would be an extremely stupid thing to do. 
+    // In practice, a tree is made once and used zillions of 
+    // times and this pause does not have significant effects
+    // on performance.
+    //
+    // Another thread is currently calculating the surface tree
+    // so this thread is suspended for 50 milliseconds.
+    ON_PointerSleepLock_SuspendThisThread(50);
+
+    // When the "other" thread finishes making the surface tree,
+    // or gives up and sets m_stree to null, then we leave this
+    // while loop;
+    stree = ON_PointerSleepLock_Test(ON_SurfaceTree,m_stree);
   }
-  return m_stree;
+  if ( 0 == stree )
+  {
+    stree = CreateSurfaceTree();
+    ON_PointerSleepLock_Set(ON_SurfaceTree,const_cast<ON_Surface*>(this)->m_stree,stree); // const_cast<ON_Surface*>(this)->m_stree = stree;
+  }
+  return stree;
+#endif
 }
-
-
 

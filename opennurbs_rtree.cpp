@@ -161,14 +161,13 @@ static size_t MemPoolBlkSize( size_t leaf_count )
   return (sizeof_blklink + nodes_per_blk*sizeof_node);
 }
 
-ON_RTreeMemPool::ON_RTreeMemPool( ON_MEMORY_POOL* heap, size_t leaf_count  )
+ON_RTreeMemPool::ON_RTreeMemPool( size_t leaf_count  )
 : m_nodes(0)
 , m_list_nodes(0)
 , m_buffer(0)
 , m_buffer_capacity(0)
 , m_blk_list(0)
 , m_sizeof_blk(0)
-, m_heap(heap)
 , m_sizeof_heap(0)
 {
   m_sizeof_blk = MemPoolBlkSize(leaf_count); 
@@ -194,7 +193,7 @@ void ON_RTreeMemPool::GrowBuffer()
     m_sizeof_blk = MemPoolBlkSize(0); 
   }
 
-  struct Blk* blk = (struct Blk*)onmalloc_from_pool(m_heap,m_sizeof_blk);
+  struct Blk* blk = (struct Blk*)onmalloc(m_sizeof_blk);
   if ( blk )
   {
     m_sizeof_heap += m_sizeof_blk;
@@ -476,10 +475,10 @@ bool ON_RTreeIterator::Prev()
 //
 
 
-ON_RTree::ON_RTree( ON_MEMORY_POOL* heap, size_t leaf_count )
+ON_RTree::ON_RTree( size_t leaf_count )
 : m_root(0)
 , m_reserved(0)
-, m_mem_pool(heap,leaf_count)
+, m_mem_pool(leaf_count)
 {
 }
 
@@ -927,7 +926,6 @@ static void PairSearchHelper( const ON_RTreeBranch* a_branchA, const ON_RTreeNod
   }
 }
 
-
 static void PairSearchHelper( const ON_RTreeNode* a_nodeA, const ON_RTreeBranch* a_branchB, ON_RTreePairSearchResult* a_result )
 {
   // DO NOT ADD ANYTHING TO THIS FUNCTION
@@ -1020,6 +1018,15 @@ struct ON_RTreePairSearchCallbackResult
   ON_RTreePairSearchCallback m_resultCallback;
 };
 
+typedef bool (*ON_RTreePairSearchCallbackBool)(void*, ON__INT_PTR, ON__INT_PTR);
+
+struct ON_RTreePairSearchCallbackResultBool
+{
+  double m_tolerance;
+  void* m_context;
+  ON_RTreePairSearchCallbackBool m_resultCallbackBool;
+};
+
 static void PairSearchHelper( const ON_RTreeBranch* a_branchA, const ON_RTreeNode* a_nodeB, ON_RTreePairSearchCallbackResult* a_result )
 {
   // DO NOT ADD ANYTHING TO THIS FUNCTION
@@ -1044,6 +1051,33 @@ static void PairSearchHelper( const ON_RTreeBranch* a_branchA, const ON_RTreeNod
   }
 }
 
+static bool PairSearchHelperBool( const ON_RTreeBranch* a_branchA, const ON_RTreeNode* a_nodeB, ON_RTreePairSearchCallbackResultBool* a_result )
+{
+  // DO NOT ADD ANYTHING TO THIS FUNCTION
+  const ON_RTreeBranch *branchB, *branchBmax;
+
+  branchB = a_nodeB->m_branch;
+  branchBmax = branchB + a_nodeB->m_count;
+  while(branchB < branchBmax)
+  {
+    if ( PairSearchOverlapHelper( &a_branchA->m_rect, &branchB->m_rect, a_result->m_tolerance ) )
+    {
+      if ( a_nodeB->m_level > 0 )
+      {
+        if ( !PairSearchHelperBool(a_branchA,branchB->m_child,a_result) )
+          return false;
+      }
+      else
+      {
+        if ( !a_result->m_resultCallbackBool(a_result->m_context,a_branchA->m_id,branchB->m_id) )
+          return false;
+      }
+    }
+    branchB++;
+  }
+  return true;
+}
+
 static void PairSearchHelper( const ON_RTreeNode* a_nodeA, const ON_RTreeBranch* a_branchB, ON_RTreePairSearchCallbackResult* a_result )
 {
   // DO NOT ADD ANYTHING TO THIS FUNCTION
@@ -1066,6 +1100,33 @@ static void PairSearchHelper( const ON_RTreeNode* a_nodeA, const ON_RTreeBranch*
     }
     branchA++;
   }
+}
+
+static bool PairSearchHelperBool( const ON_RTreeNode* a_nodeA, const ON_RTreeBranch* a_branchB, ON_RTreePairSearchCallbackResultBool* a_result )
+{
+  // DO NOT ADD ANYTHING TO THIS FUNCTION
+  const ON_RTreeBranch *branchA, *branchAmax;
+
+  branchA = a_nodeA->m_branch;
+  branchAmax = branchA + a_nodeA->m_count;
+  while(branchA < branchAmax)
+  {
+    if ( PairSearchOverlapHelper( &branchA->m_rect, &a_branchB->m_rect, a_result->m_tolerance ) )
+    {
+      if ( a_nodeA->m_level > 0 )
+      {
+        if ( !PairSearchHelperBool(branchA->m_child,a_branchB,a_result) )
+          return false;
+      }
+      else
+      {
+        if ( !a_result->m_resultCallbackBool(a_result->m_context,branchA->m_id,a_branchB->m_id) )
+          return false;
+      }
+    }
+    branchA++;
+  }
+  return true;
 }
 
 
@@ -1105,6 +1166,50 @@ static void PairSearchHelper( const ON_RTreeNode* a_nodeA, const ON_RTreeNode* a
 }
 
 
+static bool PairSearchHelperBool( const ON_RTreeNode* a_nodeA, const ON_RTreeNode* a_nodeB, ON_RTreePairSearchCallbackResultBool* a_result )
+{
+  // DO NOT ADD ANYTHING TO THIS FUNCTION
+  const ON_RTreeBranch *branchA, *branchAmax, *branchB, *branchBmax;
+
+  branchA = a_nodeA->m_branch;
+  branchAmax = branchA + a_nodeA->m_count;
+  branchBmax = a_nodeB->m_branch + a_nodeB->m_count;
+  while(branchA < branchAmax)
+  {
+    for ( branchB = a_nodeB->m_branch; branchB < branchBmax; branchB++ )
+    {
+      if ( PairSearchOverlapHelper( &branchA->m_rect, &branchB->m_rect, a_result->m_tolerance ) )
+      {
+        if ( a_nodeA->m_level > 0 )
+        {
+          if ( a_nodeB->m_level > 0 )
+          {
+            if ( !PairSearchHelperBool(branchA->m_child,branchB->m_child,a_result) )
+              return false;
+          }
+          else
+          {
+            if ( !PairSearchHelperBool(branchA->m_child,branchB,a_result) )
+              return false;
+          }
+        }
+        else if ( a_nodeB->m_level > 0 )
+        {
+          if ( !PairSearchHelperBool(branchA,branchB->m_child,a_result) )
+            return false;
+        }
+        else
+        {
+          if ( !a_result->m_resultCallbackBool(a_result->m_context,branchA->m_id,branchB->m_id) )
+            return false;
+        }
+      }
+    }
+    branchA++;
+  }
+  return true;
+}
+
 bool ON_RTree::Search( 
           const ON_RTree& a_rtreeA,
           const ON_RTree& a_rtreeB, 
@@ -1122,6 +1227,33 @@ bool ON_RTree::Search(
   r.m_context = a_context;
   r.m_resultCallback = resultCallback;
   PairSearchHelper(a_rtreeA.m_root,a_rtreeB.m_root,&r);
+  return true;
+}
+
+bool ON_RTree::Search( 
+          const ON_RTree& a_rtreeA,
+          const ON_RTree& a_rtreeB, 
+          double tolerance,
+          bool ON_MSC_CDECL resultCallback(void* a_context,ON__INT_PTR a_idA, ON__INT_PTR a_idB),
+          void* a_context
+          )
+{
+  if ( 0 == a_rtreeA.m_root )
+    return false;
+  if ( 0 == a_rtreeB.m_root )
+    return false;
+  ON_RTreePairSearchCallbackResultBool r;
+  r.m_tolerance = (ON_IsValid(tolerance) && tolerance > 0.0) ? tolerance : 0.0;
+  r.m_context = a_context;
+  r.m_resultCallbackBool = resultCallback;
+
+  // Do not return false if PairSearchHelperBool() returns false.  The only reason
+  // PairSearchHelperBool() returns false is that the user specified resultCallback()
+  // terminated the search. This way a programmer with the ability to reason can
+  // distinguish between a terminiation and a failure to start because input is
+  // missing.
+  PairSearchHelperBool(a_rtreeA.m_root,a_rtreeB.m_root,&r);
+
   return true;
 }
 

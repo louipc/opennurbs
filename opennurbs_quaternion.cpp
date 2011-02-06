@@ -231,14 +231,55 @@ ON_Quaternion ON_Quaternion::Rotation(const ON_Plane& plane0, const ON_Plane& pl
 
 bool ON_Quaternion::GetRotation(ON_Xform& xform) const
 {
-  ON_Plane plane;
-  bool rc = GetRotation(plane);
-  if (rc)
-    xform.Rotation(ON_Plane::World_xy,plane);
-  else if (IsZero())
+  bool rc;
+  ON_Quaternion q(*this);
+  if ( q.Unitize() )
+  {
+    if (    fabs(q.a-a) <= ON_ZERO_TOLERANCE
+         && fabs(q.b-b) <= ON_ZERO_TOLERANCE
+         && fabs(q.c-c) <= ON_ZERO_TOLERANCE
+         && fabs(q.d-d) <= ON_ZERO_TOLERANCE
+         )
+    {
+      // "this" was already unitized - don't tweak bits
+      q = *this;
+    }
+    xform[1][0] = 2.0*(q.b*q.c + q.a*q.d);
+    xform[2][0] = 2.0*(q.b*q.d - q.a*q.c);
+    xform[3][0] = 0.0;
+
+    xform[0][1] = 2.0*(q.b*q.c - q.a*q.d);
+    xform[2][1] = 2.0*(q.c*q.d + q.a*q.b);
+    xform[3][1] = 0.0;
+
+    xform[0][2] = 2.0*(q.b*q.d + q.a*q.c);
+    xform[1][2] = 2.0*(q.c*q.d - q.a*q.b);
+    xform[3][2] = 0.0;
+
+    q.b = q.b*q.b;
+    q.c = q.c*q.c;
+    q.d = q.d*q.d;
+    xform[0][0] = 1.0 - 2.0*(q.c + q.d);
+    xform[1][1] = 1.0 - 2.0*(q.b + q.d);
+    xform[2][2] = 1.0 - 2.0*(q.b + q.c);
+
+    xform[0][3] = xform[1][3] = xform[2][3] = 0.0;
+    xform[3][3] = 1.0;
+    rc = true;
+  }
+  else if ( IsZero() )
+  {
     xform.Zero();
+    rc = false;
+  }
   else
+  {
+    // something is seriously wrong
+    ON_ERROR("ON_Quaternion::GetRotation(ON_Xform) quaternion is invalid");
     xform.Identity();
+    rc = false;
+  }
+
   return rc;
 }
 
@@ -288,6 +329,16 @@ double ON_Quaternion::Scalar() const
 bool ON_Quaternion::IsZero() const
 {
   return (0.0 == a && 0.0 == b && 0.0 == c && 0.0 == d);
+}
+
+bool ON_Quaternion::IsNotZero() const
+{
+  return ( (0.0 != a || 0.0 != b || 0.0 != c || 0.0 != d) 
+           && ON_IsValid(a)
+           && ON_IsValid(b)
+           && ON_IsValid(c) 
+           && ON_IsValid(d)
+         );
 }
 
 bool ON_Quaternion::IsScalar() const
@@ -427,6 +478,7 @@ ON_Xform ON_Quaternion::MatrixForm() const
 bool ON_Quaternion::Unitize()
 {
   double x = Length();
+
   if (x > ON_DBL_MIN)
   {
     x = 1.0/x;
@@ -435,14 +487,18 @@ bool ON_Quaternion::Unitize()
   else if ( x > 0.0 )
   {
     ON_Quaternion q(a*1.0e300,b*1.0e300,c*1.0e300,c*1.0e300);
-    q.Unitize();
+    if ( !q.Unitize() )
+      return false;
     a = q.a; 
     b = q.b;
     c = q.c;
     d = q.d;
   }
   else
+  {
     return false;
+  }
+
   return true;
 }
 

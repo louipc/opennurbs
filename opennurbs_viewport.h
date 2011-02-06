@@ -502,14 +502,18 @@ public:
 
   /*
   Description:
-    Get near and far clipping distances of a bounding box
+    Get near and far clipping distances of a bounding box.
   Parameters:
     bbox - [in] 
       bounding box
     near_dist - [out] 
-      near distance of the box (can be < 0)
+      near distance of the box
+      This value can be zero or negative when the camera
+      location is inside bbox.
     far_dist - [out] 
-      far distance of the box (can be equal to near_dist)
+      far distance of the box
+      This value can be equal to near_dist, zero or negative 
+      when the camera location is in front of the bounding box.
     bGrowNearFar - [in]
       If true and input values of near_dist and far_dist
       are not ON_UNSET_VALUE, the near_dist and far_dist
@@ -518,6 +522,15 @@ public:
     True if the bounding box intersects the view frustum and
     near_dist/far_dist were set.
     False if the bounding box does not intesect the view frustum.
+  Remarks:
+    This function ignores the current value of the viewport's 
+    near and far settings. If the viewport is a perspective
+    projection, the it intersects the semi infinite frustum
+    volume with the bounding box and returns the near and far
+    distances of the intersection.  If the viewport is a parallel
+    projection, it instersects the infinte view region with the
+    bounding box and returns the near and far distances of the
+    projection.
   */
   bool GetBoundingBoxDepth(       
          ON_BoundingBox bbox,
@@ -592,12 +605,18 @@ public:
   //  near_plane - [out] near clipping plane if camera and frustum
   //      are valid.  The plane's frame is the same as the camera's
   //      frame.  The origin is located at the intersection of the
-  //      camera direction ray and the near clipping plane.
+  //      camera direction ray and the near clipping plane. The plane's
+  //      normal points out of the frustum towards the camera
+  //      location.
   //
   // Returns:
   //   true if camera and frustum are valid.
   bool GetNearPlane( 
     ON_Plane& near_plane 
+    ) const;
+
+  bool GetNearPlaneEquation( 
+    ON_PlaneEquation& near_plane_equation 
     ) const;
 
   // Description:
@@ -606,12 +625,17 @@ public:
   //  far_plane - [out] far clipping plane if camera and frustum
   //      are valid.  The plane's frame is the same as the camera's
   //      frame.  The origin is located at the intersection of the
-  //      camera direction ray and the far clipping plane.
+  //      camera direction ray and the far clipping plane. The plane's
+  //      normal points into the frustum towards the camera location.
   //
   // Returns:
   //   true if camera and frustum are valid.
   bool GetFarPlane( 
     ON_Plane& far_plane 
+    ) const;
+
+  bool GetFarPlaneEquation( 
+    ON_PlaneEquation& far_plane_equation 
     ) const;
 
   /*
@@ -631,13 +655,17 @@ public:
     ON_Plane& left_plane 
     ) const;
 
+  bool GetFrustumLeftPlaneEquation( 
+    ON_PlaneEquation& left_plane_equation 
+    ) const;
+
   /*
   Description:
   Get right world frustum clipping plane.
   Parameters:
     right_plane - [out] 
       frustum right side clipping plane.  The normal points
-      out of the visible region of the frustum.  If the projection
+      into the visible region of the frustum.  If the projection
       is perspective, the origin is at the camera location,
       otherwise the origin isthe point on the plane that is
       closest to the camera location.
@@ -646,6 +674,10 @@ public:
   */
   bool GetFrustumRightPlane( 
     ON_Plane& right_plane 
+    ) const;
+
+  bool GetFrustumRightPlaneEquation( 
+    ON_PlaneEquation& right_plane_equation 
     ) const;
 
   /*
@@ -665,6 +697,9 @@ public:
     ON_Plane& bottom_plane 
     ) const;
 
+  bool GetFrustumBottomPlaneEquation( 
+    ON_PlaneEquation& bottom_plane_equation 
+    ) const;
   /*
   Description:
   Get right world frustum clipping plane.
@@ -680,6 +715,10 @@ public:
   */
   bool GetFrustumTopPlane( 
     ON_Plane& top_plane 
+    ) const;
+
+  bool GetFrustumTopPlaneEquation( 
+    ON_PlaneEquation& top_plane_equation 
     ) const;
 
   // Description:
@@ -922,9 +961,6 @@ public:
   bool SetViewScale( double x, double y );
   void GetViewScale( double* x, double* y ) const;
   
-  // OBSOLETE - use SetViewScale
-  //__declspec(deprecated) bool ScaleView( double x, double y, double z );
-
   /*
   Description:
     Gets the m_clip_mod transformation;
@@ -1014,8 +1050,37 @@ public:
   */
   double TargetDistance( bool bUseFrustumCenterFallback ) const;
 
-  void SetMinNearOverFar(double);
-  double MinNearOverFar() const;
+  /*
+  Description:    
+    Get suggested values for setting the perspective minimum
+    near distance and minimum near/far ratio.
+  Parameters:      
+    camera_location - [in]
+    depth_buffer_bit_depth - [in]
+      typically 32, 34, 16 or 8, but any value can be passed in.
+    min_near_dist - [out]
+      Suggest value for passing to SetPerspectiveMinNearDist().     
+    min_near_over_far - [out]
+      Suggest value for passing to SetPerspectiveMinNearOverFar().     
+  */
+  static void GetPerspectiveClippingPlaneConstraints( 
+        ON_3dPoint camera_location,
+        unsigned int depth_buffer_bit_depth,
+        double* min_near_dist,
+        double* min_near_over_far
+        );
+
+  /*
+  Description:
+    Set suggested the perspective minimum near distance and
+    minimum near/far ratio to the suggested values returned
+    by GetPerspectiveClippingPlaneConstraints().
+  Parameters:
+    typically 32, 34, 16 or 8, but any value can be passed in.
+  */
+  void SetPerspectiveClippingPlaneConstraints(
+        unsigned int depth_buffer_bit_depth
+        );
 
   /*
   Description:
@@ -1200,6 +1265,12 @@ private:
   // These values are not saved in 3dm files.
   double m__MIN_NEAR_DIST;
   double m__MIN_NEAR_OVER_FAR;
+
+public:
+  static const double DefaultNearDist;        // 0.005
+  static const double DefaultFarDist;         // 1000.0
+  static const double DefaultMinNearDist;     // 0.0001
+  static const double DefaultMinNearOverFar;  // 0.0001
 };
 
 ON_DECL

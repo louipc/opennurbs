@@ -93,6 +93,7 @@ void ON_MassProperties::Dump( ON_TextLog& dump ) const
     if ( CentroidCoordPrincipalMoments( &Ixx, X, &Iyy, Y, &Izz, Z ) )
     {
       dump.Print("Principal moments and axes:\n");
+      dump.PushIndent();
       dump.Print("Ixx: %g (%g,%g,%g)\n",Ixx,X.x,X.y,X.z);
       dump.Print("Iyy: %g (%g,%g,%g)\n",Iyy,Y.x,Y.y,Y.z);
       dump.Print("Izz: %g (%g,%g,%g)\n",Izz,Z.x,Z.y,Z.z);
@@ -142,6 +143,99 @@ void ON_MassProperties::Dump( ON_TextLog& dump ) const
 
 /*
 Description:
+	QL Algorithm with implict shifts, to determine the eigenvalues and eigenvectors of a 
+	symmetric, tridiagonal matrix. 
+
+Parametrers:
+	d - [in/out]	On input d[0] to d[n-1] are the diagonal entries of the matrix.
+								As output d[0] to d[n-1] are the eigenvalues.
+	e - [in/out]  On Input e[0] to e[n-1] are the off-diagonal entries of the matrix.
+								with e[n-1] not used, but must be allocated.
+								on output e is unpredictable.
+	n - [in]      matrix is n by n
+	pV - [out]		If not NULL the it should be an n by n matix. 
+								The kth column will be a normalized eigenvector of d[k]
+*/
+static bool TriDiagonalQLImplicit( double* d, double* e, int n, ON_Matrix* pV)
+{
+
+	if(pV)
+	{	
+		if (pV->RowCount()!=n || pV->ColCount()!=n)
+			pV = NULL;
+	}
+
+	if(pV)
+		pV->SetDiagonal(1.0);
+
+	e[n-1]=0.0;
+
+	for( int l=0; l<n; l++)
+	{	
+		int iter = 0;
+		int m;
+		do
+		{
+			for(m=l; m<n-1; m++)
+			{
+				if( fabs(e[m]) < ON_EPSILON*( fabs( d[m]) + fabs(d[m+1]) ) )
+					break;
+			}
+			if( m!=l)
+			{
+				if( iter++==30)
+					return false;
+				double g = ( d[l+1] - d[l])/(2*e[l]);
+				double r = sqrt(g*g + 1.0);
+				g = d[m] - d[l] + e[l]/((g>=0)? (g + fabs(r)) : (g - fabs(r)) );
+				double s = 1.0;
+				double c = 1.0;
+				double p =0.0;
+				int i;
+				for( i=m-1; i>=l; i--)
+				{
+					double f = s * e[i];
+					double b = c * e[i];
+					r = sqrt( f*f+g*g);
+					e[i+1]= r;
+					if( r==0.0)
+					{
+						d[i+1]-= p;
+						e[m]=0.0;
+						break;
+					}
+					s = f/r;
+					c = g/r;
+					g = d[i+1]-p;
+					r = (d[i]-g) *s +2.0*c*b;
+
+					p = s*r;
+					d[i+1]= g+p;
+					g = c*r-b;
+
+					for(int k=0; pV && k<n; k++)
+					{
+						ON_Matrix & V = *pV;
+						f = V[k][i+1];
+						V[k][i+1] = s* V[k][i]+c*f;
+						V[k][i] =   c* V[k][i]-s*f;
+					}
+				}
+				if( r==0.0 && i>=l) 
+					continue;
+				d[l] -= p;
+				e[l] = g;
+				e[m] = 0.0;
+			}
+		} while( m!=l);
+	}
+	return true;
+}
+
+
+
+/*
+Description:
   Find the eigen values and eigen vectors of a tri-diagonal
   real symmetric 3x3 matrix
 
@@ -166,14 +260,30 @@ Returns:
 */
 bool ON_SymTriDiag3x3EigenSolver( double A, double B, double C,
                            double D, double E,
-                           double* e1, ON_3dVector E1,
-                           double* e2, ON_3dVector E2,
-                           double* e3, ON_3dVector E3
+                           double* e1, ON_3dVector& E1,
+                           double* e2, ON_3dVector& E2,
+                           double* e3, ON_3dVector& E3
                            )
 {
-  // TODO - do something more stable than using a cubic root zero finder
-  return false;
+ 
+	double d[3]={A,B,C};
+	double e[3]={D,E,0};
+
+	ON_Matrix V(3,3);
+	bool rc = TriDiagonalQLImplicit( d, e, 3, &V);
+	if(rc)
+	{
+		if(e1) *e1 = d[0];
+		E1 = ON_3dVector( V[0][0], V[1][0], V[2][0]);
+		if(e2) *e2 = d[1];
+		E2 = ON_3dVector( V[0][1], V[1][1], V[2][1]);
+		if(e3) *e3 = d[2];
+		E3 = ON_3dVector( V[0][2], V[1][2], V[2][2]);
+	}
+	return rc;
 }
+
+
 
 /*
 Description:
@@ -202,9 +312,9 @@ Returns:
 */
 bool ON_Sym3x3EigenSolver( double A, double B, double C,
                            double D, double E, double F,
-                           double* e1, ON_3dVector E1,
-                           double* e2, ON_3dVector E2,
-                           double* e3, ON_3dVector E3
+                           double* e1, ON_3dVector& E1,
+                           double* e2, ON_3dVector& E2,
+                           double* e3, ON_3dVector& E3
                            )
 {
   // STEP 1: reduce to tri-diagonal form
@@ -396,7 +506,7 @@ bool ON_MassProperties::WorldCoordPrincipalMoments(
 ON_3dVector ON_MassProperties::CentroidCoordSecondMoments() const
 {
   ON_3dVector v(0.0,0.0,0.0);
-  if ( m_bValidFirstMoments )
+  if ( m_bValidSecondMoments )
     v.Set( m_ccs_xx, m_ccs_yy, m_ccs_zz );
   return v;
 }
@@ -407,17 +517,17 @@ ON_3dVector ON_MassProperties::WorldCoordMomentsOfInertia() const
   double Ix = 0.0;
   double Iy = 0.0;
   double Iz = 0.0;
-  double Ix_err = 0.0;
-  double Iy_err = 0.0;
-  double Iz_err = 0.0;
+  //double Ix_err = 0.0;
+  //double Iy_err = 0.0;
+  //double Iz_err = 0.0;
   if ( m_bValidSecondMoments )
   {
     Ix = (m_world_yy + m_world_zz);
-    Ix_err = (m_world_yy_err + m_world_zz_err);
+    //Ix_err = (m_world_yy_err + m_world_zz_err);
     Iy = (m_world_zz + m_world_xx);
-    Iy_err = (m_world_zz_err + m_world_xx_err);
+    //Iy_err = (m_world_zz_err + m_world_xx_err);
     Iz = (m_world_xx + m_world_yy);
-    Iz_err = (m_world_xx_err + m_world_yy_err);
+    //Iz_err = (m_world_xx_err + m_world_yy_err);
   }
   return ON_3dVector(Ix,Iy,Iz);
 }

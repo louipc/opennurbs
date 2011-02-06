@@ -184,17 +184,17 @@ public:
         determine the location of the sides.
     dx - [in]
        Determines the location of the front and back planes.
-       The vector plane.xaxis is perpindicular to these planes
+       The vector plane.xaxis is perpendicular to these planes
        and they pass through plane.PointAt(dx[0],0,0) and
        plane.PointAt(dx[1],0,0), respectivly.
     dy - [in]
        Determines the location of the left and right planes.
-       The vector plane.yaxis is perpindicular to these planes
+       The vector plane.yaxis is perpendicular to these planes
        and they pass through plane.PointAt(0,dy[0],0) and
        plane.PointAt(0,dy[1],0), respectivly.
     dz - [in] 
        Determines the location of the top and bottom planes.
-       The vector plane.zaxis is perpindicular to these planes
+       The vector plane.zaxis is perpendicular to these planes
        and they pass through plane.PointAt(0,0,dz[0]) and
        plane.PointAt(0,0,dz[1]), respectivly.
     bIsCapped - [in]
@@ -468,8 +468,6 @@ public:
     const ON_Brep* brep,
     ON_3dPoint* T
     ) const;
-
-  static void SetAdvancedBrepMappingToolFunctions(TEXMAP_INTERSECT_LINE_SURFACE, TEXMAP_BREP_FACE_CLOSEST_POINT);
 
   /*
   Description:

@@ -349,6 +349,12 @@ public:
     int c3i 
     );
 
+  /*
+  Description:
+    When an edge is modified, the m_pline[].e values need
+    to be set to ON_UNSET_VALUE by calling UnsetPlineEdgeParameters().
+  */
+  void UnsetPlineEdgeParameters();
 
   // index of 3d curve in m_C3[] array
   // (edge.m_curve also points to m_C3[m_c3i])
@@ -588,7 +594,16 @@ public:
   */
   bool ChangeTrimCurve( int c2i );
 
-
+  /*
+  Description:
+    Destroy parameter space information.
+    Currently, this involves destroying m_pline
+    and m_pbox. Parameter space information should
+    be destroyed when the location of a trim
+    curve is changed.
+  */
+  void DestroyPspaceInformation();
+  
   /*
   Description:
     Expert user function.
@@ -786,6 +801,13 @@ public:
   // Runtime polyline approximation of trimming curve.
   // This information is not saved in 3DM archives.
   ON_SimpleArray<ON_BrepTrimPoint> m_pline;
+
+  /*
+  Description:
+    When an edge is modified, the m_pline[].e values need
+    to be set to ON_UNSET_VALUE by calling UnsetPlineEdgeParameters().
+  */
+  void UnsetPlineEdgeParameters();
 
   // Runtime parameter space trimming curve bounding box.
   // This information is not saved in 3DM archives.
@@ -1022,21 +1044,6 @@ public:
   */
   ON_BrepLoop* OuterLoop() const;
 
-  /*
-  Parameters:
-    dir
-       1: side with underlying surface normal
-         pointing into the topology region
-      -1: side with underlying surface normal
-          pointing out of the topology region
-  Returns:
-    Brep region topology face side.  If the region
-    topology has not be created by calling
-    ON_Brep::RegionToplogy(), then NULL is returned.
-  */
-  class ON_BrepFaceSide* FaceSide(int dir) const;
-
-
   /////////////////////////////////////////////////////////////////
   // ON_Object overrides
   //
@@ -1088,11 +1095,6 @@ public:
          double*,    // maximum
          ON_BOOL32 = false  // true means grow box
          ) const;
-
-  ON_Mesh* CreateMesh( 
-             const ON_MeshParameters& mp,
-             ON_Mesh* mesh = NULL
-             ) const;
 
   /*
   Description:
@@ -1274,185 +1276,6 @@ private:
   ON_BrepFace( const ON_BrepFace& );
 };
 
-class ON_CLASS ON_BrepFaceSide : public ON_Object
-{
-  ON_OBJECT_DECLARE(ON_BrepFaceSide);
-public:
-  ON_BOOL32 IsValid( ON_TextLog* text_log = NULL ) const;
-
-  // Union available for application use.
-  // The constructor zeros m_faceside_user.
-  // The value is of m_faceside_user is not saved in 3DM
-  // archives and may be changed by some computations.
-  ON_U m_faceside_user;
-
-  // index of face side in ON_BrepRegionTopology.m_FS[] array
-  int m_faceside_index;  
-
-  ON_BrepFaceSide();
-  ~ON_BrepFaceSide();
-  ON_BrepFaceSide& operator=(const ON_BrepFaceSide&);
-
-  ON_BOOL32 Write(ON_BinaryArchive& binary_archive) const;
-  ON_BOOL32 Read(ON_BinaryArchive& binary_archive);
-
-
-  /*
-  Returns:
-   Brep this face side belongs to.
-  */
-  ON_Brep* Brep() const;
-
-  /*
-  Returns:
-    Region topology this face side belongs to.
-  */
-  class ON_BrepRegionTopology* RegionTopology() const;
-
-  /*
-  Returns:
-   Region the face side belongs to.
-  */
-  class ON_BrepRegion* Region() const;
-
-  /*
-  Returns:
-   Face this side belongs to.
-  */
-  class ON_BrepFace* Face() const;
-
-  /*
-  Returns:
-   +1: underlying geometric surface normal points
-       into region.
-   -1: underlying geometric surface normal points
-       out of region.
-  */
-  int SurfaceNormalDirection() const;
-
-public:
-  int m_ri; // region index 
-            // m_ri = -1 indicates this faceside overlaps
-            // another faceside. Generally this is a flaw
-            // in an ON_Brep.
-  int m_fi; // face index
-  int m_srf_dir; //  1 ON_BrepFace's surface normal points into region
-                 // -1 ON_BrepFace's surface normal points out of region
-
-private:
-  friend class ON_Brep;
-  friend class ON_BrepRegionTopology;
-  ON_BrepRegionTopology* m_rtop;
-  ON_BrepFaceSide( const ON_BrepFaceSide& );
-};
-
-class ON_CLASS ON_BrepRegion : public ON_Object
-{
-  ON_OBJECT_DECLARE(ON_BrepRegion);
-public:
-  ON_BOOL32 IsValid( ON_TextLog* text_log = NULL ) const;
-
-  // Union available for application use.
-  // The constructor zeros m_region_user.
-  // The value is of m_region_user is not saved in 3DM
-  // archives and may be changed by some computations.
-  ON_U m_region_user;
-
-  // index of region in ON_BrepRegionTopology.m_R[] array
-  int m_region_index;
-
-  ON_BrepRegion();
-  ~ON_BrepRegion();
-  ON_BrepRegion& operator=(const ON_BrepRegion&);
-
-  ON_BOOL32 Write(ON_BinaryArchive& binary_archive) const;
-  ON_BOOL32 Read(ON_BinaryArchive& binary_archive);
-
-  /*
-  Returns:
-   Brep this region belongs to.
-  */
-  ON_Brep* Brep() const;
-
-  /*
-  Returns:
-    Region topology this region belongs to.
-  */
-  class ON_BrepRegionTopology* RegionTopology() const;
-
-  /*
-  Parameter:
-    rfsi - [in] index into the region's m_fsi[] array.
-  Returns:
-    The face side in rtop.m_FS[m_fsi[rsi]], where
-    rtop is the ON_BrepRegionTopology class this
-    region belongs to.
-  */
-  ON_BrepFaceSide* FaceSide(int rfsi) const;
-
-  /*
-  Returns:
-    True if the region is finite.
-  */
-  bool IsFinite() const;
-
-  /*
-  Returns:
-   Region bounding box.
-  */
-  const ON_BoundingBox& BoundingBox() const;
-
-  ON_SimpleArray<int> m_fsi; // indices of face sides
-  int m_type; // 0 = infinte, 1 = bounded
-  ON_BoundingBox m_bbox;
-
-  /*
-  Description:
-    Get the boundary of a region as a brep object.  
-    If the region is finite, the boundary will be a closed
-    manifold brep.  The boundary may have more than one
-    connected component.
-  Parameters:
-    brep - [in] if not NULL, the brep form is put into
-                this brep.
-  Returns: the region boundary as a brep or NULL if the
-           calculation fails.
-  */
-  ON_Brep* RegionBoundaryBrep( ON_Brep* brep = NULL ) const;
-
-  bool AreaMassProperties(
-    ON_MassProperties& mp,
-    bool bArea = true,
-    bool bFirstMoments = true,
-    bool bSecondMoments = true,
-    bool bProductMoments = true,
-    double rel_tol = 1.0e-6,
-    double abs_tol = 1.0e-6
-    ) const;
-
-  bool VolumeMassProperties(
-    ON_MassProperties& mp, 
-    bool bVolume = true,
-    bool bFirstMoments = true,
-    bool bSecondMoments = true,
-    bool bProductMoments = true,
-    ON_3dPoint base_point = ON_UNSET_POINT,
-    double rel_tol = 1.0e-6,
-    double abs_tol = 1.0e-6
-    ) const;
-
-  bool IsPointInside(
-          ON_3dPoint P, 
-          double tolerance,
-          bool bStrictlyInside
-          ) const;
-
-private:
-  friend class ON_Brep;
-  friend class ON_BrepRegionTopology;
-  ON_BrepRegionTopology* m_rtop;
-  ON_BrepRegion( const ON_BrepRegion& );
-};
 
 #if defined(ON_DLL_TEMPLATE)
 // This stuff is here because of a limitation in the way Microsoft
@@ -1470,8 +1293,6 @@ ON_DLL_TEMPLATE template class ON_CLASS ON_ClassArray<ON_BrepLoop>;
 ON_DLL_TEMPLATE template class ON_CLASS ON_ObjectArray<ON_BrepLoop>;
 ON_DLL_TEMPLATE template class ON_CLASS ON_ClassArray<ON_BrepFace>;
 ON_DLL_TEMPLATE template class ON_CLASS ON_ObjectArray<ON_BrepFace>;
-ON_DLL_TEMPLATE template class ON_CLASS ON_ObjectArray<ON_BrepFaceSide>;
-ON_DLL_TEMPLATE template class ON_CLASS ON_ObjectArray<ON_BrepRegion>;
 #pragma warning( pop )
 #endif
 
@@ -1529,56 +1350,6 @@ public:
   ON_BOOL32 Write( ON_BinaryArchive& ) const;
 
   unsigned int SizeOf() const;
-};
-
-class ON_CLASS ON_BrepFaceSideArray : public ON_ObjectArray<ON_BrepFaceSide>
-{
-public:
-  ON_BrepFaceSideArray();
-  ~ON_BrepFaceSideArray();
-
-  bool Read( ON_BinaryArchive& );
-  bool Write( ON_BinaryArchive& ) const;
-
-  unsigned int SizeOf() const;
-};
-
-class ON_CLASS ON_BrepRegionArray : public ON_ObjectArray<ON_BrepRegion>
-{
-public:
-  ON_BrepRegionArray();
-  ~ON_BrepRegionArray();
-
-  bool Read( ON_BinaryArchive& );
-  bool Write( ON_BinaryArchive& ) const;
-
-  unsigned int SizeOf() const;
-};
-
-class ON_CLASS ON_BrepRegionTopology
-{
-public:
-  ON_BrepRegionTopology();
-  ON_BrepRegionTopology(const ON_BrepRegionTopology& src);
-  ~ON_BrepRegionTopology();
-  ON_BrepRegionTopology& operator=(const ON_BrepRegionTopology&);
-
-  ON_BrepFaceSideArray m_FS;
-  ON_BrepRegionArray m_R;
-
-  bool Create(const ON_Brep* brep);
-
-  ON_Brep* Brep() const;
-  bool IsValid( ON_TextLog* text_log = 0 ) const;
-  bool Read( ON_BinaryArchive& );
-  bool Write( ON_BinaryArchive& ) const;
-
-  unsigned int SizeOf() const;
-
-private:
-  friend class ON_BrepRegionTopologyUserData;
-  friend class ON_Brep;
-  ON_Brep* m_brep;
 };
 
 class ON_CLASS ON_Brep : public ON_Geometry 
@@ -1677,22 +1448,6 @@ public:
 
   /*
   Description:
-    Calculates polygon mesh approximation of the brep
-    and appends one mesh for each face to the mesh_list[]
-    array.
-  Parameters:
-    mp - [in] meshing parameters
-    mesh_list - [out] meshes are appended to this array.
-  Returns:
-    Number of meshes appended to mesh_list[] array.
-  */
-  int CreateMesh( 
-    const ON_MeshParameters& mp,
-    ON_SimpleArray<ON_Mesh*>& mesh_list
-    ) const;
-
-  /*
-  Description:
     Destroy meshes used to render and analyze brep.
   Parameters:
     mesh_type - [in] type of mesh to destroy
@@ -1722,75 +1477,6 @@ public:
     ON_BrepFace::SetMesh
   */
   int GetMesh( ON::mesh_type mesh_type, ON_SimpleArray< const ON_Mesh* >& meshes ) const;
-
-  /*
-  Description:
-    Calculate area mass properties of the brep.
-  Parameters:
-    mp - [out] 
-    bArea - [in] true to calculate area
-    bFirstMoments - [in] true to calculate area first moments,
-                         area and area centroid.
-    bSecondMoments - [in] true to calculate area second moments.
-    bProductMoments - [in] true to calculate area product moments.
-  Returns:
-    True if successful.
-  */
-  bool AreaMassProperties(
-    ON_MassProperties& mp,
-    bool bArea = true,
-    bool bFirstMoments = true,
-    bool bSecondMoments = true,
-    bool bProductMoments = true,
-    double rel_tol = 1.0e-6,
-    double abs_tol = 1.0e-6
-    ) const;
-
-  /*
-  Description:
-    Calculate volume mass properties of the brep.
-  Parameters:
-    mp - [out] 
-    bVolume - [in] true to calculate volume
-    bFirstMoments - [in] true to calculate volume first moments,
-                         volume, and volume centroid.
-    bSecondMoments - [in] true to calculate volume second moments.
-    bProductMoments - [in] true to calculate volume product moments.
-    base_point - [in] 
-      If the brep is closed, then pass ON_UNSET_VALUE.
-
-      This parameter is for expert users who are computing a
-      volume whose boundary is defined by several non-closed
-      breps, surfaces, and meshes.
-
-      When computing the volume, volume centroid, or volume
-      first moments of a volume whose boundary is defined by 
-      several breps, surfaces, and meshes, pass the same 
-      base_point to each call to VolumeMassProperties.  
-
-      When computing the volume second moments or volume product
-      moments of a volume whose boundary is defined by several
-      breps, surfaces, and meshes, you MUST pass the entire 
-      volume's centroid as the base_point and the input mp 
-      parameter must contain the results of a previous call
-      to VolumeMassProperties(mp,true,true,false,false,base_point).
-      In particular, in this case, you need to make two sets of
-      calls; use first set to calculate the volume centroid and
-      the second set calculate the second moments and product 
-      moments.
-  Returns:
-    True if successful.
-  */
-  bool VolumeMassProperties(
-    ON_MassProperties& mp, 
-    bool bVolume = true,
-    bool bFirstMoments = true,
-    bool bSecondMoments = true,
-    bool bProductMoments = true,
-    ON_3dPoint base_point = ON_UNSET_POINT,
-    double rel_tol = 1.0e-6,
-    double abs_tol = 1.0e-6
-    ) const;
 
   /*
   Description:
@@ -2028,6 +1714,27 @@ public:
   bool SplitKinkyEdge( 
     int edge_index, 
     double kink_tol_radians = ON_DEFAULT_ANGLE_TOLERANCE //ON_PI/180.0
+    );
+
+  /*
+  Description:
+    Split an edge at the specified parameters.
+  Parameters:
+    edge_index - [in] Index of the edge to split.
+    edge_t_count - [in]
+      number of edge parameters
+    edge_t - [in]
+      edge parameters
+  Returns:
+    Number of splits applied to the edge.
+  Remarks:
+    This function leaves deleted stuff in the brep.  
+    Call ON_Brep::Compact() to remove deleted stuff.
+  */
+  int SplitEdgeAtParameters(
+    int edge_index,
+    int edge_t_count,
+    const double* edge_t
     );
 
   // virtual ON_Objet::Dump() override
@@ -3302,6 +3009,12 @@ public:
           double* edge_t
           ) const;
 
+  bool GetEdgeParameter(
+          int trim_index,
+          double trim_t,
+          double* edge_t,
+          bool bOkToBuildTrimPline
+          ) const;
   /*
   Description:
     Expert user function.
@@ -3451,30 +3164,6 @@ public:
     ON_Brep* sub_brep = 0 
     ) const;
 
-  ///////////////////////////////////////////////////////////////////////
-  //
-  // region topology
-  //
-  bool HasRegionTopology() const;
-
-  /*
-  Description:
-    Get region topology information:
-    In order to keep the ON_Brep class efficient, rarely used
-    region topology information is not maintained.  If you 
-    require this information, call RegionTopology().
-  */
-  const ON_BrepRegionTopology& RegionTopology() const;
-
-  /*
-  Description:
-    Get region topology information:
-    In order to keep the ON_Brep class efficient, rarely used
-    region topology information is not maintained.  If you 
-    require this information, call RegionTopology().
-  */
-  void DestroyRegionTopology();
-
   // Description:
   //   Duplicate a single brep face.
   // Parameters:
@@ -3622,7 +3311,10 @@ public:
     ON_Brep::StandardizeFaceSurface
     ON_Brep::Standardize
   */
-  void StardardizeFaceSurfaces();
+  void StandardizeFaceSurfaces();
+
+  // misspelled function name is obsolete
+  ON_DEPRECATED void StardardizeFaceSurfaces();
 
   /*
   Description:
@@ -3817,7 +3509,7 @@ public:
 
   /*
   Description:
-    Get trim from edge index or component index.
+    Get edge from edge index or component index.
   Parameters:
     edge_index - [in] either an index into m_E[] or a component index
                       of type brep_edge.
@@ -4757,5 +4449,40 @@ ON_Brep* ON_MergeBreps(
           double tolerance
           );
 
-#endif
 
+/*
+Description:
+  Does extensive tests of an edge and all of its trims to
+  insure the edge and trims define the same 3d curve to
+  a tolerance.
+Parameters:
+  brep - [in]
+  edge_index - [in]
+  text_log - [in]
+  bad_tp - [out]
+    If not null and false is returned, then bad_tp->t and 
+    bad_tp->e will identify trim and edge paramters near the
+    area where the two have parameterization problems.
+  bad_eti - [out]
+    If not null and false is returned, then *bad_eti will
+    be the edge.m_ti[] index of the trim whose correspondence
+    with the edge has paramterization problems.
+  deviation - [out]
+    If not null, then deviation[] should have length edge.m_ti.Count().
+    If true is returned, then the value of deviation[i] will be the 
+    maximum detected 3d deviation between the trim with index 
+    edge.m_ti[i] and the edge.
+Returns:
+  True if the edge and trims have is valid parameterizations.
+*/
+ON_DECL
+bool ON_ValidateEdgeTrims(
+        const ON_Brep& brep,
+        int edge_index,
+        ON_TextLog* text_log,
+        ON_BrepTrimPoint* bad_tp,
+        int* bad_eti,
+        double* deviation
+        );
+
+#endif

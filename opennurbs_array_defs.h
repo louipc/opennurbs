@@ -153,7 +153,47 @@ template <class T>
 T& ON_SimpleArray<T>::operator[]( int i )
 { 
 #if defined(ON_DEBUG)
-  ON_ASSERT( i >=0 && i < m_capacity);
+  if ( i < 0 || i > m_capacity )
+  {
+    ON_ERROR("ON_SimpleArray[i]: i out of range.");
+  }
+#endif
+  return m_a[i]; 
+}
+
+template <class T>
+T& ON_SimpleArray<T>::operator[]( unsigned int i )
+{ 
+#if defined(ON_DEBUG)
+  if ( i > (unsigned int)m_capacity )
+  {
+    ON_ERROR("ON_SimpleArray[i]: i out of range.");
+  }
+#endif
+  return m_a[i]; 
+}
+
+
+template <class T>
+T& ON_SimpleArray<T>::operator[]( ON__INT64 i )
+{ 
+#if defined(ON_DEBUG)
+  if ( i < 0 || i > (ON__INT64)m_capacity )
+  {
+    ON_ERROR("ON_SimpleArray[i]: i out of range.");
+  }
+#endif
+  return m_a[i]; 
+}
+
+template <class T>
+T& ON_SimpleArray<T>::operator[]( ON__UINT64 i )
+{ 
+#if defined(ON_DEBUG)
+  if ( i > (ON__UINT64)m_capacity )
+  {
+    ON_ERROR("ON_SimpleArray[i]: i out of range.");
+  }
 #endif
   return m_a[i]; 
 }
@@ -162,10 +202,51 @@ template <class T>
 const T& ON_SimpleArray<T>::operator[](int i) const
 {
 #if defined(ON_DEBUG)
-  ON_ASSERT( i >=0 && i < m_capacity);
+  if ( i < 0 || i > m_capacity )
+  {
+    ON_ERROR("ON_SimpleArray[i]: i out of range.");
+  }
 #endif
   return m_a[i];
 }
+
+template <class T>
+const T& ON_SimpleArray<T>::operator[](unsigned int i) const
+{
+#if defined(ON_DEBUG)
+  if ( i > (unsigned int)m_capacity )
+  {
+    ON_ERROR("ON_SimpleArray[i]: i out of range.");
+  }
+#endif
+  return m_a[i];
+}
+
+
+template <class T>
+const T& ON_SimpleArray<T>::operator[](ON__INT64 i) const
+{
+#if defined(ON_DEBUG)
+  if ( i < 0 || i > ((ON__INT64)m_capacity) )
+  {
+    ON_ERROR("ON_SimpleArray[i]: i out of range.");
+  }
+#endif
+  return m_a[i];
+}
+
+template <class T>
+const T& ON_SimpleArray<T>::operator[](ON__UINT64 i) const
+{
+#if defined(ON_DEBUG)
+  if ( i > (ON__UINT64)m_capacity )
+  {
+    ON_ERROR("ON_SimpleArray[i]: i out of range.");
+  }
+#endif
+  return m_a[i];
+}
+
 
 template <class T>
 ON_SimpleArray<T>::operator T*()
@@ -195,18 +276,29 @@ template <class T>
 T* ON_SimpleArray<T>::KeepArray()
 {
   T* p = m_a;
+  m_a = 0;
   m_count = 0;
   m_capacity = 0;
-  m_a = NULL;
   return p;
 }
 
 template <class T>
 void ON_SimpleArray<T>::SetArray(T* p)
 {
+  if ( m_a && m_a != p )
+    onfree(m_a);
   m_a = p;
 }
 
+template <class T>
+void ON_SimpleArray<T>::SetArray(T* p, int count, int capacity)
+{
+  if ( m_a && m_a != p )
+    onfree(m_a);
+  m_a = p;
+  m_count = count;
+  m_capacity = capacity;
+}
 
 template <class T>
 T* ON_SimpleArray<T>::First()
@@ -227,9 +319,45 @@ T* ON_SimpleArray<T>::At( int i )
 }
 
 template <class T>
+T* ON_SimpleArray<T>::At( unsigned int i )
+{ 
+  return (i < (unsigned int)m_count) ? m_a+i : 0;
+}
+
+template <class T>
 const T* ON_SimpleArray<T>::At( int i) const
 {
   return (i >= 0 && i < m_count) ? m_a+i : 0;
+}
+
+template <class T>
+const T* ON_SimpleArray<T>::At( unsigned int i) const
+{
+  return (i < (unsigned int)m_count) ? m_a+i : 0;
+}
+
+template <class T>
+T* ON_SimpleArray<T>::At( ON__INT64 i )
+{ 
+  return (i >= 0 && i < (ON__INT64)m_count) ? m_a+i : 0;
+}
+
+template <class T>
+T* ON_SimpleArray<T>::At( ON__UINT64 i )
+{ 
+  return (i < (ON__UINT64)m_count) ? m_a+i : 0;
+}
+
+template <class T>
+const T* ON_SimpleArray<T>::At( ON__INT64 i) const
+{
+  return (i >= 0 && i < (ON__INT64)m_count) ? m_a+i : 0;
+}
+
+template <class T>
+const T* ON_SimpleArray<T>::At( ON__UINT64 i) const
+{
+  return (i < (ON__UINT64)m_count) ? m_a+i : 0;
 }
 
 template <class T>
@@ -831,7 +959,47 @@ template <class T>
 T& ON_ClassArray<T>::operator[]( int i )
 { 
 #if defined(ON_DEBUG)
-  ON_ASSERT( i >=0 && i < m_capacity);
+  if ( i < 0 || i > m_capacity )
+  {
+    ON_ERROR("ON_ClassArray[i]: i out of range.");
+  }
+#endif
+  return m_a[i]; 
+}
+
+
+template <class T>
+T& ON_ClassArray<T>::operator[]( ON__INT64 i )
+{ 
+#if defined(ON_DEBUG)
+  if ( i < 0 || i > (ON__INT64)m_capacity )
+  {
+    ON_ERROR("ON_ClassArray[i]: i out of range.");
+  }
+#endif
+  return m_a[i]; 
+}
+
+template <class T>
+T& ON_ClassArray<T>::operator[]( unsigned int i )
+{ 
+#if defined(ON_DEBUG)
+  if ( i > (unsigned int)m_capacity )
+  {
+    ON_ERROR("ON_ClassArray[i]: i out of range.");
+  }
+#endif
+  return m_a[i]; 
+}
+
+template <class T>
+T& ON_ClassArray<T>::operator[]( ON__UINT64 i )
+{ 
+#if defined(ON_DEBUG)
+  if ( i > (ON__UINT64)m_capacity )
+  {
+    ON_ERROR("ON_ClassArray[i]: i out of range.");
+  }
 #endif
   return m_a[i]; 
 }
@@ -840,7 +1008,46 @@ template <class T>
 const T& ON_ClassArray<T>::operator[](int i) const
 {
 #if defined(ON_DEBUG)
-  ON_ASSERT( i >=0 && i < m_capacity);
+  if ( i < 0 || i > m_capacity )
+  {
+    ON_ERROR("ON_ClassArray[i]: i out of range.");
+  }
+#endif
+  return m_a[i];
+}
+
+template <class T>
+const T& ON_ClassArray<T>::operator[](ON__INT64 i) const
+{
+#if defined(ON_DEBUG)
+  if ( i < 0 || i > (ON__INT64)m_capacity )
+  {
+    ON_ERROR("ON_ClassArray[i]: i out of range.");
+  }
+#endif
+  return m_a[i];
+}
+
+template <class T>
+const T& ON_ClassArray<T>::operator[](unsigned int i) const
+{
+#if defined(ON_DEBUG)
+  if ( i > (unsigned int)m_capacity )
+  {
+    ON_ERROR("ON_ClassArray[i]: i out of range.");
+  }
+#endif
+  return m_a[i];
+}
+
+template <class T>
+const T& ON_ClassArray<T>::operator[](ON__UINT64 i) const
+{
+#if defined(ON_DEBUG)
+  if ( i > (ON__UINT64)m_capacity )
+  {
+    ON_ERROR("ON_ClassArray[i]: i out of range.");
+  }
 #endif
   return m_a[i];
 }
@@ -873,16 +1080,28 @@ template <class T>
 T* ON_ClassArray<T>::KeepArray()
 {
   T* p = m_a;
+  m_a = 0;
   m_count = 0;
   m_capacity = 0;
-  m_a = NULL;
   return p;
 }
 
 template <class T>
 void ON_ClassArray<T>::SetArray(T* p)
 {
+  if ( m_a && m_a != p )
+    Destroy();
   m_a = p;
+}
+
+template <class T>
+void ON_ClassArray<T>::SetArray(T* p, int count, int capacity)
+{
+  if ( m_a && m_a != p )
+    Destroy();
+  m_a = p;
+  m_count = count;
+  m_capacity = capacity;
 }
 
 template <class T>
@@ -904,10 +1123,48 @@ T* ON_ClassArray<T>::At( int i )
 }
 
 template <class T>
+T* ON_ClassArray<T>::At( unsigned int i )
+{ 
+  return (i < (unsigned int)m_count) ? m_a+i : 0;
+}
+
+template <class T>
 const T* ON_ClassArray<T>::At( int i) const
 {
   return (i >= 0 && i < m_count) ? m_a+i : 0;
 }
+
+template <class T>
+const T* ON_ClassArray<T>::At( unsigned int i) const
+{
+  return (i < (unsigned int)m_count) ? m_a+i : 0;
+}
+
+
+template <class T>
+T* ON_ClassArray<T>::At( ON__INT64 i )
+{ 
+  return (i >= 0 && i < (ON__INT64)m_count) ? m_a+i : 0;
+}
+
+template <class T>
+T* ON_ClassArray<T>::At( ON__UINT64 i )
+{ 
+  return (i < (ON__UINT64)m_count) ? m_a+i : 0;
+}
+
+template <class T>
+const T* ON_ClassArray<T>::At( ON__INT64 i) const
+{
+  return (i >= 0 && i < (ON__INT64)m_count) ? m_a+i : 0;
+}
+
+template <class T>
+const T* ON_ClassArray<T>::At( ON__UINT64 i) const
+{
+  return (i < (ON__UINT64)m_count) ? m_a+i : 0;
+}
+
 
 template <class T>
 T* ON_ClassArray<T>::Last()
@@ -1126,7 +1383,7 @@ int ON_ClassArray<T>::BinarySearch( const T* key, int (*compar)(const T*,const T
 #else
   // for lamer 64 bit compilers
   return found ? ((int)((((ON__UINT64)found) - ((ON__UINT64)m_a))/sizeof(T))) : -1;
-#endif
+#endif#endif
 }
 
 template <class T>

@@ -100,7 +100,6 @@ ON_INC=	opennurbs.h \
 		opennurbs_archive.h \
 		opennurbs_array.h \
 		opennurbs_array_defs.h \
-		opennurbs_base32.h \
 		opennurbs_base64.h \
 		opennurbs_beam.h \
 		opennurbs_bezier.h \
@@ -165,7 +164,6 @@ ON_INC=	opennurbs.h \
 		opennurbs_polyedgecurve.h \
 		opennurbs_polyline.h \
 		opennurbs_polylinecurve.h \
-		opennurbs_quaternion.h \
 		opennurbs_rand.h \
 		opennurbs_rendering.h \
 		opennurbs_revsurface.h \
@@ -198,7 +196,6 @@ ON_SRC=	opennurbs_3dm_attributes.cpp \
 		opennurbs_arccurve.cpp \
 		opennurbs_archive.cpp \
 		opennurbs_array.cpp \
-		opennurbs_base32.cpp \
 		opennurbs_base64.cpp \
 		opennurbs_basic.cpp \
 		opennurbs_beam.cpp \
@@ -251,7 +248,6 @@ ON_SRC=	opennurbs_3dm_attributes.cpp \
 		opennurbs_math.cpp \
 		opennurbs_matrix.cpp \
 		opennurbs_memory.c \
-		opennurbs_memory_new.cpp \
 		opennurbs_memory_util.c \
 		opennurbs_mesh.cpp \
 		opennurbs_mesh_ngon.cpp \
@@ -276,11 +272,9 @@ ON_SRC=	opennurbs_3dm_attributes.cpp \
 		opennurbs_polyedgecurve.cpp \
 		opennurbs_polyline.cpp \
 		opennurbs_polylinecurve.cpp \
-		opennurbs_quaternion.cpp \
 		opennurbs_rand.cpp \
 		opennurbs_revsurface.cpp \
 		opennurbs_rtree.cpp \
-		opennurbs_sort.cpp \
 		opennurbs_sphere.cpp \
 		opennurbs_string.cpp \
 		opennurbs_sum.cpp \
@@ -308,7 +302,6 @@ ON_OBJ=	opennurbs_3dm_attributes.o \
 		opennurbs_arccurve.o \
 		opennurbs_archive.o \
 		opennurbs_array.o \
-		opennurbs_base32.o \
 		opennurbs_base64.o \
 		opennurbs_basic.o \
 		opennurbs_beam.o \
@@ -344,7 +337,6 @@ ON_OBJ=	opennurbs_3dm_attributes.o \
 		opennurbs_extensions.o \
 		opennurbs_font.o \
 		opennurbs_geometry.o \
-		opennurbs_gl.o \
 		opennurbs_group.o \
 		opennurbs_hatch.o \
 		opennurbs_instance.o \
@@ -361,7 +353,6 @@ ON_OBJ=	opennurbs_3dm_attributes.o \
 		opennurbs_math.o \
 		opennurbs_matrix.o \
 		opennurbs_memory.o \
-		opennurbs_memory_new.o \
 		opennurbs_memory_util.o \
 		opennurbs_mesh.o \
 		opennurbs_mesh_ngon.o \
@@ -386,11 +377,9 @@ ON_OBJ=	opennurbs_3dm_attributes.o \
 		opennurbs_polyedgecurve.o \
 		opennurbs_polyline.o \
 		opennurbs_polylinecurve.o \
-		opennurbs_quaternion.o \
 		opennurbs_rand.o \
 		opennurbs_revsurface.o \
 		opennurbs_rtree.o \
-		opennurbs_sort.o \
 		opennurbs_sphere.o \
 		opennurbs_string.o \
 		opennurbs_sum.o \
@@ -432,6 +421,7 @@ ZLIB_SRC= zlib/adler32.c \
 		zlib/uncompr.c \
 		zlib/zutil.c
 
+
 ZLIB_OBJ= zlib/adler32.o \
 		zlib/compress.o \
 		zlib/crc32.o \
@@ -443,6 +433,7 @@ ZLIB_OBJ= zlib/adler32.o \
 		zlib/trees.o \
 		zlib/uncompr.o \
 		zlib/zutil.o
+
 
 EXAMPLE_OBJ = example_read/example_read.o \
       example_write/example_write.o \

@@ -596,7 +596,7 @@ ON_CrossProduct(
 
 ON_DECL
 bool 
-ON_IsOrthogonalFrame( // true if X, Y are nonzero and mutually perpindicular
+ON_IsOrthogonalFrame( // true if X, Y are nonzero and mutually perpendicular
     const ON_2fVector&, // X
     const ON_2fVector&  // Y
     );
@@ -846,7 +846,7 @@ ON_TripleProduct(  // 3d triple product for old fashioned arrays
 
 ON_DECL
 bool 
-ON_IsOrthogonalFrame( // true if X, Y, Z are nonzero and mutually perpindicular
+ON_IsOrthogonalFrame( // true if X, Y, Z are nonzero and mutually perpendicular
     const ON_3fVector&, // X
     const ON_3fVector&, // Y
     const ON_3fVector&  // Z 

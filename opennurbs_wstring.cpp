@@ -402,7 +402,6 @@ ON_wString::~ON_wString()
 ON_wString::ON_wString(const ON_wString& src)
 {
 	if (    src.Header()->ref_count > 0 
-       && 0 == ON_WorkerMemoryPool()
        )	
   {
 		m_s = src.m_s;
@@ -560,7 +559,6 @@ const ON_wString& ON_wString::operator=(const ON_wString& src)
       Create();
     }
     else if (    src.Header()->ref_count > 0 
-              && 0 == ON_WorkerMemoryPool()
             ) 
     {
       Destroy();
@@ -788,6 +786,29 @@ unsigned int ON_wString::SizeOf() const
   return ((unsigned int)sz);
 }
 
+ON__UINT32 ON_wString::DataCRC(ON__UINT32 current_remainder) const
+{
+  int string_length = Header()->string_length;
+  if ( string_length > 0 )
+  {
+    current_remainder = ON_CRC32(current_remainder,string_length*sizeof(*m_s),m_s);
+  }
+  return current_remainder;
+}
+
+ON__UINT32 ON_wString::DataCRCLower(ON__UINT32 current_remainder) const
+{
+  int string_length = Header()->string_length;
+  if ( string_length > 0 )
+  {
+    ON_wString s(*this);
+    s.MakeLower();
+    current_remainder = s.DataCRC(current_remainder);
+  }
+  return current_remainder;
+}
+
+
 int ON_wString::Compare( const char* s ) const
 {
   int rc = 0;
@@ -941,7 +962,8 @@ bool ON_WildCardMatchNoCase(const wchar_t* s, const wchar_t* pattern)
     return ( !s || !s[0] ) ? true : false;
   }
 
-  if ( *pattern == '*' ) {
+  if ( *pattern == '*' ) 
+  {
     pattern++;
     while ( *pattern == '*' )
       pattern++;
@@ -950,7 +972,7 @@ bool ON_WildCardMatchNoCase(const wchar_t* s, const wchar_t* pattern)
       return true;
 
     while (*s) {
-      if ( ON_WildCardMatch(s,pattern) )
+      if ( ON_WildCardMatchNoCase(s,pattern) )
         return true;
       s++;
     }
@@ -960,7 +982,8 @@ bool ON_WildCardMatchNoCase(const wchar_t* s, const wchar_t* pattern)
 
   while ( *pattern != '*' )
   {
-    if ( *pattern == '?' ) {
+    if ( *pattern == '?' )
+    {
       if ( *s) {
         pattern++;
         s++;
@@ -969,7 +992,8 @@ bool ON_WildCardMatchNoCase(const wchar_t* s, const wchar_t* pattern)
       return false;
     }
     
-    if ( *pattern == '\\' ) {
+    if ( *pattern == '\\' )
+    {
       switch( pattern[1] )
       {
       case '*':
@@ -978,7 +1002,8 @@ bool ON_WildCardMatchNoCase(const wchar_t* s, const wchar_t* pattern)
         break;
       }
     }
-    if ( towupper(*pattern) != towupper(*s) ) {
+    if ( towupper(*pattern) != towupper(*s) )
+    {
       return false;
     }
 
@@ -989,7 +1014,7 @@ bool ON_WildCardMatchNoCase(const wchar_t* s, const wchar_t* pattern)
     s++;
   }
   
-  return ON_WildCardMatch(s,pattern);
+  return ON_WildCardMatchNoCase(s,pattern);
 }
 
 bool ON_wString::WildCardMatch( const wchar_t* pattern ) const

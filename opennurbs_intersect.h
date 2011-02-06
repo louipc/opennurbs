@@ -178,8 +178,15 @@ Parameters:
   tolerance - [in]  If tolerance > 0.0, then the intersection is
                    performed against a box that has each side
                    moved out by tolerance.
-  line_parameters - [out] The chord from line.PointAt(line_parameters[0])
-     to line.PointAt(line_parameters[1]) is the intersection.
+  line_parameters - [out] 
+    Pass null if you do not need the parameters.
+    If true is returned and line.from != line.to,
+    then the chord from line.PointAt(line_parameters[0])
+    to line.PointAt(line_parameters[1]) is the intersection.
+    If true is returned and line.from = line.to, then line.from
+    is in the box and the interval (0.0,0.0) is returned.
+    If false is returned, the input value of line_parameters
+    is not changed.
 Returns:
   True if the line intersects the box and false otherwise.
 */
