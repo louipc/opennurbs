@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -849,7 +850,7 @@ int ON_UserStringList::SetUserStrings( int count, const ON_UserString* us, bool 
     hash[i+count0].i = hash1[i].i;
     hash[i+count0].j = hash1[i].j+count0;
   }
-  ON_hsort(hash,count0_plus_count,sizeof(hash[0]),cmp_hash_2dex_ij);
+  ON_qsort(hash,count0_plus_count,sizeof(hash[0]),cmp_hash_2dex_ij);
 
   m_e.Reserve(count0+count);
   for ( i = 0; i < count; i++)

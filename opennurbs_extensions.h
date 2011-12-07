@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -766,6 +767,21 @@ public:
     if you modify the m_object_table or m_idef_table.
   */
   void DestroyCache();
+
+  /////////////////////////////////////////////////////////////////////
+  //
+  // BEGIN Render Development Toolkit (RDK) information
+  //
+  static bool IsRDKDocumentInformation(const ONX_Model_UserData& docud);
+  static bool GetRDKDocumentInformation(const ONX_Model_UserData& docud,ON_wString& rdk_xml_document_data);
+
+  static bool IsRDKObjectInformation(const ON_UserData& objectud);
+  static bool GetRDKObjectInformation(const ON_Object& object,ON_wString& rdk_xml_object_data);
+  //
+  // END Render Development Toolkit (RDK) information
+  //
+  /////////////////////////////////////////////////////////////////////
+
 
 private:
   // prohibit use of copy construction and operator=

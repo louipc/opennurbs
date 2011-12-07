@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -276,12 +277,6 @@ public:
         int i, 
         int j
         );
-
-  // virtual ON_Geometry override
-  bool Morph( const ON_SpaceMorph& morph );
-
-  // virtual ON_Geometry override
-  bool IsMorphable() const;
 
   /////////////////////////////////////////////////////////////////
   // ON_Curve overrides
@@ -578,39 +573,6 @@ public:
                          //            repeated evaluations
          ) const;
 
-  bool GetClosestPoint( 
-          const ON_3dPoint&, // test_point
-          double* t,       // parameter of local closest point returned here
-          double maximum_distance = 0.0,  // maximum_distance
-          const ON_Interval* sub_domain = NULL // sub_domain
-          ) const;
-
-  // Description:
-  //   Get the length of the curve.
-  // Parameters:
-  //   length - [out] length returned here.
-  //   t - [out] parameter such that the length of the curve
-  //      from its start to t is arc_length.
-  //   fractional_tolerance - [in] desired fractional precision.
-  //       fabs(("exact" length from start to t) - arc_length)/arc_length <= fractional_tolerance
-  //   sub_domain - [in] If not NULL, the calculation is performed on
-  //       the specified sub-domain of the curve.
-  // Returns:
-  //   true if returned if the length calculation is successful.
-  //   false is returned if the length is not calculated.
-  // Remarks:
-  //   The arc length will be computed so that
-  //   (returned length - real length)/(real length) <= fractional_tolerance
-  //   More simply, if you want N significant figures in the answer, set the
-  //   fractional_tolerance to 1.0e-N.  For "nice" curves, 1.0e-8 works
-  //   fine.  For very high degree NURBS and NURBS with bad parameterizations,
-  //   use larger values of fractional_tolerance.
-  ON_BOOL32 GetLength(
-          double* length,
-          double fractional_tolerance = 1.0e-8,
-          const ON_Interval* sub_domain = NULL
-          ) const;
-
   /*
   Parameters:
     span_index - [in]
@@ -639,27 +601,6 @@ public:
 
   /*
   Description:
-    Looks for segments that are shorter than tolerance
-    that can be removed. If bRemoveShortSegments is true,
-    then the short segments are removed. Does not change the 
-    domain, but it will change the relative parameterization.
-  Parameters:
-    tolerance - [in]
-    bRemoveShortSegments - [in] If true, then short segments
-                                are removed.
-  Returns:
-    True if removable short segments can were found.
-    False if no removable short segments can were found.
-  See Also:
-    ON_NurbsCurve::RepairBadKnots
-  */
-  bool RemoveShortSegments(
-    double tolerance,
-    bool bRemoveShortSegments = true
-    );
-
-  /*
-  Description:
     Looks for problems caused by knots that are close together
     or have mulitplicity >= order. If bRepair is true, the problems
     are fixed.  Does not change the domain.
@@ -670,8 +611,6 @@ public:
       can be repaired, but does not modify the curve.
   Returns:
     True if bad knots were found and can be repaired.
-  See Also:
-    ON_NurbsCurve::RemoveShortSegments
   */
   bool RepairBadKnots(
     double knot_tolerance=0.0,

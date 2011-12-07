@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -592,7 +593,7 @@ public:
 
   ON_Color m_ambient_light;
   
-  int m_background_style; // 0 = solid color, 1 = "wallpaper" image, 2 = Gradient
+  int m_background_style; // 0 = solid color, 1 = "wallpaper" image, 2 = Gradient, 3 = Environment
   ON_Color m_background_color; // also Top color of gradient...
   ON_wString m_background_bitmap_filename;
 

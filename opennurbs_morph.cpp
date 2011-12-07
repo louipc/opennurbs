@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -265,7 +266,7 @@ double ON_Localizer::Value(double t) const
 
 double ON_Localizer::Value(ON_3dPoint P) const
 {
-  double v,s,t = m_d.m_t[1];
+  double t = m_d.m_t[1];
 
   switch ( m_type )
   {
@@ -285,19 +286,11 @@ double ON_Localizer::Value(ON_3dPoint P) const
     break;
 
   case curve_type:
-    if ( !m_nurbs_curve )
-      return 1.0;
-    if ( !m_nurbs_curve->GetClosestPoint(P,&v) )
-      return 1.0;
-    t = P.DistanceTo(m_nurbs_curve->PointAt(v));
+    return 1.0;
     break;
 
   case surface_type:
-    if ( !m_nurbs_surface )
-      return 1.0;
-    if ( !m_nurbs_surface->GetClosestPoint(P,&s,&v) )
-      return 1.0;
-    t = P.DistanceTo(m_nurbs_surface->PointAt(s,v));
+    return 1.0;
     break;
 
   case distance_type:
@@ -625,23 +618,6 @@ void ON_SpaceMorph::MorphPointList(
   }
 }
 
-
-
-bool ON_Point::IsMorphable() const
-{
-  return true;
-}
-
-bool ON_PointCloud::IsMorphable() const
-{
-  return true;
-}
-
-bool ON_Mesh::IsMorphable() const
-{
-  return true;
-}
-
 bool ON_Mesh::EvaluatePoint( const class ON_ObjRef& objref, ON_3dPoint& P ) const
 {
   // virtual function default
@@ -713,304 +689,4 @@ bool ON_Mesh::EvaluatePoint( const class ON_ObjRef& objref, ON_3dPoint& P ) cons
   return P.IsValid();
 }
 
-bool ON_NurbsCurve::IsMorphable() const
-{
-  return true;
-}
 
-bool ON_NurbsSurface::IsMorphable() const
-{
-  return true;
-}
-
-bool ON_LineCurve::IsMorphable() const
-{
-  return true;
-}
-
-bool ON_Brep::IsMorphable() const
-{
-  // NOTE: This is virtual function and
-  //       TL_Brep::IsMorphable() returns
-  //       true.
-  bool rc = false;
-  if ( m_F.Count() == 1 )
-  {
-    const ON_Surface* srf = m_F[0].SurfaceOf();
-    if ( srf )
-      rc = true;
-  }
-  return rc;
-}
-
-
-
-bool ON_Point::Morph( const ON_SpaceMorph& morph )
-{
-  point = morph.MorphPoint(point);
-  return true;
-}
-
-bool ON_PointCloud::Morph( const ON_SpaceMorph& morph )
-{
-  if ( m_P.Count() > 0 )
-  {
-    morph.MorphPointList( 3, 0, m_P.Count(), 3, &m_P[0].x );
-    m_bbox.Destroy();
-  }
-  return true;
-}
-
-bool ON_Mesh::Morph( const ON_SpaceMorph& morph )
-{
-  if ( m_V.Count() > 0 )
-  {
-    bool bHasDoubles = HasDoublePrecisionVertices();
-    bool bDoublesInSynch = bHasDoubles && HasSynchronizedDoubleAndSinglePrecisionVertices();
-
-    const bool bIsValid_fV = bHasDoubles && SinglePrecisionVerticesAreValid();
-    const bool bIsValid_dV = bHasDoubles && DoublePrecisionVerticesAreValid();
-
-    bool bHasFaceNormals = HasFaceNormals();
-    bool bHasVertexNormals = HasVertexNormals();
-
-    int i, count = m_V.Count();
-
-    if ( bHasVertexNormals )
-    {
-      for ( i = 0; i < count; i++ )
-      {
-        m_N[i] = m_V[i] + 0.0009765625f*m_N[i];
-      }
-      morph.MorphPointList( 3, 0, count, 3, &m_N[0].x );
-    }
-
-    if ( bHasDoubles )
-    {
-      ON_3dPointArray& dV = DoublePrecisionVertices();
-      morph.MorphPointList( 3, 0, dV.Count(), 3, &dV[0].x );
-      if ( bDoublesInSynch )
-        UpdateSinglePrecisionVertices();
-    }
-
-    if ( !bDoublesInSynch )
-    {
-      // need to morph single precision vertices
-      morph.MorphPointList( 3, 0, count, 3, &m_V[0].x );
-    }
-
-    if ( bIsValid_fV || bDoublesInSynch )
-      SetSinglePrecisionVerticesAsValid();
-
-    if ( bIsValid_dV || bDoublesInSynch )
-      SetDoublePrecisionVerticesAsValid();
-
-    if ( bHasVertexNormals )
-    {
-      for ( i = 0; i < count; i++ )
-      {
-        m_N[i] -= m_V[i];
-        m_N[i].Unitize();
-      }
-    }
-
-    m_FN.SetCount(0);
-    m_K.SetCount(0);
-    if ( bHasFaceNormals )
-    {
-      ComputeFaceNormals();
-    }
-
-    m_Ctag.Default();
-    InvalidateVertexBoundingBox();
-    InvalidateVertexNormalBoundingBox();
-    InvalidateCurvatureStats();
-  }
-  return true;
-}
-
-bool ON_NurbsCurve::Morph( const ON_SpaceMorph& morph )
-{
-  DestroyCurveTree();
-  ON_BOOL32 bIsClosed = IsClosed();
-  ON_BOOL32 bIsPeriodic = IsPeriodic();
-  morph.MorphPointList( m_dim, m_is_rat, m_cv_count, m_cv_stride, m_cv );
-  if ( bIsPeriodic )
-  {
-    int i, deg = m_order-1;
-    for ( i = 0; i < deg; i++ )
-      SetCV( m_cv_count-deg+i, ON::intrinsic_point_style, CV(i) );
-  }
-  else if ( bIsClosed )
-  {
-    SetCV( m_cv_count-1, ON::intrinsic_point_style, CV(0) );
-  }
-  return true;
-}
-
-
-bool ON_NurbsSurface::Morph( const ON_SpaceMorph& morph )
-{
-  DestroySurfaceTree();
-  ON_BOOL32 bIsClosed[2];
-  ON_BOOL32 bIsPeriodic[2];
-  ON_BOOL32 bIsSingular[4];
-
-  int i;
-  for ( i = 0; i < 2; i++ )
-  {
-    bIsClosed[i] = IsClosed(i);
-    bIsPeriodic[i] = IsPeriodic(i);
-  }
-
-  for ( i = 0; i < 4; i++ )
-    bIsSingular[i] = IsSingular(i);
-
-  for ( i = 0; i < m_cv_count[0]; i++ )
-  {
-    morph.MorphPointList( m_dim, m_is_rat, 
-                          m_cv_count[1], m_cv_stride[1], 
-                          CV(i,0) );
-  }
-
-  for ( i = 0; i < 4; i++ )
-  {
-    if ( bIsSingular[i] )
-      CollapseSide(i);
-  }
-
-  // TODO - if input was closed/periodic make output the same
-
-  return true;
-}
-
-
-bool ON_LineCurve::Morph( const ON_SpaceMorph& morph )
-{
-  DestroyCurveTree();
-  m_line.from = morph.MorphPoint(m_line.from);
-  m_line.to = morph.MorphPoint(m_line.to);
-  return true;
-}
-
-
-bool ON_BezierCurve::Morph( const ON_SpaceMorph& morph )
-{
-  morph.MorphPointList( m_dim, m_is_rat, m_order, m_cv_stride, m_cv );
-  return true;
-}
-
-
-bool ON_BezierSurface::Morph( const ON_SpaceMorph& morph )
-{
-  int i;
-  for ( i = 0; i < m_order[0]; i++ )
-  {
-    morph.MorphPointList( m_dim, m_is_rat, 
-                          m_order[1], m_cv_stride[1], 
-                          CV(i,0) );
-  }
-  return true;
-}
-
-bool ON_Brep::Morph( const ON_SpaceMorph& morph )
-{
-  bool rc = IsMorphable();
-  if ( rc )
-  {
-    ON_Surface* srf = const_cast<ON_Surface*>(m_F[0].SurfaceOf());
-    
-    if ( srf->IsMorphable() )
-    {
-      rc = srf->Morph(morph);
-    }
-    else
-    {
-      ON_NurbsSurface* new_srf = srf->NurbsSurface();
-      if ( !new_srf )
-        return false;
-      rc = new_srf->Morph(morph);
-      if (rc)
-      {
-        int si = m_F[0].m_si;
-        m_F[0].SetProxySurface(new_srf);
-        delete srf;
-        srf = new_srf;
-        m_S[si] = srf;
-        DestroyMesh(ON::any_mesh,true);
-      }
-      else
-      {
-        delete new_srf;
-        new_srf = 0;
-      }
-    }
-    
-    if ( rc )
-    {
-      double tol = 0.01; 
-      rc = RebuildEdges( m_F[0], tol, true, true );
-
-      DestroyMesh(ON::analysis_mesh);
-      DestroyMesh(ON::preview_mesh);
-      ON_Mesh* mesh = const_cast<ON_Mesh*>(m_F[0].Mesh(ON::render_mesh));
-      if ( mesh )
-        mesh->EvaluateMeshGeometry( *srf );
-    }
-  }
-  return rc;
-}
-
-// virtual ON_Geometry override
-bool ON_PolyCurve::Morph( const ON_SpaceMorph& morph )
-{
-  DestroyCurveTree();
-  int segment_count = m_segment.Count();
-  bool rc = segment_count > 0;
-  if ( rc )
-  {
-    int i;
-    ON_NurbsCurve* this_seg = 0;
-    for ( i = 0; i < segment_count && rc; i++ )
-    {
-      if ( 0 == m_segment[i] )
-        continue;
-      this_seg = ON_NurbsCurve::Cast(m_segment[i]);
-      if ( 0 == this_seg )
-      {
-        this_seg = m_segment[i]->NurbsCurve();
-        if ( 0 != this_seg )
-        {
-          delete m_segment[i];
-          m_segment[i] = this_seg;
-        }
-      }
-      if ( 0 == this_seg )
-        rc = false;
-      else
-        rc = this_seg->Morph(morph);
-    }
-  }
-  return rc;
-}
-
-// virtual ON_Geometry override
-bool ON_PolyCurve::IsMorphable() const
-{
-  return true;
-}
-
-
-// virtual ON_Geometry override
-bool ON_PolylineCurve::Morph( const ON_SpaceMorph& morph )
-{
-  DestroyCurveTree();
-  morph.MorphPointList( 3, false, m_pline.Count(), 3, (double*)m_pline.Array() );
-  return true;
-}
-
-// virtual ON_Geometry override
-bool ON_PolylineCurve::IsMorphable() const
-{
-  return true;
-}

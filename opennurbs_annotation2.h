@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -857,10 +858,19 @@ public:
     Returns:
       True if text_xform is set.
   */
+  //bool GetTextXform( 
+  //    const ON_RECT gdi_text_rect,
+  //    const ON_Font& font,
+  //    const ON_DimStyle& dimstyle,
+  //    double dimscale,
+  //    const ON_Viewport* vp,
+  //    const ON_Xform* model_xform,
+  //    ON_Xform& text_xform  // output
+  //    ) const;
   bool GetTextXform( 
       const ON_RECT gdi_text_rect,
       const ON_Font& font,
-      const ON_DimStyle& dimstyle,
+      const ON_DimStyle* dimstyle,
       double dimscale,
       const ON_Viewport* vp,
       const ON_Xform* model_xform,
@@ -2040,7 +2050,7 @@ public:
     // Do not change these enum values.  They are saved in files as the 
     // ON_COMPONENT_INDEX.m_index value.
     //
-    // Indices of angular dimension definition points in 
+    // Indices of leader definition points in 
     // the m_points[] array
     arrow_pt_index  = 0, // arrow tip
 

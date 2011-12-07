@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -12,7 +13,6 @@
 //
 ////////////////////////////////////////////////////////////////
 */
-
 #include "opennurbs.h"
 
 static
@@ -1651,6 +1651,7 @@ ON_Brep* ON_BrepTrimmedPlane(
   s->SetExtents(1, s->Domain(1) );
   const int si = brep->AddSurface(s);
   ON_BrepFace& face = brep->NewFace( si );
+  face.DestroyRuntimeCache();
   if ( brep->NewPlanarFaceLoop( face.m_face_index, ON_BrepLoop::outer, boundary, bDuplicateCurves ) )
   {
     // set face domain
@@ -2364,16 +2365,6 @@ bool ON_Brep::RemoveNesting(
 }
 
 
-bool ON_Brep::SplitClosedFaces( int min_degree )
-{
-  return false;
-}
-
-bool ON_Brep::SplitBipolarFaces()
-{
-  return false;
-}
-
 static bool IsSlitTrim(const ON_BrepTrim& T)
 
 {
@@ -2433,7 +2424,6 @@ static bool IsSlitTrim(const ON_BrepTrim& T)
 }
 
 static bool ON_BrepRemoveSlits(ON_BrepLoop& L)
-
 {
   if (L.m_loop_index < 0)
     return false;
@@ -2581,7 +2571,6 @@ static bool ON_BrepRemoveSlits(ON_BrepLoop& L)
 //ON_Brep::Compact() to get rid of deleted trims and loops.
 
 bool ON_BrepRemoveSlits(ON_BrepFace& F)
-
 {
   //For each loop, look for slit pairs that fall between non slits and 
   //break the loop at the pair.
@@ -2796,7 +2785,7 @@ bool ON_BrepMergeFaces(ON_Brep& B)
   }
   if (SF.Count() < 2)
     return false;
-  SF.HeapSort(sfsort);
+  SF.QuickSort(sfsort);
   //int si = SF[0][0];
   int start_i = 0;
   while (start_i<SF.Count()){
@@ -2870,5 +2859,4 @@ void ON_BrepMergeAllEdges(ON_Brep& B)
   }
   return;
 }
-
 

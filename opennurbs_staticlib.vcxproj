@@ -58,10 +58,10 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
-    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(Configuration)StaticLib\</IntDir>
-    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(Platform)\$(Configuration)StaticLib\</IntDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(Configuration)StaticLib\</IntDir>
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(Platform)\$(Configuration)StaticLib\</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(Configuration)StaticLib\</IntDir>
+    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(Platform)\$(Configuration)StaticLib\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -145,16 +145,15 @@
     <ClCompile Include="opennurbs_bounding_box.cpp" />
     <ClCompile Include="opennurbs_box.cpp" />
     <ClCompile Include="opennurbs_brep.cpp" />
-    <ClCompile Include="opennurbs_brep_changesrf.cpp" />
     <ClCompile Include="opennurbs_brep_extrude.cpp" />
     <ClCompile Include="opennurbs_brep_io.cpp" />
     <ClCompile Include="opennurbs_brep_isvalid.cpp" />
-    <ClCompile Include="opennurbs_brep_kinky.cpp" />
     <ClCompile Include="opennurbs_brep_region.cpp" />
     <ClCompile Include="opennurbs_brep_tools.cpp" />
     <ClCompile Include="opennurbs_brep_v2valid.cpp" />
     <ClCompile Include="opennurbs_circle.cpp" />
     <ClCompile Include="opennurbs_color.cpp" />
+    <ClCompile Include="opennurbs_compress.cpp" />
     <ClCompile Include="opennurbs_cone.cpp" />
     <ClCompile Include="opennurbs_crc.cpp" />
     <ClCompile Include="opennurbs_curve.cpp" />
@@ -165,11 +164,13 @@
     <ClCompile Include="opennurbs_detail.cpp" />
     <ClCompile Include="opennurbs_dimstyle.cpp" />
     <ClCompile Include="opennurbs_ellipse.cpp" />
+    <ClCompile Include="opennurbs_embedded_file.cpp" />
     <ClCompile Include="opennurbs_error.cpp" />
     <ClCompile Include="opennurbs_error_message.cpp" />
     <ClCompile Include="opennurbs_evaluate_nurbs.cpp" />
     <ClCompile Include="opennurbs_extensions.cpp" />
     <ClCompile Include="opennurbs_font.cpp" />
+    <ClCompile Include="opennurbs_fsp.cpp" />
     <ClCompile Include="opennurbs_geometry.cpp" />
     <ClCompile Include="opennurbs_group.cpp" />
     <ClCompile Include="opennurbs_hatch.cpp" />
@@ -238,6 +239,7 @@
     <ClCompile Include="opennurbs_rand.cpp" />
     <ClCompile Include="opennurbs_revsurface.cpp" />
     <ClCompile Include="opennurbs_rtree.cpp" />
+    <ClCompile Include="opennurbs_sort.cpp" />
     <ClCompile Include="opennurbs_sphere.cpp" />
     <ClCompile Include="opennurbs_string.cpp" />
     <ClCompile Include="opennurbs_sum.cpp" />
@@ -246,12 +248,12 @@
     <ClCompile Include="opennurbs_surfaceproxy.cpp" />
     <ClCompile Include="opennurbs_textlog.cpp" />
     <ClCompile Include="opennurbs_torus.cpp" />
+    <ClCompile Include="opennurbs_unicode.cpp" />
     <ClCompile Include="opennurbs_userdata.cpp" />
     <ClCompile Include="opennurbs_uuid.cpp" />
     <ClCompile Include="opennurbs_viewport.cpp" />
     <ClCompile Include="opennurbs_workspace.cpp" />
     <ClCompile Include="opennurbs_wstring.cpp" />
-    <ClCompile Include="opennurbs_x.cpp" />
     <ClCompile Include="opennurbs_xform.cpp" />
     <ClCompile Include="opennurbs_zlib.cpp" />
     <ClCompile Include="opennurbs_zlib_memory.cpp" />
@@ -278,8 +280,8 @@
     <ClInclude Include="opennurbs_brep.h" />
     <ClInclude Include="opennurbs_circle.h" />
     <ClInclude Include="opennurbs_color.h" />
+    <ClInclude Include="opennurbs_compress.h" />
     <ClInclude Include="opennurbs_cone.h" />
-    <ClInclude Include="opennurbs_crashtest.h" />
     <ClInclude Include="opennurbs_crc.h" />
     <ClInclude Include="opennurbs_curve.h" />
     <ClInclude Include="opennurbs_curveonsurface.h" />
@@ -294,10 +296,13 @@
     <ClInclude Include="opennurbs_extensions.h" />
     <ClInclude Include="opennurbs_font.h" />
     <ClInclude Include="opennurbs_fpoint.h" />
+    <ClInclude Include="opennurbs_fsp.h" />
+    <ClInclude Include="opennurbs_fsp_defs.h" />
     <ClInclude Include="opennurbs_geometry.h" />
     <ClInclude Include="opennurbs_gl.h" />
     <ClInclude Include="opennurbs_group.h" />
     <ClInclude Include="opennurbs_hatch.h" />
+    <ClInclude Include="opennurbs_hsort_template.h" />
     <ClInclude Include="opennurbs_instance.h" />
     <ClInclude Include="opennurbs_intersect.h" />
     <ClInclude Include="opennurbs_knot.h" />
@@ -333,6 +338,7 @@
     <ClInclude Include="opennurbs_polyedgecurve.h" />
     <ClInclude Include="opennurbs_polyline.h" />
     <ClInclude Include="opennurbs_polylinecurve.h" />
+    <ClInclude Include="opennurbs_qsort_template.h" />
     <ClInclude Include="opennurbs_rand.h" />
     <ClInclude Include="opennurbs_rendering.h" />
     <ClInclude Include="opennurbs_revsurface.h" />
@@ -347,12 +353,12 @@
     <ClInclude Include="opennurbs_texture.h" />
     <ClInclude Include="opennurbs_texture_mapping.h" />
     <ClInclude Include="opennurbs_torus.h" />
+    <ClInclude Include="opennurbs_unicode.h" />
     <ClInclude Include="opennurbs_userdata.h" />
     <ClInclude Include="opennurbs_uuid.h" />
     <ClInclude Include="opennurbs_version.h" />
     <ClInclude Include="opennurbs_viewport.h" />
     <ClInclude Include="opennurbs_workspace.h" />
-    <ClInclude Include="opennurbs_x.h" />
     <ClInclude Include="opennurbs_xform.h" />
     <ClInclude Include="opennurbs_zlib.h" />
   </ItemGroup>

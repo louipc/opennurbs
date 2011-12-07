@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -58,9 +59,10 @@ public:
                       // If m_source_archive is not available, the
                       // instance definition is not valid.
                       // This does not save runtime memory.  It may
-                      // save a little disk space, but it is a 
-                      // foolish option requested by people who do not 
-                      // understand all the issues.
+                      // save a little disk space, but the definition
+                      // will be unavailable whenever the linked file
+                      // is unavailable. If the linked file is relatively
+                      // small, then using this feature is not reccomended.
     force_32bit_idef_update_type = 0xFFFFFFFF
   };
 
@@ -88,6 +90,10 @@ public:
 
   // virtual ON_Object overrides
   ON_BOOL32 IsValid( ON_TextLog* text_log = NULL ) const;
+
+  // virtual ON_Object::Dump override
+  void Dump( ON_TextLog& ) const;
+
   ON_BOOL32 Write(
          ON_BinaryArchive& binary_archive
        ) const;
@@ -169,10 +175,101 @@ public:
 
   /*
   Description:
+    Use this function to specify an alternate location to
+    look for a linked instance defininition archive if it
+    cannot be found in the location specified by m_source_archive.
+  Parameters:
+    alternate_source_archive_path - [in]
+      alterate location. pass null to delete the alternate path.
+    bRelativePath - [in]
+      true if alternate_source_archive_path is a relative path.
+  */
+  void SetAlternateSourceArchivePath( 
+        const wchar_t* alternate_source_archive_path,
+        bool bRelativePath
+        );
+
+  /*
+  Description:
+    If there is an alternate location to look for a linked instance
+    defininition archive when it cannot be found in the location 
+    specified by m_source_archive, then function will return the
+    alterate location.
+  Parameters:
+    alternate_source_archive_path - [out]
+    bRelativePath - [out]
+      true if alternate_source_archive_path is a relative path.
+  */
+  bool GetAlternateSourceArchivePath( 
+        ON_wString& alternate_source_archive_path,
+        bool& bRelativePath
+        ) const;
+  /*
+  Description:
     Sets m_us and m_unit_scale.
   */
   void SetUnitSystem( ON::unit_system us );
   void SetUnitSystem( const ON_UnitSystem& us );
+
+  /*
+  Returns:
+    True if this is a linked instance definition with
+    layer settings information.
+  */
+  bool HasLinkedIdefLayerSettings() const;
+
+  /*
+  Description:
+    Set linked instance definition reference file layer settings.
+  Parameters:
+    layer_settings - [in/out]
+      input: layer settings read from the linked file.
+      output: layer settings to use in the context of the idef.
+  */
+  void UpdateLinkedIdefReferenceFileLayerSettings( unsigned int layer_count, ON_Layer** layer_settings );
+
+  /*
+  Description:
+    Set linked instance definition parent layer information. 
+    Typically this is done just before the linked idef is 
+    saved to a file.
+  Parameters:
+    linked_idef_parent_layer - [in]
+  */
+  void UpdateLinkedIdefParentLayerSettings( const ON_Layer* linked_idef_parent_layer );
+
+  const ON_Layer* LinkedIdefParentLayerSettings() const;
+
+  /*
+  Description:
+    When a linked instance definition is read and its layers are added to the
+    context when the idef exists, runtime layer ids may need to be changed
+    when an id collision occures.  In this case, use this function to
+    inform the linked instance definition of the map from runtime layer
+    id to the layer id found in the linked file.
+  Parameters:
+    id_map - [in]
+      The first id in the pair is the layer id in the current context
+      where the idef is being used.
+      The second id in the pair is the layer id found in the linked file.
+  */
+  void UpdateLinkedIdefReferenceFileLayerRuntimeId( const ON_UuidPairList& id_map );
+
+  /*
+  Description:
+    Set linked instance definition layer settings.
+    Typically this is done just before the linked idef is 
+    saved to a file.
+  Parameters:
+    layer_settings - [in]
+      Layer settings in the context where the linked idef is being used.
+  Remarks:
+    Linked idefs save the original layer informtion from the linked file.
+    In the context where the idef is used, some of those settings (color,
+    visibility, ...) can be modified. This function saves those modifications
+    so the can be applied the next time the linked idef is read.
+  */
+  void UpdateLinkedIdefLayerSettings( unsigned int layer_count, const ON_Layer*const* layer_settings );
 
 public:
 
@@ -186,6 +283,17 @@ public:
   ON_wString m_url;
   ON_wString m_url_tag;     // UI link text for m_url
 
+#if defined(ON_32BIT_POINTER)
+private:
+  // 24 January 2011:
+  //   Because the Rhino 4 and 5 SDKs are fixed, the offset of 
+  //   existing fields cannot be changed and the m_reserved1
+  //   value has to be located in different places for 
+  //   32 and 64 bit builds.
+  unsigned int m_reserved1;
+#endif
+
+public:
   ON_BoundingBox m_bbox;
 
   ON_UnitSystem  m_us;
@@ -203,6 +311,20 @@ public:
                                  // a relative the location of the 3dm file
                                  // containing this instance definition.
 
+private:
+  unsigned char m_reserved2[3];
+
+#if defined(ON_64BIT_POINTER)
+private:
+  // 24 January 2011:
+  //   Because the Rhino 4 and 5 SDKs are fixed, the offset of 
+  //   existing fields cannot be changed and the m_runtime_sn
+  //   value has to be located in different places for 
+  //   32 and 64 bit builds.
+  unsigned int m_reserved1;
+#endif
+
+public:
   ON_CheckSum m_source_archive_checksum; // used to detect when idef is out of
                                          // synch with source archive.
 };

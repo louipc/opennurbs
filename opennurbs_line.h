@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -260,42 +261,6 @@ public:
   bool Translate(
         const ON_3dVector& delta
         );
-
-  /*
-  Description:
-    Intersect infinite line with surfaceB.
-  Parameters:
-    surfaceB - [in]
-    x - [out] Intersection events are appended to this array.
-    intersection_tolerance - [in]  If the distance from a point
-      on this line to the surface is <= intersection tolerance,
-      then the point will be part of an intersection event.
-      If the input intersection_tolerance <= 0.0, then 0.001 is used.
-    overlap_tolerance - [in] If t1 and t2 are curve parameters of
-      intersection events and the distance from line(t) to the
-      surface is <= overlap_tolerance for every t1 <= t <= t2,
-      then the event will be returened as an overlap event.
-      If the input overlap_tolerance <= 0.0, then 
-      intersection_tolerance*2.0 is used.
-    line_domain - [in] optional restriction on line's domain
-      If you want a finite intersection, then specify a 
-      line_domain. If you want a ray intersection, then specify
-      a line domain like (0.0, ON_DBL_MAX).
-    surfaceB_udomain - [in] optional restriction on surfaceB u domain
-    surfaceB_vdomain - [in] optional restriction on surfaceB v domain
-  Returns:
-    Number of intersection events appended to x.
-  */
-  int IntersectSurface( 
-          const class ON_Surface* surfaceB,
-          ON_SimpleArray<ON_X_EVENT>& x,
-          double intersection_tolerance = 0.0,
-          double overlap_tolerance = 0.0,
-          const ON_Interval* line_domain = 0,
-          const ON_Interval* surfaceB_udomain = 0,
-          const ON_Interval* surfaceB_vdomain = 0
-          ) const;
-
 
 public:
   ON_3dPoint from; // start point

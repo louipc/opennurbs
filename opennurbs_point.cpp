@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -2929,11 +2930,10 @@ bool ON_2fVector::Unitize()
   double d = Length();
   if ( d > 0.0 ) 
   {
-    d = 1.0/d;
     double dx = (double)x;
     double dy = (double)y;
-    x = (float)(d*dx);
-    y = (float)(d*dy);
+    x = (float)(dx/d);
+    y = (float)(dy/d);
     rc = true;
   }
   return rc;
@@ -3430,13 +3430,12 @@ bool ON_3fVector::Unitize()
   double d = Length();
   if ( d > 0.0 ) 
   {
-    d = 1.0/d;
     double dx = x;
     double dy = y;
     double dz = z;
-    x = (float)(d*dx);
-    y = (float)(d*dy);
-    z = (float)(d*dz);
+    x = (float)(dx/d);
+    y = (float)(dy/d);
+    z = (float)(dz/d);
     rc = true;
   }
   return rc;
@@ -5190,8 +5189,7 @@ double ON_Length2d( double x, double y )
   //     part of the bug fix for RR 11217.
   if ( x > ON_DBL_MIN )
   {
-    len = 1.0/x;
-    y *= len;
+    y /= x;
     len = x*sqrt(1.0 + y*y);
   }
   else if ( x > 0.0 && ON_IS_FINITE(x) )
@@ -5231,9 +5229,8 @@ bool ON_2dVector::Unitize()
   double d = Length();
   if ( d > ON_DBL_MIN ) 
   {
-    d = 1.0/d;
-    x *= d;
-    y *= d;
+    x /= d;
+    y /= d;
     rc = true;
   }
   else if ( d > 0.0 && ON_IS_FINITE(d) )
@@ -5250,9 +5247,8 @@ bool ON_2dVector::Unitize()
     d = tmp.Length();
     if ( d > ON_DBL_MIN )
     {
-      d = 1.0/d;
-      x = tmp.x*d;
-      y = tmp.y*d;
+      x = tmp.x/d;
+      y = tmp.y/d;
       rc = true;
     }
     else
@@ -5772,9 +5768,8 @@ double ON_Length3d(double x, double y, double z)
   //     part of the bug fix for RR 11217.
   if ( x > ON_DBL_MIN ) 
   {
-    len = 1.0/x;
-    y *= len;
-    z *= len;
+    y /= x;
+    z /= x;
     len = x*sqrt(1.0 + y*y + z*z);
   }
   else if ( x > 0.0 && ON_IS_FINITE(x) )
@@ -5811,10 +5806,9 @@ bool ON_3dVector::Unitize()
   double d = Length();
   if ( d > ON_DBL_MIN )
   {
-    d = 1.0/d;
-    x *= d;
-    y *= d;
-    z *= d;
+    x /= d;
+    y /= d;
+    z /= d;
     rc = true;
   }
   else if ( d > 0.0 && ON_IS_FINITE(d) )
@@ -5832,10 +5826,9 @@ bool ON_3dVector::Unitize()
     d = tmp.Length();
     if ( d > ON_DBL_MIN )
     {
-      d = 1.0/d;
-      x = tmp.x*d;
-      y = tmp.y*d;
-      z = tmp.z*d;
+      x = tmp.x/d;
+      y = tmp.y/d;
+      z = tmp.z/d;
       rc = true;
     }
     else
@@ -6630,6 +6623,15 @@ bool ON_PlaneEquation::IsNearerThan(
   return true;
 }
 
+bool ON_PlaneEquation::operator==( const ON_PlaneEquation& eq ) const
+{
+  return (x==eq.x && y==eq.y && z==eq.z && d==eq.d)?true:false;
+}
+
+bool ON_PlaneEquation::operator!=( const ON_PlaneEquation& eq ) const
+{
+  return (x!=eq.x || y!=eq.y || z!=eq.z || d!=eq.d)?true:false;
+}
 
 
 
@@ -6752,6 +6754,20 @@ bool ON_BoundingBox::IsValid() const
           && ON_IS_VALID(m_max.z)
          );
 };
+
+void ON_BoundingBox::Dump(ON_TextLog& text_log) const
+{
+  text_log.Print(L"Bounding box: ");
+  if ( !IsValid() )
+  {
+    text_log.Print(L"not valid ");
+  }
+  text_log.Print("%.17g to %.17g, %.17g to %.17g, %.17g to %.17g\n",
+    m_min.x,m_max.x,
+    m_min.y,m_max.y,
+    m_min.z,m_max.z
+    );
+}
 
 bool ON_IsDegenrateConicHelper(double A, double B, double C, double D, double E)
 {

@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -12,7 +13,6 @@
 //
 ////////////////////////////////////////////////////////////////
 */
-
 #include "opennurbs.h"
 
 //March 23, 2008 - LW
@@ -381,9 +381,10 @@ double ON_HatchLine::GetPatternLength() const
 ON_OBJECT_IMPLEMENT( ON_HatchPattern, ON_Object, "064E7C91-35F6-4734-A446-79FF7CD659E1" );
 
 ON_HatchPattern::ON_HatchPattern()
+: m_hatchpattern_index(-1)
+, m_hatchpattern_id(ON_nil_uuid)
+, m_type(ON_HatchPattern::ftSolid)
 {
-  m_hatchpattern_index = -1;
-  memset(&m_hatchpattern_id,0,sizeof(m_hatchpattern_id));
 }
 
 ON_HatchPattern::~ON_HatchPattern()
@@ -1144,6 +1145,8 @@ ON_BOOL32 ON_Hatch::Transform( const ON_Xform& xform)
       m_loops[i]->m_p2dCurve->Transform( T);
   }
   int rc = m_plane.Transform( xform);
+
+  TransformUserData(xform);
 
   return rc;
 }

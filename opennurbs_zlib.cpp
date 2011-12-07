@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -20,39 +21,50 @@
 // statically link ./zlib/.../zlib....lib into
 // the opennurbs DLL.
 
-#if defined(WIN64) && defined(_M_X64)
+#if !defined(ON_MSC_SOLUTION_DIR)
+// ON_ZLIB_SOLUTION_DIR must have a trailing slash
+#define ON_MSC_SOLUTION_DIR "./"
+#endif
 
-// 64 bit Windows zlib linking instructions
+#if !defined(ON_MSC_LIB_DIR)
 
-#if defined(NDEBUG)
+#if defined(WIN64)
 
-// release x64 libs
-#pragma comment(lib, "./zlib/x64/Release/zlib.lib")
-
-#else // _DEBUG
-
-// debug  x64 libs
-#pragma comment(lib, "./zlib/x64/Debug/zlib.lib")
-
-#endif // if NDEBUG else _DEBUG
-
-#elif defined(WIN32) && defined(_M_IX86)
-
-// 32 bit Windows zlib linking instructions
+// x64 (64 bit) static libraries
 
 #if defined(NDEBUG)
 
-// release 32 bit WIndows libs
-#pragma comment(lib, "./zlib/Release/zlib.lib")
+// Release x64 (64 bit) libs
+#define ON_MSC_LIB_DIR "x64/Release/"
 
 #else // _DEBUG
 
-// debug 32 bit WIndows libs
-#pragma comment(lib, "./zlib/Debug/zlib.lib")
+// Debug x64 (64 bit) libs
+#define ON_MSC_LIB_DIR "x64/Debug/"
 
-#endif // if NDEBUG else _DEBUG
+#endif // NDEBUG else _DEBUG
 
-#endif // if WIN64 else WIN32
+#else // WIN32
+
+// x86 (32 bit) static libraries
+
+#if defined(NDEBUG)
+
+// Release x86 (32 bit) libs
+#define ON_MSC_LIB_DIR "Release/"
+
+#else // _DEBUG
+
+// Debug x86 (32 bit) libs
+#define ON_MSC_LIB_DIR "Debug/"
+
+#endif // NDEBUG else _DEBUG
+
+#endif // WIN64 else WIN32
+
+#endif //  !defined(ON_MSC_LIB_DIR)
+
+#pragma comment(lib, "\"" ON_MSC_SOLUTION_DIR ON_MSC_LIB_DIR "zlib.lib" "\"")
 
 #endif // ON_DLL_EXPORTS
 

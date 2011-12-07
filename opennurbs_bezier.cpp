@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -523,17 +524,15 @@ bool ON_BezierCurve::Loft( int pt_dim, int pt_count, int pt_stride, const double
     const int degree = m_order-1;
     const double t0 = t[0];
     const double t1 = t[t_stride*(pt_count-1)];
-    //m_domain.Set(t0,t1);
     const double tm = 0.5*(t1-t0);
-    //const double d = 1.0/m_domain.Length();
-    const double d = 1.0/(t1-t0);
+    const double d = (t1-t0);
     ON_Matrix M( m_order, m_order );
     for ( i = 0; i < m_order; i++ ) {
       if ( t[i] <= tm ) {
-        s = (t[i] - t[0])*d;
+        s = (t[i] - t[0])/d;
       }
       else {
-        s = 1.0 - (t1 - t[i])*d;
+        s = 1.0 - (t1 - t[i])/d;
       }
       for ( j = 0; j < m_order; j++ ) {
         M.m[i][j] = ON_EvaluateBernsteinBasis( degree, j, s );
@@ -669,6 +668,26 @@ bool ON_BezierCurve::GetBoundingBox( // returns true if successful
   return rc;
 }
 
+bool ON_BezierCurve::GetTightBoundingBox( 
+		ON_BoundingBox& tight_bbox, 
+    int bGrowBox,
+		const ON_Xform* xform
+    ) const
+{
+  // no tight bounding boxes in free opennurbs
+  return ON_GetPointListBoundingBox(
+    m_dim,
+    m_is_rat,
+    m_order,
+    m_cv_stride,
+    m_cv,
+    tight_bbox,
+    bGrowBox,
+    xform
+    );
+}
+
+
 ON_BoundingBox ON_BezierCurve::BoundingBox() const
 {
   ON_BoundingBox bbox;
@@ -771,8 +790,22 @@ bool ON_Arc::GetTightBoundingBox(
     {
       nurbs_arc.Transform(*xform);
     }
-    if ( nurbs_arc.GetBoundingBox(tight_bbox,bGrowBox) )
-      bGrowBox = true;
+    ON_BezierCurve bez_arc;
+    bez_arc.m_dim = nurbs_arc.m_dim;
+    bez_arc.m_is_rat = nurbs_arc.m_is_rat;
+    bez_arc.m_order = nurbs_arc.m_order;
+    bez_arc.m_cv_stride = nurbs_arc.m_cv_stride;
+    bez_arc.m_cv = nurbs_arc.m_cv;
+    int i;
+    for ( i = nurbs_arc.m_order-2; i < nurbs_arc.m_cv_count-1; i++, bez_arc.m_cv += bez_arc.m_cv_stride )
+    {
+      if ( nurbs_arc.m_knot[i] < nurbs_arc.m_knot[i+1] )
+      {
+        if ( bez_arc.GetTightBoundingBox( tight_bbox, bGrowBox, 0 ) )
+          bGrowBox = true;
+      }
+    }
+    bez_arc.m_cv = 0;
   }
   nurbs_arc.m_cv = 0;
   nurbs_arc.m_knot = 0;

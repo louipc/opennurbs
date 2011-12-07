@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -188,6 +189,7 @@ public:
   //
   // overrides of virtual ON_Surface functions
   //
+
   ON_BOOL32 SetDomain( 
     int dir, // 0 sets first parameter's domain, 1 gets second parameter's domain
     double t0, 
@@ -197,23 +199,6 @@ public:
   ON_Interval Domain(
     int // 0 gets first parameter's domain, 1 gets second parameter's domain
     ) const;
-
-  /*
-  Description:
-    Get an estimate of the size of the rectangle that would
-    be created if the 3d surface where flattened into a rectangle.
-  Parameters:
-    width - [out]  (corresponds to the first surface parameter)
-    height - [out] (corresponds to the first surface parameter)
-  Remarks:
-    overrides virtual ON_Surface::GetSurfaceSize
-  Returns:
-    true if successful.
-  */
-  ON_BOOL32 GetSurfaceSize( 
-      double* width, 
-      double* height 
-      ) const;
 
   int SpanCount(
     int // 0 gets first parameter's domain, 1 gets second parameter's domain

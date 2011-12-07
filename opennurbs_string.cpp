@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -269,7 +270,8 @@ ON_String::~ON_String()
 
 ON_String::ON_String(const ON_String& src)
 {
-	if ( src.Header()->ref_count > 0 )
+	if (    src.Header()->ref_count > 0 
+     )	
   {
 		m_s = src.m_s;
     src.Header()->ref_count++;
@@ -414,7 +416,8 @@ ON_String& ON_String::operator=(const ON_String& src)
       Destroy();
       Create();
     }
-    else if ( src.Header()->ref_count > 0 )
+    else if (    src.Header()->ref_count > 0 
+            ) 
     {
       Destroy();
       src.Header()->ref_count++;
@@ -1283,7 +1286,17 @@ void ON_CheckSum::Zero()
 
 bool ON_CheckSum::IsSet() const
 {
-  return ( m_size != 0 );
+  return ( 0 != m_size 
+           || 0 != m_time 
+           || 0 != m_crc[0]
+           || 0 != m_crc[1]
+           || 0 != m_crc[2]
+           || 0 != m_crc[3]
+           || 0 != m_crc[4]
+           || 0 != m_crc[5]
+           || 0 != m_crc[6]
+           || 0 != m_crc[7]
+           );           
 }
 
 bool ON_CheckSum::SetBufferCheckSum( 
@@ -1407,9 +1420,9 @@ bool ON::GetFileStats( FILE* fp,
       if (filesize)
         *filesize = (size_t)sb.st_size;
       if (create_time)
-        *create_time = (size_t)sb.st_ctime;
+        *create_time = (time_t)sb.st_ctime;
       if (lastmodify_time)
-        *lastmodify_time = (size_t)sb.st_mtime;
+        *lastmodify_time = (time_t)sb.st_mtime;
       rc = true;
     }
   }
@@ -1649,3 +1662,28 @@ bool ON_CheckSum::CheckFile(
   return rc;
 }
 
+void ON_CheckSum::Dump(ON_TextLog& text_log) const
+{
+  // Using %llu so this code is portable for both 32 and 64 bit
+  // builds on a wide range of compilers.
+
+  unsigned long long u; // 8 bytes in windows and gcc - should be at least as big
+                        // as a size_t or time_t.
+
+  text_log.Print(L"Checksum:");
+  if ( !IsSet() )
+    text_log.Print(L"zero (not set)\n");
+  else
+  {
+    text_log.PushIndent();
+    text_log.Print(L"\n");
+    u = (unsigned long long)m_size;
+    text_log.Print(L"Size: %llu bytes\n",u);
+    u = (unsigned long long)m_time;
+    text_log.Print(L"Last Modified Time: %u (seconds since January 1, 1970, UCT)\n",u);
+    text_log.Print(L"CRC List: %08x, %08x, %08x, %08x, %08x, %08x, %08x, %08x\n",
+                   m_crc[0],m_crc[1],m_crc[2],m_crc[3],m_crc[4],m_crc[5],m_crc[6],m_crc[7]
+                   );
+    text_log.PopIndent();
+  }
+}

@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -134,7 +135,6 @@ void ON_CurveProxy::SetProxyCurve( const ON_Curve* real_curve )
     SetProxyCurve( real_curve, real_curve->Domain() );
   else
   {
-    DestroyCurveTree();
     m_real_curve_domain.Destroy();
     m_this_domain.Destroy();
     m_bReversed = false;
@@ -149,7 +149,6 @@ void ON_CurveProxy::SetProxyCurve( const ON_Curve* real_curve,
     // setting m_real_curve=0 prevents crashes if user has deleted
     // the "real" curve before calling SetProxyCurve().
     m_real_curve = 0;
-    DestroyCurveTree();
     m_real_curve_domain.Destroy();
     m_this_domain.Destroy();
     m_bReversed = false;
@@ -176,7 +175,6 @@ void ON_CurveProxy::SetProxyCurve( const ON_Curve* real_curve,
     // setting m_real_curve=0 prevents crashes if user has deleted
     // the "real" curve before calling SetProxyCurve().
     m_real_curve = 0;
-    DestroyCurveTree();
   }
 
   m_real_curve = real_curve;
@@ -198,7 +196,6 @@ const ON_Curve* ON_CurveProxy::ProxyCurve() const
 
 bool ON_CurveProxy::SetProxyCurveDomain( ON_Interval proxy_curve_subdomain )
 {
-  DestroyCurveTree();
   bool rc = proxy_curve_subdomain.IsIncreasing();
   if ( rc )
   {
@@ -325,7 +322,6 @@ ON_BOOL32 ON_CurveProxy::SetDomain( double t0, double t1 )
   ON_BOOL32 rc = false;
   if (t0 < t1)
   {
-		DestroyCurveTree();
     m_this_domain.Set(t0, t1);
     rc = true;
   }
@@ -848,7 +844,6 @@ ON_CurveProxy::Reverse()
   if ( m_this_domain.IsIncreasing() )
   {
     m_bReversed = (m_bReversed) ? false : true;
-	  DestroyCurveTree();
     m_this_domain.Reverse();
   }
   return true;
@@ -920,133 +915,6 @@ ON_CurveProxy::Evaluate( // returns false if unable to evaluate
   return rc;
 }
 
-bool ON_CurveProxy::GetClosestPoint( const ON_3dPoint& test_point,
-        double* t,       // parameter of global closest point returned here
-        double maximum_distance,
-        const ON_Interval* sub_domain
-        ) const
-{
-  bool rc = false;
-  if ( m_real_curve ) 
-  {
-    ON_Interval scratch_domain = RealCurveInterval( sub_domain );
-    rc = m_real_curve->GetClosestPoint( test_point, t, maximum_distance, &scratch_domain );
-    if ( rc )
-      *t = ThisCurveParameter(*t);
-  }
-  return rc;
-}
-
-ON_BOOL32 ON_CurveProxy::GetLength(
-        double* length,               // length returned here
-        double fractional_tolerance,  // default = 1.0e-8
-        const ON_Interval* sub_domain // default = NULL
-        ) const
-{
-  if ( length )
-    *length = 0;
-  if ( !m_real_curve || m_real_curve == this )
-    return false;
-  ON_Interval scratch_domain = RealCurveInterval( sub_domain );
-  return m_real_curve->GetLength( length, fractional_tolerance, &scratch_domain );
-}
-
-ON_BOOL32 ON_CurveProxy::GetNormalizedArcLengthPoint(
-        double s,
-        double* t,
-        double fractional_tolerance,
-        const ON_Interval* sub_domain
-        ) const
-{
-  if ( !m_real_curve )
-    return false;
-	if ( s<0.0 || s>1.0)
-		return false;
-	 
-  ON_Interval scratch_domain = RealCurveInterval( sub_domain );
-	if( m_bReversed)
-		s = 1-s;
-
-	ON_BOOL32 rc =  m_real_curve->GetNormalizedArcLengthPoint(s, t , fractional_tolerance, &scratch_domain);
-	if( rc){
-		*t = ThisCurveParameter( *t); 
-	}
-	return rc;
-}
-
-ON_BOOL32 ON_CurveProxy::GetNormalizedArcLengthPoints(
-        int count,
-        const double* s,
-        double* t,
-        double absolute_tolerance ,
-        double fractional_tolerance ,
-        const ON_Interval* sub_domain 
-        ) const
-{
-  // 23 July 2004 Dale Lear:
-  //     Fixed a bug so this would work right when m_bReversed = true
-  int i, j;
-
-  if ( !m_real_curve )
-    return false;
-
-	if( count<0)
-		return false;
- 
-  ON_Interval scratch_domain = RealCurveInterval( sub_domain );
-	ON_SimpleArray<double> ss;
-	if( m_bReversed)
-  {
-    ss.Reserve(count);
-		ss.SetCount(count);
-		for(i=0, j = count-1; i<count; i++, j--)
-    {
-			ss[i] = 1.0-s[j];
-    }
-		s = ss.Array();
-	}
-
-	ON_BOOL32 rc =  m_real_curve->GetNormalizedArcLengthPoints(count, s, t , absolute_tolerance, fractional_tolerance, &scratch_domain);
-	if( rc)
-  {
-		for(i=0;i<count; i++)
-    {
-			t[i] = ThisCurveParameter( t[i]); 
-    }
-    if ( m_bReversed )
-    {
-      double x;
-      for (i = 0, j = count-1; i < j; i++, j-- )
-      {
-        x = t[i];
-        t[i] = t[j];
-        t[j] = x;
-      }
-    }
-	}
-
-	return rc;
-}
-
-
-
-ON_BOOL32 ON_CurveProxy::GetLocalClosestPoint( const ON_3dPoint& test_point,
-        double seed_parameter,
-        double* t,
-        const ON_Interval* sub_domain
-        ) const
-{
-  ON_BOOL32 rc = false;
-  if ( m_real_curve ) 
-  {
-    ON_Interval scratch_domain = RealCurveInterval( sub_domain );
-    double sp = RealCurveParameter(seed_parameter);
-    rc = m_real_curve->GetLocalClosestPoint( test_point, sp, t, &scratch_domain );
-    if ( rc && t )
-      *t = ThisCurveParameter(*t);
-  }
-  return rc;
-}
 
 ON_BOOL32 ON_CurveProxy::Trim(
   const ON_Interval& domain
@@ -1062,7 +930,6 @@ ON_BOOL32 ON_CurveProxy::Trim(
       ON_Interval real_dom = RealCurveInterval( &trim_dom );
       if ( real_dom.IsIncreasing() )
       {
-        DestroyCurveTree();
         m_real_curve_domain = real_dom;
         m_this_domain = trim_dom;
         rc = true;

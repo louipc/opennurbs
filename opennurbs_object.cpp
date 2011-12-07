@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -12,12 +13,7 @@
 //
 ////////////////////////////////////////////////////////////////
 */
-
 #include "opennurbs.h"
-
-
-
-#if defined(ON_DLL_EXPORTS)
 
 #if defined(ON_COMPILER_MSC)
 // Force this module to be inited first so the important globals
@@ -26,8 +22,6 @@
 #pragma warning( disable : 4073 )
 #pragma init_seg(lib)
 #pragma warning( pop )
-#endif
-
 #endif
 
 const ON_UUID ON_nil_uuid = {0,0,0,{0,0,0,0,0,0,0,0}};
@@ -1131,7 +1125,7 @@ bool ON__ClassIdDumpNode::Dump( int depth, ON_TextLog& text_log )
     if ( count > 0 )
     {
       // dump children names alphabetically
-      m_child_nodes.HeapSort( ON__ClassIdDumpNode_CompareName );
+      m_child_nodes.QuickSort( ON__ClassIdDumpNode_CompareName );
 
       text_log.PushIndent();
       for ( i = 0; i < count; i++ )
@@ -1174,7 +1168,7 @@ void ON_ClassId::Dump( ON_TextLog& dump )
     }
 
     // sort nodes by class id's uuid
-    nodes.HeapSort(ON__ClassIdDumpNode_CompareUuid);
+    nodes.QuickSort(ON__ClassIdDumpNode_CompareUuid);
 
     // fill in m_parent_node and m_child_nodes[]
     for ( i = 0; i < count; i++ )
@@ -1288,10 +1282,10 @@ bool ON_Object::CopyFrom( const ON_Object* src )
   return (cid && cid->ClassIdVersion() >= 1 && cid->m_copy) ? cid->m_copy(src,this) : false;
 }
 
-ON_Object::ON_Object() : m_mempool(0), m_userdata_list(0)
+ON_Object::ON_Object() : m_userdata_list(0)
 {}
 
-ON_Object::ON_Object(const ON_Object& src) : m_mempool(0), m_userdata_list(0)
+ON_Object::ON_Object(const ON_Object& src) : m_userdata_list(0)
 {
   CopyUserData(src);
 }
@@ -1324,6 +1318,12 @@ bool ON__EnableLeakUserData(bool bEnable)
   g__bLeakUserData = bEnable ? true : false;
   return b;
 }
+
+void ON_Object::EmergencyDestroy()
+{
+  m_userdata_list = 0;
+}
+
 
 void ON_Object::PurgeUserData()
 {
@@ -1697,15 +1697,6 @@ void ON_Object::DestroyRuntimeCache( bool bDelete )
 
 void ON_Curve::DestroyRuntimeCache( bool bDelete )
 {
-#if defined(OPENNURBS_PLUS_INC_)
-  ON_CurveTree* ctree = ON_PointerSleepLock_Set(ON_CurveTree,m_ctree,0);
-  if ( 0 != ctree && bDelete ) 
-  {
-    delete ctree;
-  }
-#else
-  m_ctree = 0;
-#endif
 }
 
 
@@ -1722,15 +1713,6 @@ void ON_CurveProxy::DestroyRuntimeCache( bool bDelete )
 
 void ON_Surface::DestroyRuntimeCache( bool bDelete )
 {
-#if defined(OPENNURBS_PLUS_INC_)
-  ON_SurfaceTree* stree = ON_PointerSleepLock_Set(ON_SurfaceTree,m_stree,0);
-  if ( 0 != stree && bDelete ) 
-  {
-    delete stree;
-  }
-#else
-  m_stree = 0;
-#endif
 }
 
 void ON_SurfaceProxy::DestroyRuntimeCache( bool bDelete )

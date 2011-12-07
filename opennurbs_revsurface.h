@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -165,23 +166,6 @@ public:
   ON_Interval Domain(
     int // 0 gets first parameter's domain, 1 gets second parameter's domain
     ) const;
-
-  /*
-  Description:
-    Get an estimate of the size of the rectangle that would
-    be created if the 3d surface where flattened into a rectangle.
-  Parameters:
-    width - [out]  (corresponds to the first surface parameter)
-    height - [out] (corresponds to the first surface parameter)
-  Remarks:
-    overrides virtual ON_Surface::GetSurfaceSize
-  Returns:
-    true if successful.
-  */
-  ON_BOOL32 GetSurfaceSize( 
-      double* width, 
-      double* height 
-      ) const;
 
   int SpanCount(
     int // 0 gets first parameter's domain, 1 gets second parameter's domain
@@ -500,55 +484,6 @@ public:
          ON_Surface*& west_or_south_side,
          ON_Surface*& east_or_north_side
          ) const;
-
-  /*
-  Description:
-    Get the parameters of the point on the surface that is closest to P.
-  Parameters:
-    P - [in] 
-            test point
-    s - [out]
-    t - [out] 
-            (*s,*t) = parameters of the surface point that 
-            is closest to P.
-    maximum_distance = 0.0 - [in] 
-            optional upper bound on the distance from P to 
-            the surface.  If you are only interested in 
-            finding a point Q on the surface when 
-            P.DistanceTo(Q) < maximum_distance, then set
-            maximum_distance to that value.
-    sdomain = 0 - [in] optional domain restriction
-    tdomain = 0 - [in] optional domain restriction
-  Returns:
-    True if successful.  If false, the values of *s and *t
-    are undefined.
-  See Also:
-    ON_Surface::GetLocalClosestPoint.
-  */
-  bool GetClosestPoint( 
-          const ON_3dPoint& P,
-          double* s,
-          double* t,
-          double maximum_distance = 0.0,
-          const ON_Interval* sdomain = 0,
-          const ON_Interval* tdomain = 0
-          ) const;
-
-  //////////
-  // Find parameters of the point on a surface that is locally closest to 
-  // the test_point.  The search for a local close point starts at 
-  // seed parameters. If a sub_domain parameter is not NULL, then
-  // the search is restricted to the specified portion of the surface.
-  //
-  // true if returned if the search is successful.  false is returned if
-  // the search fails.
-  ON_BOOL32 GetLocalClosestPoint( 
-          const ON_3dPoint&, // test_point
-          double,double,     // seed_parameters
-          double*,double*,   // parameters of local closest point returned here
-          const ON_Interval* = NULL, // first parameter sub_domain
-          const ON_Interval* = NULL  // second parameter sub_domain
-          ) const;
 
   int GetNurbForm( // returns 0: unable to create NURBS representation
                    //            with desired accuracy.

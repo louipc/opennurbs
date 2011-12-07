@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -17,16 +18,15 @@
 
 ON_VIRTUAL_OBJECT_IMPLEMENT(ON_Curve,ON_Geometry,"4ED7D4D7-E947-11d3-BFE5-0010830122F0");
 
-ON_Curve::ON_Curve() : m_ctree(0)
+ON_Curve::ON_Curve()
 {}
 
-ON_Curve::ON_Curve(const ON_Curve& src) : ON_Geometry(src), m_ctree(0)
+ON_Curve::ON_Curve(const ON_Curve& src) : ON_Geometry(src)
 {}
 
 ON_Curve& ON_Curve::operator=(const ON_Curve& src)
 {
   if ( this != &src ) {
-    DestroyCurveTree();
     ON_Geometry::operator=(src);
   }
   return *this;
@@ -34,19 +34,6 @@ ON_Curve& ON_Curve::operator=(const ON_Curve& src)
 
 ON_Curve::~ON_Curve()
 {
-  // Do not call the (virtual) DestroyRuntimeCache or 
-  // DestroyCurveTree (which calls DestroyRuntimeCache()
-  // because it opens the potential for crashes in a
-  // "dirty" destructors of classes derived from ON_Curve
-  // that to not use DestroyRuntimeCache() in their
-  // destructors and to not set deleted pointers to zero.
-  if ( m_ctree ) 
-  {
-#if defined(OPENNURBS_PLUS_INC_)
-    delete m_ctree;
-#endif
-    m_ctree = 0;
-  }
 }
 
 unsigned int ON_Curve::SizeOf() const
@@ -86,53 +73,6 @@ ON_BOOL32 ON_Curve::GetDomain(double* s0,double* s1) const
     rc = true;
   }
   return rc;
-}
-
-void ON_Curve::DestroyCurveTree()
-{
-  DestroyRuntimeCache(true);
-}
-
-const ON_CurveTree* ON_Curve::CurveTree() const
-{
-#if !defined(OPENNURBS_PLUS_INC_)
-  return 0;
-#else
-  // This is a sleeplock to make curve tree creation thread safe.
-  //
-  // ON_PointerSleepLock_Test() returns the input value of m_ctree.
-  // In addition, if the input value of m_ctree is 0, then m_ctree
-  // is set to 1.  Using ON_PointerSleepLock_Test() insures this 
-  // compare and set happens as an atomic operation, so multi-threaded
-  // applications run as expected.
-  ON_CurveTree* ctree = ON_PointerSleepLock_Test(ON_CurveTree,m_ctree);
-  // At this point, m_ctree is either a valid pointer or m_ctree = 1.
-  while ( ((ON_CurveTree*)1) == ctree )
-  {
-    // The code in this loop is executed when two or more threads
-    // try to create a tree at the same time and is rarely used.
-    // If the same tree is constantly created and destroyed, then
-    // this approach would be an extremely stupid thing to do. 
-    // In practice, a tree is made once and used zillions of 
-    // times and this pause does not have significant effects
-    // on performance.
-    //
-    // Another thread is currently calculating the curve tree
-    // so this thread is suspended for 50 milliseconds. 
-    ON_PointerSleepLock_SuspendThisThread(50);
-
-    // When the "other" thread finishes making the curve tree,
-    // or gives up and sets m_ctree to null, then we leave this
-    // while loop;
-    ctree = ON_PointerSleepLock_Test(ON_CurveTree,m_ctree);
-  }
-  if ( 0 == ctree )
-  {
-    ctree = CreateCurveTree();
-    ON_PointerSleepLock_Set(ON_CurveTree,const_cast<ON_Curve*>(this)->m_ctree,ctree); // const_cast<ON_Curve*>(this)->m_ctree = ctree;
-  }
-  return ctree;
-#endif
 }
 
 bool ON_Curve::SetDomain( ON_Interval domain )
@@ -1085,127 +1025,6 @@ bool ON_PolyCurve::EvaluatePoint( const class ON_ObjRef& objref, ON_3dPoint& P )
   return false;
 }
 
-bool ON_Curve::EvaluatePoint( const class ON_ObjRef& objref, ON_3dPoint& P ) const
-{
-  // virtual function default
-  bool rc = false;
-
-  ON_3dPoint Q = ON_UNSET_POINT;
-  if ( 1 == objref.m_evp.m_t_type )
-  {
-    if ( !EvPoint(objref.m_evp.m_t[0],Q) )
-      Q = ON_UNSET_POINT;
-  }
-
-  switch( objref.m_osnap_mode )
-  {
-  case ON::os_center:
-    {
-      ON_Ellipse ellipse;
-      if ( IsEllipse(0,&ellipse) )
-      {
-        P = ellipse.plane.origin;
-        rc = true;
-      }
-      else
-      {
-        ON_SimpleArray<ON_3dPoint> pline;
-        if ( IsClosed() && IsPolyline(&pline) && pline.Count() >= 4 )
-        {
-          P = pline[0];
-          int i;
-          for ( i = pline.Count()-2; i > 0; i-- )
-          {
-            Q = pline[i];
-            P.x += Q.x; P.y += Q.y; P.z += Q.z;
-          }
-          double s = 1.0/(pline.Count()-1.0);
-          P.x *= s; P.y *= s; P.z *= s;
-        }
-        else if ( Q.IsValid() )
-        {
-          ON_3dVector T, K;
-          if ( EvCurvature(objref.m_evp.m_t[0],Q,T,K) )
-          {
-            double k = K.Length();
-            if ( k > 0.0 )
-            {
-              P = Q + (1.0/(k*k))*K;
-              rc = true;
-            }
-          }
-        }
-      }
-    }
-    break;
-
-  case ON::os_focus:
-    {
-      ON_Ellipse ellipse;
-      if ( IsEllipse(0,&ellipse) )
-      {
-        ON_3dPoint F1, F2;
-        if ( ellipse.GetFoci(F1,F2) )
-        {
-          P = ( F1.DistanceTo(Q) <= F1.DistanceTo(Q)) ? F1 : F2;
-        }
-      }
-    }
-    break;
-
-  case ON::os_midpoint:
-    {
-      double t;
-      if ( GetNormalizedArcLengthPoint(0.5,&t) )
-      {
-        EvPoint(t,P);
-      }
-    }
-    break;
-
-  case ON::os_end:
-    {
-      ON_SimpleArray<ON_3dPoint> pline;
-      if ( IsPolyline(&pline)  )
-      {
-        P = pline[0];
-        double d = P.DistanceTo(Q);
-        int i;
-        for ( i = 1; i < pline.Count(); i++ )
-        {
-          double d1 = pline[i].DistanceTo(Q);
-          if ( d1 < d )
-          {
-            d = d1;
-            P = pline[i];
-          }
-        }
-      }
-      else
-      {
-        P = PointAtStart();
-        if ( !IsClosed() )
-        {
-          ON_3dPoint P1 = PointAtEnd();
-          if ( P.DistanceTo(Q) > P1.DistanceTo(Q) )
-            P = P1;
-        }
-      }      
-    }
-    break;
-
-  default:
-    if ( Q.IsValid() )
-    {
-      P = Q;
-      rc = true;
-    }
-    break;
-  }
-
-  return rc;
-}
-
 ON_BOOL32 ON_Curve::Ev1Der( // returns false if unable to evaluate
        double t,         // evaluation parameter
        ON_3dPoint& point,
@@ -1301,429 +1120,27 @@ ON_BOOL32 ON_Curve::Ev2Der( // returns false if unable to evaluate
   return rc;
 }
 
-ON_BOOL32 ON_Curve::GetLocalClosestPoint( const ON_3dPoint& test_point,
-        double seed_parameter,
-        double* t,
-        const ON_Interval* sub_domain
-        ) const
+////////////////////////////////////////////////////////////////////////////////////////
+//
+// ON_Curve::IsShort() 
+//
+
+const ON_Interval* ON_Curve_IsShortSubdomainHelper(
+  const ON_Curve* curve,
+  const ON_Interval* sub_domain,
+  ON_Interval& tmp_subdomain
+  )
 {
-  // TODO: add simple dbrent search for base class default that will work
-  //       with C1 curves that have a non-vanishing derivative.
-  return false;
-}
-
-ON_BOOL32 ON_Curve::GetLength(
-        double* length,               // length returned here
-        double fractional_tolerance,  // default = 1.0e-8
-        const ON_Interval* sub_domain // default = NULL
-        ) const
-{
-  ON_BOOL32 rc = false;
-  if ( length )
-    *length = 0.0;
-  if ( !ON_NurbsCurve::Cast(this) )
-  {
-    // This works when openNURBS is used in Rhino
-    const ON_Curve* proxy = 0;
-    ON_NurbsCurve nc;
-    if ( GetNurbForm( nc, 0.0, sub_domain ) )
-      proxy = &nc;
-    // MUST call GetLength() via proxy pointer
-    if ( proxy )
-      rc = proxy->GetLength( length, fractional_tolerance, NULL );
-  }
-  return rc;
-}
-
-
-bool ON_LineCurve::IsShort(
-  double tolerance,
-  const ON_Interval* sub_domain
-  ) const
-{
-  ON_Interval domain = Domain();
-  if ( 0 != sub_domain )
-  {
-    if ( sub_domain->Includes(domain) )
-    {
-      sub_domain = 0;
-    }
-    else
-    {
-      domain.Intersection(*sub_domain);
-      if ( !domain.IsIncreasing() )
-        return true;
-      sub_domain = &domain;
-    }
-  }
-
-  // Length() function is fast for lines and arcs
-  bool rc = false;
-  double length = 0.0;
-  if ( GetLength(&length, 1.0e-4, sub_domain) )
-  {
-    if ( length <= tolerance )
-      rc = true;
-  }
-  return rc;
-}
-
-bool ON_ArcCurve::IsShort(
-  double tolerance,
-  const ON_Interval* sub_domain
-  ) const
-{
-  ON_Interval domain = Domain();
-  if ( 0 != sub_domain )
-  {
-    if ( sub_domain->Includes(domain) )
-    {
-      sub_domain = 0;
-    }
-    else
-    {
-      domain.Intersection(*sub_domain);
-      if ( !domain.IsIncreasing() )
-        return true;
-      sub_domain = &domain;
-    }
-  }
-
-  // Length() function is fast for lines and arcs
-  bool rc = false;
-  double length = 0.0;
-  if ( GetLength(&length, 1.0e-4, sub_domain) )
-  {
-    if ( length <= tolerance )
-      rc = true;
-  }
-  return rc;
-}
-
-bool ON_PolyCurve::IsShort(
-  double tolerance,
-  const ON_Interval* sub_domain
-  ) const
-{
-  ON_Interval domain = Domain();
-  if ( 0 != sub_domain )
-  {
-    if ( sub_domain->Includes(domain) )
-    {
-      sub_domain = 0;
-    }
-    else
-    {
-      domain.Intersection(*sub_domain);
-      if ( !domain.IsIncreasing() )
-        return true;
-      sub_domain = &domain;
-    }
-  }
-
-  int segment_count = Count();
-
-  int segment_i0, segment_i1;
-  if ( 0 != sub_domain )
-  {
-    if ( !SegmentIndex(*sub_domain, &segment_i0, &segment_i1 ) )
-      return false;
-  }
-  else
-  {
-    segment_i0 = 0;
-    segment_i1 = segment_count;
-  }
-  ON_Interval tmp0, tmp1;
-  if ( segment_i1 > segment_i0 )
-    tolerance /= ((double)(segment_i1 - segment_i0));
-
-  int segment_i;
-  for( segment_i = segment_i0; segment_i < segment_i1; segment_i++ )
-  {
-    const ON_Interval* seg_sub_domain = 0;
-    const ON_Curve* segment_curve = SegmentCurve(segment_i);
-    if ( 0 == segment_curve )
-      continue;
-    if ( this == segment_curve )
-      return false;
-    if ( 0 != sub_domain && (segment_i == segment_i0 || segment_i == segment_i1-1) )
-    {
-      tmp0 = SegmentDomain(segment_i);
-      tmp1 = segment_curve->Domain();
-      if ( tmp0 != tmp1 )
-      {
-        double t = sub_domain->Min();
-        double s0 = tmp0.NormalizedParameterAt(t);
-        if ( s0 < 0.0 )
-          s0 = 0.0;
-        t = sub_domain->Max();
-        double s1 = tmp1.NormalizedParameterAt(t);
-        if ( s1 > 1.0 )
-          s1 = 1.0;
-        tmp0[0] = tmp1.ParameterAt(s0);
-        tmp0[1] = tmp1.ParameterAt(s1);
-      }  
-      else
-      {
-        tmp0.Intersection(*sub_domain);
-      }
-      seg_sub_domain = &tmp0;
-    }
-    if ( !segment_curve->IsShort( tolerance, seg_sub_domain ) )
-      return false;
-  }
-  return true;
-}
-
-bool ON_CurveProxy::IsShort(
-  double tolerance,
-  const ON_Interval* sub_domain
-  ) const
-{
-  ON_Interval domain = Domain();
-  if ( 0 != sub_domain )
-  {
-    if ( sub_domain->Includes(domain) )
-    {
-      sub_domain = 0;
-    }
-    else
-    {
-      domain.Intersection(*sub_domain);
-      if ( !domain.IsIncreasing() )
-        return true;
-      sub_domain = &domain;
-    }
-  }
-
-  const ON_Curve* real_curve = ProxyCurve();
-  if ( 0 == real_curve || this == real_curve )
-    return false;
-  ON_Interval tmp;
-  ON_Interval real_domain = real_curve->Domain();
-  ON_Interval proxy_domain = Domain();
-  if ( 0 != sub_domain )
-  {
-    tmp = RealCurveInterval(sub_domain);
-    sub_domain = &tmp;
-  }
-  else if ( real_domain != m_real_curve_domain )
-  {
-    tmp.Intersection(real_domain,m_real_curve_domain);
-    sub_domain = &tmp;
-  }
-
-  return real_curve->IsShort( tolerance, sub_domain );
-}
-
-bool ON_PolylineCurve::IsShort(
-  double tolerance,
-  const ON_Interval* sub_domain
-  ) const
-{
-  double length = 0.0;
-  int count = PointCount();
-  if ( count < 2 )
-    return false;
-  const ON_Polyline& pline = m_pline;
-  int i0, i1;
-  if ( 0 != sub_domain )
-  {
-    double s;
-    double t = sub_domain->Min();
-    i0 = ON_NurbsSpanIndex(2,count,m_t,t,0,0);
-    if ( i0 < 0 || i0 >= count ) 
-    {
-      // handle degenerate cases when m_t[] array is bogus
-      i0 = 0;
-      s = 0.0;
-    }
-    else
-    {
-      s = ON_Interval(m_t[i0],m_t[i0+1]).NormalizedParameterAt(t);
-    }
-    ON_3dPoint P0 = (1.0-s)*pline[i0] + s*pline[i0+1];
-    i0++;
-    t = sub_domain->Max();
-    i1 = ON_NurbsSpanIndex(2,count,m_t,t,0,0);
-    if ( i1 < 0 || i1 >= count-1 )
-    {
-      i1 = count-2;
-      s = 1.0;
-    }
-    else
-    {
-      s = ON_Interval(m_t[i1],m_t[i1+1]).NormalizedParameterAt(t);
-    }
-    ON_3dPoint P1 = (1.0-s)*pline[i1] + s*pline[i1+1];
-    if ( i0 <= i1 )
-      length = P0.DistanceTo(pline[i0]) + P1.DistanceTo(pline[i1]);
-    else
-      length = P0.DistanceTo(P1);
-  }
-  else
-  {
-    i0 = 0;
-    i1 = count-1;
-    length = 0.0;
-  }
-  for (i0++; i0 <= i1 && length <= tolerance; i0++)
-    length += pline[i0-1].DistanceTo(pline[i0]);
+  if ( 0 == curve || 0 == sub_domain )
+    return 0;
   
-  return (length <= tolerance);
+  tmp_subdomain = curve->Domain();
+  if ( sub_domain->Includes(tmp_subdomain) )
+    return 0;
+
+  tmp_subdomain.Intersection(*sub_domain);
+  return &tmp_subdomain;
 }
-
-bool ON_Curve::IsShort(
-  double tolerance,
-  const ON_Interval* sub_domain
-  ) const
-{
-  // When the SDK freeze ends, IsShort() will become a virtual function
-  // and this will be done right.  For now, I have to hack at it this
-  // way because adding a new virtual function will change the vtable
-  // and break existing plug-ins.  (The classid stuff avoids multiple (slow)
-  // calls to failed Cast().  When Cast() returns non-NULL, it is fast.)
-
-  const ON_ClassId* curve_id = &ON_Curve::m_ON_Curve_class_id;
-  const ON_ClassId* id = ClassId();
-
-  double length = 0.0;
-
-  ON_Interval domain = Domain();
-  if ( 0 != sub_domain )
-  {
-    if ( sub_domain->Includes(domain) )
-    {
-      sub_domain = 0;
-    }
-    else
-    {
-      domain.Intersection(*sub_domain);
-      if ( !domain.IsIncreasing() )
-        return true;
-      sub_domain = &domain;
-    }
-  }
-
-  // "fake virtual" handling of fast/easy special cases
-  while (0 != id && curve_id != id )
-  {
-    if ( &ON_ArcCurve::m_ON_ArcCurve_class_id == id )
-    {
-      bool rc = false;
-      const ON_ArcCurve* arc_curve = ON_ArcCurve::Cast(this);
-      if ( 0 != arc_curve )
-        rc = arc_curve->ON_ArcCurve::IsShort(tolerance,sub_domain);
-      return rc;
-    }
-
-    if ( &ON_LineCurve::m_ON_LineCurve_class_id == id )
-    {
-      bool rc = false;
-      const ON_LineCurve* line_curve = ON_LineCurve::Cast(this);
-      if ( 0 != line_curve )
-        rc = line_curve->ON_LineCurve::IsShort(tolerance,sub_domain);
-      return rc;
-    }
-
-    if( &ON_PolylineCurve::m_ON_PolylineCurve_class_id == id )
-    {
-      bool rc = false;
-      const ON_PolylineCurve* polyline_curve = ON_PolylineCurve::Cast(this);
-      if ( 0 != polyline_curve )
-        rc = polyline_curve->ON_PolylineCurve::IsShort(tolerance,sub_domain);
-      return rc;
-    }
-
-    if( &ON_PolyCurve::m_ON_PolyCurve_class_id == id )
-    {
-      bool rc = false;
-      const ON_PolyCurve* poly_curve = ON_PolyCurve::Cast(this);
-      if ( 0 != poly_curve )
-        rc = poly_curve->ON_PolyCurve::IsShort(tolerance,sub_domain);
-      return rc;
-    }
-
-    if ( &ON_CurveProxy::m_ON_CurveProxy_class_id == id )
-    {
-      bool rc = false;
-      const ON_CurveProxy* proxy = ON_CurveProxy::Cast(this);
-      if ( 0 != proxy )
-        rc = proxy->ON_CurveProxy::IsShort(tolerance,sub_domain);
-      return rc;
-    }
-
-    id = id->BaseClass();
-  }
-
-  // use dimension to weed out bogus cases.
-  switch( Dimension() )
-  {
-  case 1:
-  case 2:
-  case 3:
-    break;
-  default:
-    return false;
-    break;
-  }
-
-  {
-    int i, hint, hint0 = 0;
-    ON_3dPoint P[65];
-    int v_stride = 3;
-    memset(P,0,sizeof(P));
-    
-    if ( !Evaluate(domain[0],0,v_stride,&P[0].x,0,&hint0) )
-      return false;
-
-    // four point check
-    length = 0.0;
-    hint = hint0;
-    for ( i = 16; i <= 64 && length <= tolerance; i += 16 )
-    {
-      if ( !Evaluate(domain.ParameterAt(i/64.0),0,v_stride,&P[i].x,0,&hint) )
-        return false;
-      length += P[i].DistanceTo(P[i-16]);
-    }
-
-    if ( length <= tolerance )
-    {
-      // eight point check
-      length = 0.0;
-      hint = hint0;
-      for ( i = 8; i <= 64 && length <= tolerance; i += 8 )
-      {
-        if ( i%16 )
-        {
-          if ( !Evaluate(domain.ParameterAt(i/64.0),0,v_stride,&P[i].x,0,&hint) )
-            return false;
-        }
-        length += P[i-8].DistanceTo(P[i]);
-      }
-
-      if ( length <= tolerance )
-      {
-        // 64 point check
-        length = 0.0;
-        hint = hint0;
-        for ( i = 1; i <= 64 && length <= tolerance; i++ )
-        {
-          if ( i%8 )
-          {
-            if ( !Evaluate(domain.ParameterAt(i/64.0),0,v_stride,&P[i].x,0,&hint) )
-              return false;
-          }
-          length += P[i-1].DistanceTo(P[i]);
-        }
-      }
-    }
-  }
-
-  return (length <= tolerance);
-}
-
 
 static
 ON::eCurveType ON_CurveType( const ON_Curve* curve )
@@ -2077,82 +1494,6 @@ bool ON_ForceMatchCurveEnds(ON_Curve& Crv0, int end0, ON_Curve& Crv1, int end1)
   return rc;
 }
 
-
-bool ON_PolyCurve::RemoveShortSegments( double tolerance, bool bRemoveShortSegments )
-{
-  ON_Curve* segment_curve;
-  bool rc = false;
-  int i, segment_count = Count();
-  ON_SimpleArray<int> short_seg(segment_count);
-  for ( i = 0; i < segment_count; i++ )
-  {
-    segment_curve = SegmentCurve(i);
-    if ( 0 == segment_curve || segment_curve == this )
-    {
-      continue;
-    }
-    if ( segment_curve->RemoveShortSegments(tolerance,bRemoveShortSegments) )
-    {
-      if ( !rc )
-      {
-        rc = true;
-        if ( bRemoveShortSegments )
-          DestroyRuntimeCache();
-        else
-          return rc;
-      }
-    }
-    if ( segment_curve->IsShort(tolerance) )
-      short_seg.Append( i );
-  }
-
-  if ( short_seg.Count() > 0 && segment_count - short_seg.Count() > 0 )
-  {
-    // need to remove some curve segments.
-    int i0 = short_seg.Count()-1;
-    const ON_Interval domain = Domain();
-    ON_3dPoint P0 = PointAtStart();
-    ON_3dPoint P1 = PointAtEnd();
-    for ( i = segment_count-1; i >= 0 && i0 >=0; i-- )
-    {
-      if ( i == short_seg[i0] )
-      {
-        if ( !rc )
-        {
-          rc =true;
-          if ( bRemoveShortSegments )
-            DestroyCurveTree();
-          else
-            return rc;
-        }
-        segment_curve = m_segment[i];
-        delete segment_curve;
-        segment_curve = 0;
-        m_segment.Remove(i);
-        m_t.Remove(i);
-        if ( i > 0 && i < segment_count-1 )
-        {
-          // close up gap
-          ON_MatchCurveEnds( m_segment[i-1], 1, m_segment[i], 0, -1.0 );
-        }
-        i0--;
-      }
-    }
-
-    if (rc && bRemoveShortSegments)
-    {
-      // do not change start/end or domain
-      if ( 0 == short_seg[0] )
-        SetStartPoint(P0);
-      if ( segment_count == *(short_seg.Last()) )
-        SetEndPoint(P1);
-      if ( domain != Domain() )
-        SetDomain( domain[0], domain[1] );
-    }
-  }
-  return rc;
-}
-
 bool ON_NurbsCurve::RepairBadKnots( double knot_tolerance, bool bRepair )
 {
   bool rc = false;
@@ -2229,7 +1570,7 @@ bool ON_NurbsCurve::RepairBadKnots( double knot_tolerance, bool bRepair )
           {
             // remove extra knots but do not change end point location
             DestroyRuntimeCache();
-            i -= (m_order+1);
+            i -= (m_order-1);
             double* cv = (double*)onmalloc(sizeof_cv);
             ClampEnd(2);
             memcpy(cv,CV(0),sizeof_cv);
@@ -2443,320 +1784,6 @@ bool ON_NurbsCurve::SpanIsLinear(
 }
 
 
-bool ON_NurbsCurve::RemoveShortSegments( double tolerance, bool bRemoveShortSegments )
-{
-  bool rc = false;
-  if ( m_order >= 2 
-       && m_cv_count > m_order
-       && 0 != m_cv && 0 != m_knot 
-       && m_dim > 0
-       && (m_cv_stride >= (m_is_rat)?(m_dim+1):m_dim)
-       )
-  {
-    rc = RepairBadKnots(0.0, bRemoveShortSegments);
-    if ( rc && !bRemoveShortSegments )
-      return rc;
-
-    ON_NurbsCurve span;
-    span.m_dim = m_dim;
-    span.m_is_rat = m_is_rat;
-    span.m_order = m_order;
-    span.m_cv_count = m_order;
-    span.m_cv_stride = m_cv_stride;
-
-    // save domain so it does not change
-    ON_Interval domain = Domain();
-    //const int cv_count0 = m_cv_count;
-
-    int i, j0, j1;
-    double* c = 0;
-    int sizeof_cv = CVSize()*sizeof(*m_cv);
-
-    // Find first non-short span
-    span.m_cv = CV(0);
-    span.m_knot = m_knot;
-    if ( 2 == m_order )
-    {
-      ON_3dPoint P0, P1;
-      span.GetCV(0,P0);
-      for ( i = 0; i < m_cv_count - m_order; i++ )
-      {
-        span.GetCV(1,P1);
-        if ( P0.DistanceTo(P1) > tolerance && ON_ComparePoint( m_dim, m_is_rat, CV(0), span.CV(1) ) )
-        {
-          // line segment from start to this->CV(i+1) is not "short"
-          break;
-        }
-        span.m_cv += span.m_cv_stride;
-        span.m_knot++;
-      }
-    }
-    else
-    {
-      for ( i = 0; i < m_cv_count - m_order; i++ )
-      {
-        if ( span.m_knot[m_order-2] < span.m_knot[m_order-1] && !span.IsShort(tolerance) )
-        {
-          // span with index i is not short
-          break;
-        }
-        span.m_cv += span.m_cv_stride;
-        span.m_knot++;
-      }
-    }
-
-    if ( i < m_cv_count - m_order )
-    {
-      if ( i > 0 )
-      {
-        rc = true;
-        if ( bRemoveShortSegments )
-        {
-          // remove short start span(s)
-          DestroyRuntimeCache();
-          c = (double*)onmalloc(sizeof_cv);
-          ClampEnd(2);
-          memcpy(c,CV(0),sizeof_cv);
-          for ( j0=0,j1=i; j1 < m_cv_count+m_order-2; j0++,j1++ )
-            m_knot[j0] = m_knot[j1];
-          for ( j0=0,j1=i; j1 < m_cv_count; j0++,j1++ )
-            memcpy( CV(j0), CV(j1), sizeof_cv );
-          m_cv_count -= i;
-          ClampEnd(2);
-          // do not change start point
-          memcpy(CV(0),c,sizeof_cv);
-          SetDomain( domain[0], domain[1] );
-        }
-        else
-        {
-          // query mode
-          return rc;
-        }
-      }
-
-      if ( m_cv_count > m_order )
-      {
-        // see if there are short span(s) at the end
-        span.m_cv = CV(m_cv_count-m_order);
-        span.m_knot = m_knot + (m_cv_count-m_order);
-        if ( 2 == m_order )
-        {
-          ON_3dPoint P0, P1;
-          span.GetCV(1,P0);
-          for ( i = 0; i < m_cv_count-m_order; i++ )
-          {
-            span.GetCV(0,P1);
-            if ( P0.DistanceTo(P1) > tolerance && ON_ComparePoint( m_dim, m_is_rat, CV(m_cv_count-1), span.CV(0) ) )
-            {
-              // line segment from end to this->CV(m_cv_count-2-i) is not short
-              break;
-            }
-            span.m_cv -= span.m_cv_stride;
-            span.m_knot--;
-          }
-        }
-        else
-        {
-          for ( i = 0; i < m_cv_count-m_order; i++ )
-          {
-            if ( span.m_knot[m_order-2] < span.m_knot[m_order-1] && !span.IsShort(tolerance) )
-            {
-              // this span is not short
-              break;
-            }
-            span.m_cv -= span.m_cv_stride;
-            span.m_knot--;
-          }
-        }
-
-        if ( i < m_cv_count-m_order  )
-        {
-          if ( i > 0 )
-          {
-            // remove short end span(s)
-            rc = true;
-            if ( bRemoveShortSegments )
-            {
-              DestroyRuntimeCache();
-              ClampEnd(2);
-              if ( 0 == c )
-                c = (double*)onmalloc(sizeof_cv);
-              memcpy(c,CV(m_cv_count-1),sizeof_cv);
-              m_cv_count -= i;
-              ClampEnd(2);
-              // do not change domain or end point
-              memcpy(CV(m_cv_count-1),c,sizeof_cv);
-              SetDomain( domain[0], domain[1] );
-            }
-            else
-            {
-              // query mode
-              return rc;
-            }
-          }
-
-          // remove short interior spans
-          for (i = m_cv_count-m_order-1; i>0; i-- )
-          {
-            span.m_knot = m_knot+i;
-            span.m_cv = CV(i);
-            if (    span.m_knot[0] == span.m_knot[m_order-2]
-                 && span.m_knot[m_order-2] < span.m_knot[m_order-1]
-                 && span.m_knot[m_order-1] == span.m_knot[2*m_order-3]
-                 && span.IsShort(tolerance) )
-            {
-              // remove short bezier span
-              rc = true;
-              if ( bRemoveShortSegments )
-              {
-                DestroyRuntimeCache();
-                for ( j0=i,j1=j0+m_order-1; j1 < m_cv_count; j0++,j1++ )
-                {
-                  memcpy(CV(j0),CV(j1),sizeof_cv);
-                }
-                for ( j0=i,j1=j0+m_order-1; j1 < m_cv_count+m_order-2; j0++,j1++ )
-                {
-                  m_knot[j0] = m_knot[j1];
-                }
-                m_cv_count -= (m_order-1);
-                SetDomain( domain[0], domain[1] );
-              }
-              else
-                return true;
-            }
-          }
-        }
-      }
-
-      if ( 0 != c )
-        onfree(c);
-    }
-
-    if ( bRemoveShortSegments && (m_knot[m_order-2] != domain[0] || m_knot[m_cv_count-1] != domain[1]) )
-    {
-      // do not change domain
-      SetDomain(domain[0],domain[1]);
-    }
-  }
-
-  return rc;
-}
-
-bool ON_PolylineCurve::RemoveShortSegments( double tolerance, bool bRemoveShortSegments )
-{
-  int count = PointCount();
-  if ( count <= 2 )
-    return false;
-
-  ON_NurbsCurve nurbs_curve;
-  nurbs_curve.m_dim = 3;
-  nurbs_curve.m_is_rat = 0;
-  nurbs_curve.m_order = 2;
-  nurbs_curve.m_cv_count = count;
-  nurbs_curve.m_cv_stride = 3;
-  nurbs_curve.m_cv = &(m_pline.Array()->x);
-  nurbs_curve.m_knot = m_t.Array();
-  bool rc = nurbs_curve.ON_NurbsCurve::RemoveShortSegments(tolerance, bRemoveShortSegments );
-  if ( (nurbs_curve.m_cv_count != count || rc) && bRemoveShortSegments )
-  {
-    DestroyRuntimeCache();
-    m_pline.SetCount(nurbs_curve.m_cv_count);
-    m_t.SetCount(nurbs_curve.m_cv_count);
-  }
-  nurbs_curve.m_cv = 0;
-  nurbs_curve.m_knot = 0;
-
-  return rc;
-}
-
-
-bool ON_Curve::RemoveShortSegments( double tolerance, bool bRemoveShortSegments )
-{
-  bool rc = false;
-  // When the SDK freeze ends, RemoveShortSegments() will become a 
-  // virtual function and this will be done right.  For now, I have
-  // to hack at it this way because adding a new virtual function 
-  // will change the vtable and break existing plug-ins.  
-  // (The classid stuff avoids multiple (slow) calls to failed Cast().
-  // When Cast() returns non-NULL, it is fast.)
-
-  const ON_ClassId* curve_id = &ON_Curve::m_ON_Curve_class_id;
-  const ON_ClassId* id = ClassId();
-
-  // "fake virtual" handling of fast/easy special cases
-  while (0 != id && curve_id != id )
-  {
-    if (    &ON_ArcCurve::m_ON_ArcCurve_class_id == id 
-         || &ON_LineCurve::m_ON_LineCurve_class_id == id
-         || &ON_CurveProxy::m_ON_CurveProxy_class_id == id )
-    {
-      // nothing to do
-      break;
-    }
-
-    if( &ON_PolylineCurve::m_ON_PolylineCurve_class_id == id )
-    {
-      ON_PolylineCurve* polyline_curve = ON_PolylineCurve::Cast(this);
-      if ( 0 != polyline_curve )
-        rc = polyline_curve->ON_PolylineCurve::RemoveShortSegments(tolerance,bRemoveShortSegments);
-      break;
-    }
-    
-    if ( &ON_PolyCurve::m_ON_PolyCurve_class_id == id )
-    {
-      ON_PolyCurve* poly_curve = ON_PolyCurve::Cast(this);
-      if ( 0 != poly_curve )
-        rc = poly_curve->ON_PolyCurve::RemoveShortSegments(tolerance,bRemoveShortSegments);
-      break;
-    }
-    
-    if ( &ON_NurbsCurve::m_ON_NurbsCurve_class_id == id )
-    {
-      ON_NurbsCurve* nurbs_curve = ON_NurbsCurve::Cast(this);
-      if ( 0 != nurbs_curve )
-        rc = nurbs_curve->ON_NurbsCurve::RemoveShortSegments(tolerance,bRemoveShortSegments);
-      break;
-    }
-
-    id = id->BaseClass();
-  }
-
-  return rc;
-}
-
-
-//ON_BOOL32 ON_Curve::Length(
-//        double* length,               // length returned here
-//        double fractional_tolerance,  // default = 1.0e-8
-//        const ON_Interval* sub_domain // default = NULL
-//        ) const
-//{
-//  return GetLength(length,fractional_tolerance,sub_domain);
-//}
-
-ON_BOOL32 ON_Curve::GetNormalizedArcLengthPoint(
-        double s,
-        double* t,
-        double fractional_tolerance,
-        const ON_Interval* sub_domain
-        ) const
-{
-  // override when possible
-  return false;
-}
-
-ON_BOOL32 ON_Curve::GetNormalizedArcLengthPoints(
-        int count,
-        const double* s,
-        double* t,
-        double absolute_tolerance,
-        double fractional_tolerance,
-        const ON_Interval* sub_domain
-        ) const
-{
-  // override when possible
-  return false;
-}
 
 
 ON_BOOL32 ON_Curve::Trim( const ON_Interval& in )
@@ -2764,7 +1791,6 @@ ON_BOOL32 ON_Curve::Trim( const ON_Interval& in )
   // TODO - make this pure virtual
   return false;
 }
-
 
 bool ON_Curve::Extend(
   const ON_Interval& domain
@@ -3221,7 +2247,7 @@ ON_JoinCurves(const ON_SimpleArray<const ON_Curve*>& InCurves,
   }
 
   //sort possiblities by distance
-  EData.HeapSort(CompareEndData);
+  EData.QuickSort(CompareEndData);
 
   int* endspace = (int*)onmalloc(2*sizeof(int)*IC.Count());
   memset(endspace, 0, 2*sizeof(int)*IC.Count());

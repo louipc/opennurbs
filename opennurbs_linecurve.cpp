@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -123,7 +124,6 @@ ON_BOOL32
 ON_LineCurve::Transform( const ON_Xform& xform )
 {
   TransformUserData(xform);
-	DestroyCurveTree();
   return m_line.Transform( xform );
 }
 
@@ -211,7 +211,6 @@ ON_BOOL32 ON_LineCurve::SetDomain( double t0, double t1)
   if (t0 < t1)
   {
     m_t.Set(t0, t1);
-		DestroyCurveTree();
     return true;
   }
   return false;
@@ -223,7 +222,6 @@ bool ON_LineCurve::ChangeDimension( int desired_dimension )
 
   if (rc && m_dim != desired_dimension )
   {
-    DestroyCurveTree();
     if ( desired_dimension == 2 )
     {
       // 7 April 2003 Dale Lear - zero z coords if x coord are set
@@ -374,7 +372,6 @@ ON_LineCurve::Reverse()
   m_line.from = m_line.to;
   m_line.to = p;
   m_t.Reverse();
-	DestroyCurveTree();
   return true;
 }
 
@@ -421,166 +418,16 @@ ON_BOOL32 ON_LineCurve::Evaluate( // returns false if unable to evaluate
   return rc;
 }
 
-bool ON_LineCurve::GetClosestPoint( const ON_3dPoint& test_point,
-        double* t,       // parameter of local closest point returned here
-        double maximum_distance,
-        const ON_Interval* sub_domain
-        ) const
-{
-  bool rc = false;
-  double s, x, d;
-  ON_3dVector Q, P1;
-
-  Q.x = test_point.x - m_line.from.x;
-  Q.y = test_point.y - m_line.from.y;
-  Q.z = test_point.z - m_line.from.z;
-
-  P1.x = m_line.to.x - m_line.from.x;
-  P1.y = m_line.to.y - m_line.from.y;
-  P1.z = m_line.to.z - m_line.from.z;
-
-  s = P1.x*P1.x + P1.y*P1.y + P1.z*P1.z;
-  if ( 0.0 != s )
-  {
-    s = (Q.x*P1.x + Q.y*P1.y + Q.z*P1.z)/s;
-    if ( s <= 0.0 ) 
-      s = 0.0;
-    else if ( s > 1.0 )
-      s = 1.0;
-
-    x = (1.0-s)*m_t[0] + s*m_t[1];
-
-    if ( sub_domain )
-    {
-      if ( x < sub_domain->m_t[0]  )
-      {
-        if ( m_t[1] < sub_domain->m_t[0] )
-          return false;
-        x = sub_domain->m_t[0];
-        s = (x - m_t[0])/(m_t[1] - m_t[0]);
-      }
-      else if ( x > sub_domain->m_t[1] )
-      {
-        if ( m_t[0] > sub_domain->m_t[1] )
-          return false;
-        x = sub_domain->m_t[1];
-        s = (x - m_t[0])/(m_t[1] - m_t[0]);
-      }
-    }
-
-    if ( maximum_distance > 0.0 )
-    {
-      d = 1.0-s;
-      Q.x = d*m_line.from.x + s*m_line.to.x - test_point.x;
-      Q.y = d*m_line.from.y + s*m_line.to.y - test_point.y;
-      Q.z = d*m_line.from.z + s*m_line.to.z - test_point.z;
-      d = Q.Length();
-      if ( d > maximum_distance )
-        return false;
-    }
-    
-    *t = x;
-
-    rc = true;
-  }
-  return rc;
-}
-
-ON_BOOL32 ON_LineCurve::GetLocalClosestPoint( const ON_3dPoint& test_point,
-        double seed_parameter,
-        double* t,
-        const ON_Interval* sub_domain
-        ) const
-{
-  if ( sub_domain )
-  {
-    if ( seed_parameter < sub_domain->Min() )
-      seed_parameter = sub_domain->Min();
-    else if ( seed_parameter > sub_domain->Max() )
-      seed_parameter = sub_domain->Max();
-  }
-  ON_BOOL32 rc = GetClosestPoint( test_point, t, 0.0, sub_domain );
-  if ( rc 
-       && t 
-       && seed_parameter != *t
-       && test_point.DistanceTo(PointAt(seed_parameter)) <= test_point.DistanceTo(PointAt(*t)) 
-       )
-  {
-    *t = seed_parameter;
-  }
-  return rc;
-}
-
-ON_BOOL32 ON_LineCurve::GetLength(
-        double* length,               // length returned here
-        double fractional_tolerance,  // default = 1.0e-8
-        const ON_Interval* sub_domain // default = NULL
-        ) const
-{
-  // override when possible
-  // TODO: add simple integration routine that works with C1 curves
-	if ( sub_domain && sub_domain->IsDecreasing())
-		return false;
-  else if ( sub_domain ) {
-		ON_Interval scratch_domain= m_t;
-		if(!scratch_domain.Intersection(*sub_domain))
-			return false;
-		else
-			sub_domain= &scratch_domain;
-    *length = PointAt(sub_domain->Min()).DistanceTo( PointAt(sub_domain->Max()) );
-  }
-  else {
-    *length = m_line.Length();
-  }
-  return true;
-}
-
-ON_BOOL32 ON_LineCurve::GetNormalizedArcLengthPoint(
-        double s,
-        double* t,
-        double fractional_tolerance,
-        const ON_Interval* sub_domain
-        ) const
-{
-  ON_Interval domain = (sub_domain) ? *sub_domain : Domain();
-  if ( t )
-    *t = domain.ParameterAt(s);
-  return true;
-}
-
-ON_BOOL32 ON_LineCurve::GetNormalizedArcLengthPoints(
-        int count,
-        const double* s,
-        double* t,
-        double absolute_tolerance,
-        double fractional_tolerance,
-        const ON_Interval* sub_domain
-        ) const
-{
-  if ( count > 0 || s != NULL && t != NULL )
-  {
-    if ( !sub_domain )
-      sub_domain = &m_t;
-    int i;
-    for ( i = 0; i < count; i++ )
-    {
-      t[i] = sub_domain->ParameterAt( s[i] );
-    }
-  }
-  return true;
-}
 
 ON_BOOL32 ON_LineCurve::SetStartPoint(ON_3dPoint start_point)
 {
   m_line.from = start_point;
-	DestroyCurveTree();
   return true;
 }
 
 ON_BOOL32 ON_LineCurve::SetEndPoint(ON_3dPoint end_point)
 {
   m_line.to = end_point;
-	DestroyCurveTree();
   return true;
 }
 
@@ -661,7 +508,6 @@ ON_BOOL32 ON_LineCurve::Trim( const ON_Interval& domain )
   ON_BOOL32 rc = false;
   if ( domain.IsIncreasing() )
   {
-    DestroyCurveTree();
     ON_3dPoint p = PointAt( domain[0] );
     ON_3dPoint q = PointAt( domain[1] );
 		if( p.DistanceTo(q)>0){								// 2 April 2003 Greg Arden A successfull trim 
@@ -672,7 +518,6 @@ ON_BOOL32 ON_LineCurve::Trim( const ON_Interval& domain )
 			rc = true;
 		}
   }
-	DestroyCurveTree();
   return rc;
 }
 
@@ -703,7 +548,6 @@ bool ON_LineCurve::Extend(
   if (do_it){
     m_line = ON_Line(Q0, Q1);
     SetDomain(t0, t1);
-    DestroyCurveTree();
   }
   return do_it;
 }
@@ -754,12 +598,10 @@ ON_BOOL32 ON_LineCurve::Split(
       right_side = right_line;
     }
 
-    left_line->DestroyCurveTree();
     left_line->m_line = left;
     left_line->m_t.Set( t0, t );
     left_line->m_dim = dim;
 
-    right_line->DestroyCurveTree();
     right_line->m_line = right;
     right_line->m_t.Set( t, t1 );
     right_line->m_dim = dim;

@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -476,6 +477,7 @@ public:
     );
 
   /*
+  Description:
     Get near and far clipping distances of a point
   Parameters:
     point - [in] 
@@ -499,6 +501,29 @@ public:
          double* far_dist,
          bool bGrowNearFar=false
          ) const;
+
+  /*
+  Description:
+    Get the view plane depth of a point
+  Parameters:
+    point - [in] 
+    view_plane_depth - [out] 
+      positive values are in front of the camera and negative
+      values are behind the camera.
+      If 0 <= point_depth < FrustumNear(), the point's view
+      plane is between the camera and the frustum's near plane.
+      If point_depth > FrustumFar(), the point's view
+      plane is farther from the camera and the frustum's far plane.
+  Returns:
+    True if the point is ing the view frustum and
+    near_dist/far_dist were set.
+    False if the bounding box does not intesect the
+    view frustum.
+  */
+  bool GetPointDepth(       
+       ON_3dPoint point,
+       double* view_plane_depth
+       ) const;
 
   /*
   Description:
@@ -640,6 +665,36 @@ public:
 
   /*
   Description:
+    Get the plane that is a specified distance from the camera.
+    This plane is parallel to the frustum's near and far planes.
+  Parameters:
+    view_plane_depth - [in]
+      The distance from the camera location to the view plane. 
+      Positive distances are in front of the camera and
+      negative distances are behind the camera.
+      A value of FrustumNear() will return the frustum's
+      near plane and a valud of FrustumFar() will return
+      the frustum's far plane.
+    view_plane - [out]
+      View plane
+    view_plane_equation - [out]
+      Equation of the view plane.
+  Returns:
+    True if the camera and frustum are valid and view_plane
+    was calculated.  False otherwise.
+  */
+  bool GetViewPlane( 
+    double view_plane_depth,
+    ON_Plane& view_plane 
+    ) const;
+
+  bool GetViewPlaneEquation( 
+    double view_plane_depth,
+    ON_PlaneEquation& view_plane_equation 
+    ) const;
+
+  /*
+  Description:
   Get left world frustum clipping plane.
   Parameters:
     left_plane - [out] 
@@ -757,6 +812,35 @@ public:
           ON_3dPoint& right_top
           ) const;
 
+  /*
+  Description:
+    Get the world coordinate corners of the rectangle of
+    a view plane that is a specified distance from the camera.
+    This rectangle is parallel to the frustum's near and far planes.
+  Parameters:
+    view_plane_depth - [in]
+      The distance from the camera location to the view plane. 
+      Positive distances are in front of the camera and
+      negative distances are behind the camera.
+      A value of FrustumNear() will return the frustum's
+      near rectangle and a valud of FrustumFar() will return
+      the frustum's far rectangle.
+    left_bottom - [out]
+    right_bottom - [out]
+    left_top - [out]
+    right_top - [out]
+  Returns:
+    True if the camera and frustum are valid and view_plane
+    was calculated.  False otherwise.
+  */
+  bool GetViewPlaneRect(
+          double view_plane_depth,
+          ON_3dPoint& left_bottom,
+          ON_3dPoint& right_bottom,
+          ON_3dPoint& left_top,
+          ON_3dPoint& right_top
+          ) const;
+
 
   /*
   Description:
@@ -808,6 +892,18 @@ public:
         int* port_near=NULL,  
         int* port_far=NULL   
         ) const;
+
+  /* 
+  Returns:
+    abs(port_right - port_left)
+  */
+  int ScreenPortWidth() const;
+
+  /* 
+  Returns:
+    abs(port_bottom - port_top)
+  */
+  int ScreenPortHeight() const;
 
   bool GetScreenPortAspect( double& ) const; // port's |width/height|
 
@@ -960,7 +1056,7 @@ public:
   */
   bool SetViewScale( double x, double y );
   void GetViewScale( double* x, double* y ) const;
-  
+
   /*
   Description:
     Gets the m_clip_mod transformation;
@@ -1057,7 +1153,8 @@ public:
   Parameters:      
     camera_location - [in]
     depth_buffer_bit_depth - [in]
-      typically 32, 34, 16 or 8, but any value can be passed in.
+      typically 32, 24, 16 or 8, but any positive value can be 
+      passed in.
     min_near_dist - [out]
       Suggest value for passing to SetPerspectiveMinNearDist().     
     min_near_over_far - [out]
@@ -1072,11 +1169,84 @@ public:
 
   /*
   Description:
+    Calculate the value to add to homogeneous "z" clipping coordinate
+    that corresponds to moving the corresponding euclidean camera
+    coordinate by relative_depth_bias*(far - near).
+  Parameters:
+    relative_depth_bias - [in]
+      signed relative bias. 
+      = 0: no bias, 
+      > 0: bias towards frustum's near clipping plane
+      < 0: bias towards frustum's far clipping plane
+      When you have curves and points that are "on" shaded objects,
+      values around 1/256 work well to move the wire objects
+      in front of or behind shaded objects.
+    clip_z [-in]
+    clip_w [-in]
+      clip_z and clip_w are the homogeneous "w" and "w" coordinates
+      of a homogeneous clipping coordinate point.
+  Returns:
+    The clipping coordinate depth bias to add to the z-clipping
+    coordinate that corresponds to adding cam_depth_bias
+    to the z camera coordinate.
+  Remarks:
+    For perspective views, this bias is largest in the vicinity
+    of the frustum's near clipping plane and smallest in the
+    vicinity of the frustum's far clipping plane.
+    For orthographic projectsions, this bias is constant.
+  */
+  double ClipCoordDepthBias(
+    double relative_depth_bias,
+    double clip_z, 
+    double clip_w
+    ) const;
+
+  /*
+  Description:
+    Calculate a transformation to apply to clipping coordinates to
+    bias their depth.
+
+  Parameters:
+    relative_depth_bias - [in]
+      signed relative bias. 
+      = 0: no bias, 
+      > 0: bias towards frustum's near clipping plane
+      < 0: bias towards frustum's far clipping plane
+      When you have curves and points that are "on" shaded objects,
+      values around 1/512 work well to move the wire objects
+      in front of or behind shaded objects.
+
+    clip_bias - [out]
+      clip_bias = cam2clip * delta * clip2cam,
+      where delta = 1 0 0 0 
+                    0 1 0 0
+                    0 0 1 D
+                    0 0 0 1
+      and D = relative_depth_bias*(far-near).
+
+  Returns:
+    True if the function worked.  False if the frustum settings
+    are not valild, in which cate the identity matrix is returned.
+
+  Remarks:
+    The inverse of the transformations returned by 
+    GetClipCoordDepthBiasXform(+r,...) is the transformation
+    returned by GetClipCoordDepthBiasXform(-r,...).
+  */
+  bool GetClipCoordDepthBiasXform( 
+    double relative_depth_bias,
+    ON_Xform& clip_bias
+    ) const;
+
+  /*
+  Description:
     Set suggested the perspective minimum near distance and
     minimum near/far ratio to the suggested values returned
     by GetPerspectiveClippingPlaneConstraints().
   Parameters:
-    typically 32, 34, 16 or 8, but any value can be passed in.
+    depth_buffer_bit_depth - [in]
+      typically 32, 24, 16 or 8, but any positive value can be 
+      passed in.
   */
   void SetPerspectiveClippingPlaneConstraints(
         unsigned int depth_buffer_bit_depth

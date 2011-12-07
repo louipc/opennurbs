@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -656,7 +657,7 @@ void ON_UuidList::SortHelper()
   if ( m_sorted_count < m_count || m_removed_count > 0 )
   {
     // clean up array
-    HeapSort(ON_UuidList::CompareUuid);
+    QuickSort(ON_UuidList::CompareUuid);
     while ( m_count > 0 && ON_max_uuid == m_a[m_count-1] )
     {
       m_count--;
@@ -1074,7 +1075,7 @@ void ON_UuidPairList::ImproveSearchSpeed()
 {
   if ( ((unsigned int)m_count) > m_sorted_count )
   {
-    HeapSort(compar_uuidpair_id1id2);
+    QuickSort(compar_uuidpair_id1id2);
     if ( m_removed_count > 0 )
     {
       // cull removed items.  These get sorted to the
@@ -1203,7 +1204,7 @@ void ON_UuidIndexList::ImproveSearchSpeed()
 {
   if ( ((unsigned int)m_count) > m_sorted_count )
   {
-    HeapSort(compar_uuidindex_uuid);
+    QuickSort(compar_uuidindex_uuid);
     if ( m_removed_count > 0 )
     {
       // cull removed items.  These get sorted to the
@@ -1367,7 +1368,7 @@ const ON_2dex* ON_2dexMap::Find2dex(int i) const
   {
     if ( !m_bSorted )
     {
-      ON_hsort(m_a,m_count,sizeof(m_a[0]),compare_2dex_i);
+      ON_qsort(m_a,m_count,sizeof(m_a[0]),compare_2dex_i);
       const_cast<ON_2dexMap*>(this)->m_bSorted = true;
     }
     e = ON_BinarySearch2dexArray(i,m_a,m_count);

@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -105,36 +106,6 @@ public:
   ON_BOOL32 SwapCoordinates(
         int, int        // indices of coords to swap
         );
-
-  // virtual ON_Geometry override
-  bool Morph( const ON_SpaceMorph& morph );
-
-  // virtual ON_Geometry override
-  bool IsMorphable() const;
-
-  /*
-  Description:
-    Get the index of the point in the point cloud that is closest
-    to P.
-  Parameters:
-    P - [in]
-    closest_point_index - [out]
-    maximum_distance - [in] optional distance constraint.
-        If maximum_distance > 0, then only points Q with
-        |P-Q| <= maximum_distance are tested.
-  Returns:
-    True if a point is found; in which case *closest_point_index
-    is the index of the point.  False if no point is found
-    or the input is not valid.
-  See Also:
-    ON_GetClosestPointInPointList
-  */
-  bool GetClosestPoint( 
-          ON_3dPoint P,
-          int* closest_point_index,
-          double maximum_distance = 0.0
-          ) const;
-
 
   /////////////////////////////////////////////////////////////////
   // Interface

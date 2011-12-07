@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -331,6 +332,18 @@ bool ON_IsValid( double x );
 ON_DECL
 bool ON_IsValidFloat( float x );
 
+/*
+class ON_CLASS ON_TimeLimit
+{
+  ON_TimeLimit();
+  ON_TimeLimit(ON__UINT64 time_limit_seconds);
+  void SetTimeLimit(ON__UINT64 time_limit_seconds);
+  bool Continue() const;
+  bool IsSet() const;
+private:
+  ON__UINT64 m_time_limit[2];
+};
+*/
 
 // The ON_IS_FINITE and ON_IS_VALID defines are much faster
 // than calling ON_IsValid(), but need to be used when
@@ -366,7 +379,9 @@ bool ON_IsValidFloat( float x );
 // function to return true.
 
 #if defined(_GNU_SOURCE)
-#define ON_IS_FINITE(x) (finite(x)?true:false)
+// if you are using an older version of gcc, use finite()
+//#define ON_IS_FINITE(x) (finite(x)?true:false)
+#define ON_IS_FINITE(x) (isfinite(x)?true:false)
 #else
 #define ON_IS_FINITE(x) (_finite(x)?true:false)
 #endif
@@ -1381,7 +1396,10 @@ Description:
   Sort an index array.
 Parameters
   method - [in]
-    ON::heap_sort or ON::quick_sort
+    ON::quick_sort (best in general) or ON::heap_sort.
+    Use ON::heap_sort only after doing meaningful performance
+    testing using optimized release builds that demonstrate
+    ON::heap_sort is significantly better.
   index - [out] 
     Pass in an array of count integers.  The returned
     index[] is a permutation of (0,1,..,count-1)
@@ -1399,7 +1417,7 @@ Parameters
 */
 ON_DECL
 void ON_Sort( 
-        ON::sort_algorithm method,  // ON::heap_sort or ON::quick_sort, 
+        ON::sort_algorithm method,
         int* index,
         const void* base,
         size_t count,
@@ -1414,7 +1432,10 @@ Description:
   pass extra informtation.
 Parameters
   method - [in]
-    ON::heap_sort or ON::quick_sort
+    ON::quick_sort (best in general) or ON::heap_sort.
+    Use ON::heap_sort only after doing meaningful performance
+    testing using optimized release builds that demonstrate
+    ON::heap_sort is significantly better.
   index - [out] 
     Pass in an array of count integers.  The returned
     index[] is a permutation of (0,1,..,count-1)
@@ -1435,7 +1456,7 @@ Parameters
 */
 ON_DECL
 void ON_Sort( 
-        ON::sort_algorithm method,  // ON::heap_sort or ON::quick_sort, 
+        ON::sort_algorithm method,
         int* index,
         const void* base,
         size_t count,
@@ -1446,7 +1467,9 @@ void ON_Sort(
 
 /*
 Description:
-  heap sort analogue of qsort()
+  Various sorts. When in doubt, use ON_qsort().
+  ON_qsort - quick sort.
+  ON_hsort = hearp sort.
 Parameters
   base - [in]
     array of count elements
@@ -1460,6 +1483,18 @@ Parameters
     is pass as the third argument.
   context - [in]
     pointer passed as the third argument to compare().
+Remarks:
+  As a rule, use quick sort unless extensive tests in your case
+  prove that heap sort is faster. 
+  
+  This implementation of quick sort is generally faster than 
+  heap sort, even when the input arrays are nearly sorted.
+  The only common case when heap sort is faster occurs when
+  the arrays are strictly "chevron" (3,2,1,2,3) or "carat" 
+  (1,2,3,2,1) ordered, and in these cases heap sort is about
+  50% faster.  If the "chevron" or "caret" ordered arrays 
+  have a little randomness added, the two algorithms have 
+  the same speed.
 */
 ON_DECL
 void ON_hsort( 
@@ -1469,25 +1504,14 @@ void ON_hsort(
         int (*compare)(const void*,const void*)
         );
 
-/*
-Description:
-  heap sort analogue of qsort() with a compare function
-  that takes an additional pointer that can be used to
-  pass extra informtation.
-Parameters
-  base - [in]
-    array of count elements
-  count - [in]
-    number of elements in the index[] and base[] arrays
-  sizeof_element - [in]
-    number of bytes between consecutive elements in the
-    base[] array.
-  compare - [in]
-    Comparison function a la qsort().  The context parameter
-    is passed as the first argument.
-  context - [in]
-    pointer passed as the first argument to compare().
-*/
+ON_DECL
+void ON_qsort( 
+        void* base,
+        size_t count,
+        size_t sizeof_element,
+        int (*compare)(const void*,const void*)
+        );
+
 ON_DECL
 void ON_hsort( 
         void* base,
@@ -1497,50 +1521,6 @@ void ON_hsort(
         void* context
         );
 
-/*
-Description:
-  Quick sort an array
-Parameters
-  base - [in]
-    array of count elements
-  count - [in]
-    number of elements in the index[] and base[] arrays
-  sizeof_element - [in]
-    number of bytes between consecutive elements in the
-    base[] array.
-  compare - [in]
-    Comparison function a la qsort().  The context parameter
-    is pass as the third argument.
-  context - [in]
-    pointer passed as the third argument to compare().
-*/
-ON_DECL
-void ON_qsort( 
-        void* base,
-        size_t count,
-        size_t sizeof_element,
-        int (*compare)(const void*,const void*)
-        );
-
-/*
-Description:
-  Quick sort an array with a compare function
-  that takes an additional pointer that can be used to
-  pass extra informtation.
-Parameters
-  base - [in]
-    array of count elements
-  count - [in]
-    number of elements in the index[] and base[] arrays
-  sizeof_element - [in]
-    number of bytes between consecutive elements in the
-    base[] array.
-  compare - [in]
-    Comparison function a la qsort().  The context parameter
-    is passed as the first argument.
-  context - [in]
-    pointer passed as the first argument to compare().
-*/
 ON_DECL
 void ON_qsort( 
         void* base,
@@ -1550,33 +1530,89 @@ void ON_qsort(
         void* context
         );
 
-// heap sort array of doubles in place
+/*
+Description:
+  Sort an array of doubles in place.
+Parameters:
+  sort_algorithm - [in]  
+    ON::quick_sort (best in general) or ON::heap_sort
+    Use ON::heap_sort only if you have done extensive testing with
+    optimized release builds and are confident heap sort is 
+    significantly faster in your case.
+  a - [in / out] 
+    The values in a[] are sorted so that a[i] <= a[i+1].
+    a[] cannot contain NaNs.
+  nel - [in]
+    length of array a[]
+*/
 ON_DECL
 void ON_SortDoubleArray( 
-        ON::sort_algorithm, // ON::heap_sort or ON::quick_sort, 
-        double*,  // array of doubles
-        size_t    // length of array
+        ON::sort_algorithm sort_algorithm,
+        double* a,
+        size_t nel
         );
 
+/*
+Description:
+  Sort an array of ints in place.
+Parameters:
+  sort_algorithm - [in]  
+    ON::quick_sort (best in general) or ON::heap_sort
+    Use ON::heap_sort only if you have done extensive testing with
+    optimized release builds and are confident heap sort is 
+    significantly faster in your case.
+  a - [in / out] 
+    The values in a[] are sorted so that a[i] <= a[i+1].
+  nel - [in]
+    length of array a[]
+*/
 ON_DECL
 void ON_SortIntArray(
-        ON::sort_algorithm, // ON::heap_sort or ON::quick_sort, 
-        int*,     // array of doubles
-        size_t    // length of array
+        ON::sort_algorithm sort_algorithm,
+        int* a,
+        size_t nel
         );
 
+/*
+Description:
+  Sort an array of unsigned ints in place.
+Parameters:
+  sort_algorithm - [in]  
+    ON::quick_sort (best in general) or ON::heap_sort
+    Use ON::heap_sort only if you have done extensive testing with
+    optimized release builds and are confident heap sort is 
+    significantly faster in your case.
+  a - [in / out] 
+    The values in a[] are sorted so that a[i] <= a[i+1].
+  nel - [in]
+    length of array a[]
+*/
 ON_DECL
 void ON_SortUnsignedIntArray(
-        ON::sort_algorithm, // ON::heap_sort or ON::quick_sort, 
-        unsigned int*,      // array of doubles
-        size_t              // length of array
+        ON::sort_algorithm sort_algorithm,
+        unsigned int* a,
+        size_t nel
         );
 
+/*
+Description:
+  Sort an array of unsigned null terminated char strings in place.
+Parameters:
+  sort_algorithm - [in]  
+    ON::quick_sort (best in general) or ON::heap_sort
+    Use ON::heap_sort only if you have done extensive testing with
+    optimized release builds and are confident heap sort is 
+    significantly faster in your case.
+  a - [in / out] 
+    The values in a[] are sorted so that strcmp(a[i],a[i+1]) <= 0.
+  nel - [in]
+    length of array a[]
+*/
 ON_DECL
 void ON_SortStringArray(
-        ON::sort_algorithm, // ON::heap_sort or ON::quick_sort, 
-        char**,   // array of doubles
-        size_t    // length of array
+        ON::sort_algorithm sort_algorithm,
+        char** a,
+        size_t nel
         );
 
 ON_DECL
@@ -2168,5 +2204,30 @@ Returns:
  sqrt(x^2 + y^2 + z^2) calculated in as precisely and safely as possible.
 */
 ON_DECL double ON_Length3d( double x, double y, double z );
+
+
+/*
+Description:
+  Convert a double x to the largest float f such that
+  the mathematical value of f is at most the value of x.
+Parameters:
+  x - [in]
+Returns
+  The largest float f such that the mathematical value
+  of f is at most the value of x.
+*/
+ON_DECL float ON_FloatFloor(double x);
+
+/*
+Description:
+  Convert a double x to the smallest float f such that
+  the mathematical value of f is at least the value of x.
+Parameters:
+  x - [in]
+Returns
+  The smallest float f such that the mathematical value
+  of f is at least the value of x.
+*/
+ON_DECL float ON_FloatCeil(double x);
 
 #endif

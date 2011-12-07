@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -18,6 +19,7 @@
 ON_OBJECT_IMPLEMENT(ON_Layer,ON_Object,"95809813-E985-11d3-BFE5-0010830122F0");
 
 #define ON_BOZO_VACCINE_3E4904E6E9304fbcAA42EBD407AEFE3B
+#define ON_BOZO_VACCINE_BFB63C094BC7472789BB7CC754118200
 
 ON_Layer::ON_Layer() 
 {
@@ -1377,6 +1379,27 @@ void ON_Layer::DeletePerViewportPlotColor( const ON_UUID& viewport_id )
   }
 }
 
+int ON_Layer::UpdateViewportIds( const ON_UuidPairList& viewport_id_map )
+{
+  if ( viewport_id_map.Count() <= 0 )
+    return 0;
+  ON__LayerExtensions* ud = ON__LayerExtensions::LayerExtensions(*this,false);
+  if ( 0 == ud )
+    return 0;
+  int rc = 0;
+  ON_UUID new_id;
+  for ( int i = 0; i < ud->m_vp_settings.Count(); i++ )
+  {
+    ON__LayerPerViewSettings& s = ud->m_vp_settings[i];
+    if ( viewport_id_map.FindId1(s.m_viewport_id,&new_id) && s.m_viewport_id != new_id )
+    {
+      s.m_viewport_id = new_id;
+      rc++;
+    }
+  }
+  return rc;
+}
+
 void ON_Layer::DeletePerViewportPlotWeight( const ON_UUID& viewport_id )
 {
   if ( ON_UuidIsNil(viewport_id) )
@@ -1462,6 +1485,32 @@ bool ON_Layer::HasPerViewportSettings( const ON_UUID& viewport_id ) const
   return rc;
 }
 
+bool ON_Layer::CopyPerViewportSettings(ON_UUID source, ON_UUID destination)
+{
+  bool rc = false;
+  if ( ON_UuidIsNotNil(source) && ON_UuidIsNotNil(destination) && ON_UuidCompare(source, destination)!=0 )
+  {
+    ON__LayerPerViewSettings* pSourceSettings = ON__LayerExtensions::ViewportSettings( *this, source, false );
+    if( pSourceSettings )
+    {
+      // Copy source settings, since pSourceSettings pointer may become bogus
+      // after creating the destination settings
+      ON__LayerPerViewSettings src = *pSourceSettings;
+      ON__LayerPerViewSettings* pDestinationSettings = ON__LayerExtensions::ViewportSettings( *this, destination, true);
+      if( pDestinationSettings )
+      {
+        pDestinationSettings->m_color = src.m_color;
+        pDestinationSettings->m_plot_color = src.m_plot_color;
+        pDestinationSettings->m_plot_weight_mm = src.m_plot_weight_mm;
+        pDestinationSettings->m_visible = src.m_visible;
+        rc = true;
+      }
+    }
+  }
+  return rc;
+}
+
+
 void ON_Layer::DeletePerViewportSettings( const ON_UUID& viewport_id ) const
 {
   if ( ON_UuidIsNil(viewport_id) )
@@ -1532,4 +1581,401 @@ ON__UINT32 ON_Layer::PerViewportSettingsCRC() const
 // END ON_Layer per viewport interface functions
 //
 ////////////////////////////////////////////////////////////////
+
+
+
+unsigned int ON_Layer::Differences( const ON_Layer& layer0, const ON_Layer& layer1 )
+{
+  /*
+  enum
+  {
+    none = 0,
+    userdata = 1,
+    color = 2,
+    plot_color = 4,
+    plot_weight = 8,
+    visible = 16,
+    locked = 32,
+    expanded = 64,
+    all = 0xFFFFFFFF
+  }
+  */
+  unsigned int differences = 0;
+
+
+  const ON_UserData* ud0 = layer0.FirstUserData();
+  const ON_UserData* ud1 = layer1.FirstUserData();
+  while ( 0 != ud0 && 0 != ud1 )
+  {
+    if ( ud0->m_userdata_uuid != ud1->m_userdata_uuid )
+      break;
+    ud0 = ud0->Next();
+    ud1 = ud1->Next();
+  }
+  if ( 0 != ud0 || 0 != ud1 )
+    differences |= ON_Layer::userdata_settings;
+
+  if ( layer0.m_color != layer1.m_color )
+    differences |= ON_Layer::color_settings;
+
+  if ( layer0.m_plot_color != layer1.m_plot_color )
+    differences |= ON_Layer::plot_color_settings;
+
+  if ( layer0.m_plot_weight_mm != layer1.m_plot_weight_mm )
+    differences |= ON_Layer::plot_weight_settings;
+
+  if ( layer0.m_bVisible != layer1.m_bVisible )
+    differences |= ON_Layer::visible_settings;
+
+  if ( layer0.m_bLocked != layer1.m_bLocked )
+    differences |= ON_Layer::locked_settings;
+
+  // Note:
+  //  This function is used for comparing layers from different
+  //  documents.  It does not make sense to compare values
+  //  like m_linetype_index, m_material_index and so on because
+  //  different indices may actually reference the same linetype
+  //  or material.  If there is a compelling reason to compare
+  //  other settings, they can be added.
+
+  return differences;
+}
+
+
+void ON_Layer::Set( unsigned int settings, const ON_Layer& settings_values )
+{
+  if ( 0 != (ON_Layer::userdata_settings & settings) )
+  {
+    // save original user data on this layer
+    ON_UserDataHolder ud; 
+    ud.MoveUserDataFrom(*this);
+
+    // make a complete copy of the userdata on settings_values
+    CopyUserData(settings_values);
+
+    // now restore any original user data that was not present on settings_values.
+    ud.MoveUserDataTo(*this,true);
+  }
+
+  if ( 0 != (ON_Layer::color_settings & settings) )
+  {
+    m_color = settings_values.m_color;
+  }
+
+  if ( 0 != (ON_Layer::plot_color_settings & settings) )
+  {
+    m_plot_color = settings_values.m_plot_color;
+  }
+
+  if ( 0 != (ON_Layer::plot_weight_settings & settings) )
+  {
+    m_plot_weight_mm = settings_values.m_plot_weight_mm;
+  }
+
+  if ( 0 != (ON_Layer::visible_settings & settings) )
+  {
+    m_bVisible = settings_values.m_bVisible ? true : false;
+  }
+
+  if ( 0 != (ON_Layer::locked_settings & settings) )
+  {
+    m_bLocked = settings_values.m_bLocked ? true : false;
+  }
+}
+
+class /*NEVER EXPORT THIS CLASS DEFINITION*/ ON__LayerSettingsUserData : public ON_UserData
+{
+#if !defined(ON_BOZO_VACCINE_BFB63C094BC7472789BB7CC754118200)
+#error Never copy this class definition or put this definition in a header file!
+#endif
+  ON_OBJECT_DECLARE(ON__LayerSettingsUserData);
+
+public:
+  ON__LayerSettingsUserData();
+  ~ON__LayerSettingsUserData();
+  // default copy constructor and operator= work fine.
+
+  static ON__LayerSettingsUserData* LayerSettings(const ON_Layer& layer,bool bCreate);
+
+
+public:
+  // virtual ON_Object override
+  ON_BOOL32 IsValid( ON_TextLog* text_log = NULL ) const;
+  // virtual ON_Object override
+  unsigned int SizeOf() const;
+  // virtual ON_Object override
+  ON__UINT32 DataCRC(ON__UINT32 current_remainder) const;
+  // virtual ON_Object override
+  ON_BOOL32 Write(ON_BinaryArchive& binary_archive) const;
+  // virtual ON_Object override
+  ON_BOOL32 Read(ON_BinaryArchive& binary_archive);
+  // virtual ON_UserData override
+  ON_BOOL32 Archive() const;
+  // virtual ON_UserData override
+  ON_BOOL32 GetDescription( ON_wString& description );
+
+public:
+
+  enum 
+  {
+    valid_settings = 
+      (
+          ON_Layer::color_settings
+        | ON_Layer::plot_color_settings
+        | ON_Layer::visible_settings
+        | ON_Layer::locked_settings
+        | ON_Layer::plot_weight_settings
+      )
+  };
+
+  bool HaveSettings() const {return 0 != (m_settings & ON__LayerSettingsUserData::valid_settings);}
+
+  bool HaveColor() const {return 0 != (m_settings & ON_Layer::color_settings);}
+  bool HavePlotColor() const {return 0 != (m_settings & ON_Layer::plot_color_settings);}
+  bool HaveVisible() const {return 0 != (m_settings & ON_Layer::visible_settings);}
+  bool HaveLocked() const {return 0 != (m_settings & ON_Layer::locked_settings);}
+  bool HavePlotWeight() const {return 0 != (m_settings & ON_Layer::plot_weight_settings);}
+
+  void Defaults()
+  {
+    m_settings = 0;
+    m_color = 0;
+    m_plot_color = 0;
+    m_bVisible = 0;
+    m_bLocked = 0;
+    m_plot_weight_mm = 0.0;
+  }
+
+  unsigned int m_settings;
+  ON_Color m_color;
+  ON_Color m_plot_color;
+  bool m_bVisible;
+  bool m_bLocked;
+  double m_plot_weight_mm;
+
+};
+
+#undef ON_BOZO_VACCINE_BFB63C094BC7472789BB7CC754118200
+
+ON_OBJECT_IMPLEMENT(ON__LayerSettingsUserData,ON_UserData,"BFB63C09-4BC7-4727-89BB-7CC754118200");
+
+ON__LayerSettingsUserData* ON__LayerSettingsUserData::LayerSettings(const ON_Layer& layer,bool bCreate)
+{
+  ON__LayerSettingsUserData* ud = ON__LayerSettingsUserData::Cast(layer.GetUserData(ON__LayerSettingsUserData::m_ON__LayerSettingsUserData_class_id.Uuid()));
+  if ( !ud && bCreate )
+  {
+    ud = new ON__LayerSettingsUserData();
+    const_cast<ON_Layer&>(layer).AttachUserData(ud);
+  }
+  return ud;
+}
+
+ON__LayerSettingsUserData::ON__LayerSettingsUserData()
+{
+  m_userdata_uuid = ON__LayerSettingsUserData::m_ON__LayerSettingsUserData_class_id.Uuid();
+  m_application_uuid = ON_opennurbs_id;
+  m_userdata_copycount = 1;
+  Defaults();
+}
+
+ON__LayerSettingsUserData::~ON__LayerSettingsUserData()
+{
+}
+
+// virtual ON_Object override
+ON_BOOL32 ON__LayerSettingsUserData::IsValid( ON_TextLog* text_log ) const
+{
+  return true;
+}
+
+// virtual ON_Object override
+unsigned int ON__LayerSettingsUserData::SizeOf() const
+{
+  return (unsigned int)(sizeof(*this));
+}
+
+// virtual ON_Object override
+ON__UINT32 ON__LayerSettingsUserData::DataCRC(ON__UINT32 current_remainder) const
+{
+  ON__UINT32 crc = current_remainder;
+  crc = ON_CRC32(crc,sizeof(m_settings),&m_settings);
+  if ( HaveColor() ) crc = ON_CRC32(crc,sizeof(m_color),&m_color);
+  if ( HavePlotColor() ) crc = ON_CRC32(crc,sizeof(m_plot_color),&m_plot_color);
+  if ( HaveVisible() ) crc = ON_CRC32(crc,sizeof(m_bVisible),&m_bVisible);
+  if ( HaveLocked() ) crc = ON_CRC32(crc,sizeof(m_bLocked),&m_bLocked);
+  if ( HavePlotWeight() ) crc = ON_CRC32(crc,sizeof(m_plot_weight_mm),&m_plot_weight_mm);
+  return crc;
+}
+
+// virtual ON_Object override
+ON_BOOL32 ON__LayerSettingsUserData::Write(ON_BinaryArchive& binary_archive) const
+{
+  bool rc = binary_archive.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,0);
+  if ( !rc )
+    return false;
+
+  rc = false;
+  for(;;)
+  {
+    if ( !binary_archive.WriteInt(m_settings) )
+      break;
+    if ( HaveColor() && !binary_archive.WriteColor(m_color) )
+      break;
+    if ( HavePlotColor() && !binary_archive.WriteColor(m_plot_color) )
+      break;
+    if ( HaveVisible() && !binary_archive.WriteBool(m_bVisible) )
+      break;
+    if ( HaveLocked() && !binary_archive.WriteBool(m_bLocked) )
+      break;
+    if ( HavePlotWeight() && !binary_archive.WriteDouble(m_plot_weight_mm) )
+      break;
+
+    rc = true;
+    break;
+  }
+
+  if ( !binary_archive.EndWrite3dmChunk() )
+    rc = false;
+
+  return rc;
+}
+
+// virtual ON_Object override
+ON_BOOL32 ON__LayerSettingsUserData::Read(ON_BinaryArchive& binary_archive)
+{
+  Defaults();
+
+  int major_version = 0;
+  int minor_version = 0;
+  bool rc = binary_archive.BeginRead3dmChunk(TCODE_ANONYMOUS_CHUNK,&major_version,&minor_version);
+  if ( !rc )
+    return false;
+
+  rc = false;
+  while ( 1 == major_version )
+  {
+    if ( !binary_archive.ReadInt(&m_settings) )
+      break;
+    if ( HaveColor() && !binary_archive.ReadColor(m_color) )
+      break;
+    if ( HavePlotColor() && !binary_archive.ReadColor(m_plot_color) )
+      break;
+    if ( HaveVisible() && !binary_archive.ReadBool(&m_bVisible) )
+      break;
+    if ( HaveLocked() && !binary_archive.ReadBool(&m_bLocked) )
+      break;
+    if ( HavePlotWeight() && !binary_archive.ReadDouble(&m_plot_weight_mm) )
+      break;
+    rc = true;
+    break;
+  }
+
+  if ( !binary_archive.EndRead3dmChunk() )
+    rc = false;
+
+  return rc;
+}
+
+// virtual ON_UserData override
+ON_BOOL32 ON__LayerSettingsUserData::Archive() const
+{
+  // don't save empty settings
+  return HaveSettings();
+}
+
+// virtual ON_UserData override
+ON_BOOL32 ON__LayerSettingsUserData::GetDescription( ON_wString& description )
+{
+  description = L"Saved Layer Settings";
+  return true;
+}
+
+
+
+void ON_Layer::SaveSettings( unsigned int settings, bool bUpdate )
+{
+  ON__LayerSettingsUserData* ud;
+  if ( 0 == (settings & ON__LayerSettingsUserData::valid_settings) )
+  {
+    if ( !bUpdate )
+    {
+      // delete any existing user data
+      ud = ON__LayerSettingsUserData::LayerSettings(*this,false);
+      if ( ud )
+      {
+        delete ud;
+        ud = 0;
+      }
+    }
+  }
+  else
+  {
+    ud = ON__LayerSettingsUserData::LayerSettings(*this,true);
+    if ( !bUpdate )
+    {
+      ud->Defaults();
+      ud->m_settings = settings;
+    }
+    else
+    {
+      ud->m_settings |= settings;
+    }
+    if ( ud->HaveColor() )
+      ud->m_color = m_color;
+    if ( ud->HavePlotColor() )
+      ud->m_plot_color = m_plot_color;
+    if ( ud->HaveVisible() )
+      ud->m_bVisible = m_bVisible;
+    if ( ud->HaveLocked() )
+      ud->m_bLocked = m_bLocked;
+    if ( ud->HavePlotWeight() )
+      ud->m_plot_weight_mm = m_plot_weight_mm;
+  }
+}
+
+unsigned int ON_Layer::SavedSettings() const
+{
+  const ON__LayerSettingsUserData* ud = ON__LayerSettingsUserData::LayerSettings(*this,false);
+  return ( 0 != ud ? ud->m_settings : 0 );
+}
+
+bool ON_Layer::GetSavedSettings( ON_Layer& layer, unsigned int& settings ) const
+{
+  const ON__LayerSettingsUserData* ud = ON__LayerSettingsUserData::LayerSettings(*this,false);
+  if ( 0 == ud )
+    return false;
+  bool rc = false;
+
+  if ( ud->HaveColor() )
+  {
+    layer.m_color = ud->m_color;
+    rc = true;
+  }
+
+  if ( ud->HavePlotColor() )
+  {
+    layer.m_plot_color = ud->m_plot_color;
+    rc = true;
+  }
+
+  if ( ud->HaveVisible() )
+  {
+    layer.m_bVisible = ud->m_bVisible;
+    rc = true;
+  }
+
+  if ( ud->HaveLocked() )
+  {
+    layer.m_bLocked = ud->m_bLocked;
+    rc = true;
+  }
+
+  if ( ud->HavePlotWeight() )
+  {
+    layer.m_plot_weight_mm = ud->m_plot_weight_mm;
+    rc = true;
+  }
+
+  return true;
+}
 

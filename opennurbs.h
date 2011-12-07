@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2009 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -12,6 +13,7 @@
 //
 ////////////////////////////////////////////////////////////////
 */
+
 
 ////////////////////////////////////////////////////////////////
 //
@@ -33,10 +35,13 @@
 #include "opennurbs_rand.h"         /* random number generator */
 #include "opennurbs_crc.h"          /* cyclic redundancy check tool */
 #include "opennurbs_uuid.h"         /* universally unique identifiers (UUID, a.k.a, GUID) */
+#include "opennurbs_unicode.h"      /* unicode string conversion */
 
 #if defined(ON_CPLUSPLUS)
 
+#include "opennurbs_fsp.h"            // fixed size memory pool
 #include "opennurbs_string.h"         // dynamic string classes (single and double byte)
+#include "opennurbs_compress.h"
 #include "opennurbs_base64.h"         // base64 encodeing and decoding
 #include "opennurbs_color.h"          // R G B color
 #include "opennurbs_linestyle.h"      // line pattern, scale, and width
@@ -53,7 +58,6 @@
 #include "opennurbs_plane.h"          // simple 3d plane
 #include "opennurbs_circle.h"         // simple 3d circle
 #include "opennurbs_ellipse.h"        // simple 3d ellipse
-#include "opennurbs_x.h"              // intersection events
 #include "opennurbs_line.h"           // simple line
 #include "opennurbs_polyline.h"       // simple polyline
 #include "opennurbs_cylinder.h"       // simple 3d elliptical cylinder

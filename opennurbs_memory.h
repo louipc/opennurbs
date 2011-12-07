@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -118,86 +119,6 @@ void ON_MemoryManagerEnd(void);
 //   is called.  If onmemdup() returns NULL, then NULL is returned.
 //   If src is NULL, then NULL is returned.
 //               
-//
-// ON_register_memory_error_handler( ON_memory_error_handler my_handler );
-//
-//    Use this function to specify the error handler function that will be called
-//    if an error occures.  See the description of ON_memory_error_handler() for the
-//    error handler function specification.
-//
-// int ON_memory_error_handler( int error_number );
-//
-//   This function is called when an error occurs.  The values of error_number
-//   are:
-//
-//     0: There is not enough memory to satisfy an onmalloc() or onrealloc()
-//        request.
-//
-//        If ON_memory_error_handler() returns 0, then onmalloc() or onrealloc()
-//        returns NULL.  If ON_memory_error_handler() returns 1, the allocation
-//        is attempted again.
-//
-//     1: An invalid pointer was passed to onrealloc().
-//
-//        If ON_memory_error_handler() returns 0, then onrealloc() returns NULL.
-//        If ON_memory_error_handler() returns 1, the reallocation is attempted
-//        again;
-//
-//     2: An invalid pointer was passed to onfree().
-//
-//        If ON_memory_error_handler() returns 0, then free() returns.
-//        If ON_memory_error_handler() returns 1, the deallocation is
-//        attempted again;
-//
-//     3: An query to onmsize() returned 0 or 0xFFFFFFFF.
-//
-//        If ON_memory_error_handler() returns 0, then onmsize() returns 0.
-//        If ON_memory_error_handler() returns 1, the query is
-//        attempted again;
-//
-// These functions allow you to direct a memory request to a specific pool.  If
-// you have not implemented custom memory pool management, these behave exactly
-// like onmalloc(), oncalloc(), and onfree().
-// 
-//   void* onmalloc_from_pool( ON_MEMORY_POOL*, site_t sz );
-//   void* oncalloc_from_pool( ON_MEMORY_POOL*, size_t num, size_t sz );
-//   void* onrealloc_from_pool( ON_MEMORY_POOL*, void* p, size_t sz );
-*/
-
-/* ^^^ see comments above for details ^^^ */
-
-/*
-/////////////////////////////////////////////////////////////
-//
-// Memory error handler - the default handler does nothing.
-//
-// 
-// See opennurbs_memory.c for instructions on using
-// custom memory managers.
-//
-// ON_memory_error_register_handler() returns a pointer to
-// the handler you are replacing.  If you pass a NULL,
-// the default memory error handler is used.  The default 
-// memory error handler returns 0 for all errors.
-//
-// The input to ON_memory_error_handler(int) is:
-//
-//   0: malloc/calloc/realloc request returned NULL
-//   1: invalid pointer passed to realloc()
-//   2: invalid pointer passed to free()
-//   3: msize query returned zero or 0xFFFFFFFF
-//
-// If ON_memory_error_handler(int) returns
-//
-//   0: The malloc()/calloc()/realloc()/msize() request returns 0.
-//   1: The call to malloc()/calloc()/realloc()/msize() is repeated.
-//  
-*/
-
-/*
-/////////////////////////////////////////////////////////////
-//
-// Heap tools
 //
 */
 

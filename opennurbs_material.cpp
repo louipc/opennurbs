@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -2199,41 +2200,9 @@ int ON_TextureMapping::EvaluateBoxMapping(
   return side0;
 }
 
-static bool TC_AtSrfp(ON_Interval srf_domain[2], ON_Interval packed_tex_domain[2], bool packed_tex_rotate, const ON_2dPoint & ptSrfp, ON_3dPoint& uv)
-{
-	const double a = srf_domain[0].NormalizedParameterAt(ptSrfp.x);
-	const double b = srf_domain[1].NormalizedParameterAt(ptSrfp.y);
-	if (packed_tex_rotate)
-	{
-		uv.x = packed_tex_domain[0].ParameterAt(1 - b);
-		uv.y = packed_tex_domain[1].ParameterAt(a);
-	}
-	else
-	{
-		uv.x = packed_tex_domain[0].ParameterAt(a);
-		uv.y = packed_tex_domain[1].ParameterAt(b);
-	}
-	return true;
-}
-
-static bool TC_AtSrfp(const ON_Surface& surface, const ON_2dPoint & ptSrfp, ON_3dPoint& uv)
-{
-	ON_Interval srf_domain[2];
-	srf_domain[0] = surface.Domain(0);
-	srf_domain[1] = surface.Domain(1);
-
-	ON_Interval packed_tex_domain[2];
-	packed_tex_domain[0].Set(0.0, 1.0);
-	packed_tex_domain[1].Set(0.0, 1.0);
-
-	bool packed_tex_rotate = false;
-
-	return TC_AtSrfp(srf_domain, packed_tex_domain, packed_tex_rotate, ptSrfp, uv);
-}
-
 int ON_TextureMapping::EvaluateMeshMapping(const ON_3dPoint& P, const ON_3dVector& N, const ON_Mesh* mesh, ON_3dPoint* T) const
 {
-	return 0;
+  return 0;
 }
 
 int ON_TextureMapping::EvaluateSurfaceMapping( 
@@ -2243,56 +2212,7 @@ int ON_TextureMapping::EvaluateSurfaceMapping(
   ON_3dPoint* T
   ) const
 {
-	ON_3dPoint rst(m_Pxyz*P);
-
-	if ( srf )
-	{
-		ON_3dPoint uv(ON_UNSET_VALUE,ON_UNSET_VALUE,0.0);
-		
-		if ( ray_projection == m_projection )
-		{
-			ON_3dVector n(m_Nxyz*N);
-			if ( n.Unitize() )
-			{
-				ON_Line L(rst,rst+n);
-				ON_SimpleArray<ON_X_EVENT> x;
-				if ( L.IntersectSurface(srf,x) > 0 )
-				{
-					double t0, t1;
-					int i;
-					const ON_X_EVENT& e0 = x[0];
-					t0 = e0.m_a[0];
-					uv.x = e0.m_b[0];
-					uv.y = e0.m_b[1];
-					for ( i = 1; i < x.Count() && t0 < 0.0; i++ )
-					{
-						const ON_X_EVENT& e = x[i];
-						t1 = e.m_a[0];
-						if ( 1 == BestHitHelper(t0,t1) )
-						{
-							t0 = t1;
-							uv.x = e.m_b[0];
-							uv.y = e.m_b[1];
-						}
-					}
-				}
-			}
-		}
-		if (!uv.IsValid())
-		{
-			srf->GetClosestPoint(rst, &uv.x, &uv.y);
-		}
-
-		if ( uv.IsValid() )
-		{
-			// Convert surface paramters to texture coordinates
-			const ON_2dPoint ptSrfp(uv.x, uv.y);
-			if (true == TC_AtSrfp(*srf, ptSrfp, uv))
-				rst = uv;
-		}
-	}
-	*T = m_uvw*rst;
-	return 1;
+  return 0;
 }
 
 class CBrepFaceMappingData
@@ -2333,6 +2253,47 @@ public:
 	ON__UINT32 m_brepDataCRC;
 	ON_UUID m_brepModelObjectId;
 };
+
+class CBrepMappingDataCache
+{
+public:
+	CBrepMappingDataCache() {}
+	~CBrepMappingDataCache() {}
+
+	bool GetBrepFaceMappingData(const ON_Brep * pBrep, int face, CBrepFaceMappingData & brepFaceMappingDataOut);
+protected:
+
+	ON_ClassArray<CBrepMappingData> m_aDataBlocks[0x20];
+};
+
+bool CBrepMappingDataCache::GetBrepFaceMappingData(const ON_Brep * pBrep, int face, CBrepFaceMappingData & brepFaceMappingDataOut)
+{
+	if (NULL == pBrep || face < 0)
+		return false;
+
+	const ON_UUID brepModelObjectId = pBrep->ModelObjectId();
+	const ON__UINT32 brepDataCRC = pBrep->DataCRC(123456789);
+	const unsigned int blockIndex = (brepDataCRC & 0x1F);
+	CBrepMappingData brepMappingData(brepDataCRC, brepModelObjectId);
+	const int brepMappingDataIndex = m_aDataBlocks[blockIndex].BinarySearch(&brepMappingData, CBrepMappingData::Compare);
+
+	if (0 <= brepMappingDataIndex)
+	{
+		const CBrepMappingData & brepMappingData = m_aDataBlocks[blockIndex][brepMappingDataIndex];
+		if (brepMappingData.m_faceData.Count() <= face)
+			return false;
+
+		brepFaceMappingDataOut = brepMappingData.m_faceData[face];
+
+		return true;
+	}
+
+  return false;
+}
+
+void ON_TextureMapping::SetAdvancedBrepMappingToolFunctions(TEXMAP_INTERSECT_LINE_SURFACE pFnILS, TEXMAP_BREP_FACE_CLOSEST_POINT pFnBFCP)
+{
+}
 
 int ON_TextureMapping::EvaluateBrepMapping( const ON_3dPoint& P, const ON_3dVector& N, const ON_Brep* brep,	ON_3dPoint* T) const
 {
@@ -2465,11 +2426,19 @@ ON__UINT32 ON_TextureMapping::MappingCRC() const
           crc32 = surface->DataCRC(crc32);
         }
         break;
+
+      case ON_TextureMapping::no_mapping:
+      case ON_TextureMapping::srfp_mapping:
+      case ON_TextureMapping::plane_mapping:
+      case ON_TextureMapping::cylinder_mapping:
+      case ON_TextureMapping::sphere_mapping:
+      case ON_TextureMapping::box_mapping:
+      case ON_TextureMapping::force_32bit_mapping_projection:
       default:
-        // Intentionally ignoring other ON_TextureMapping::TYPE values
         break;
       }
     }
+
   }
 
   crc32 = ON_CRC32(crc32,sizeof(m_uvw), &m_uvw);
@@ -2796,6 +2765,7 @@ bool ON_TextureMapping::GetTextureCoordinates(
 
 		if (clspt_projection == m_projection && ON_TextureMapping::mesh_mapping_primitive == m_type && NULL != m_mapping_primitive)
 		{
+      return false;
 		}
 		else if ( mesh_N &&
           (   ray_projection == m_projection 
@@ -3618,8 +3588,12 @@ void AdjustSingleBoxTextureCoordinatesHelper(
         d = d1;
       }
     }
-    if ( d <= 0.0f )
-      continue;
+
+    // Jussi, 5th September 2011:
+    // This 'continue' only works for faces having one or more of its tc's in (0,1)x(0,1).
+    // I have commented it out as a fix to RR 90329.
+    //if ( d <= 0.0f )
+    //  continue;
 
     for ( j = 0; j < fvicnt; j++ )
     {
@@ -4713,6 +4687,7 @@ bool ON_ObjectRenderingAttributes::AddMappingChannel(
     ON_MappingChannel& mc = mr->m_mapping_channels.AppendNew();
     mc.m_mapping_channel_id = mapping_channel_id;
     mc.m_mapping_id = mapping_id;
+    mc.m_mapping_index = -1; // 27th October 2011 John Croudy - constructor is not called by AppendNew().
     mc.m_object_xform.Identity();
     return true;
   }
@@ -4804,6 +4779,7 @@ bool ON_MappingRef::AddMappingChannel(
   ON_MappingChannel& mc   = m_mapping_channels.AppendNew();
   mc.m_mapping_channel_id = mapping_channel_id;
   mc.m_mapping_id         = mapping_id;
+  mc.m_mapping_index      = -1; // 27th October 2011 John Croudy - constructor is not called by AppendNew().
   mc.m_object_xform.Identity();
 
   return true;

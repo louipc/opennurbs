@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -20,10 +21,6 @@ class ON_Mesh;
 class ON_MeshVertexRef;
 class ON_MeshEdgeRef;
 class ON_MeshFaceRef;
-#if defined(OPENNURBS_PLUS)
-class ON_MMX_POINT;
-class ON_MESH_POINT;
-#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -33,6 +30,35 @@ class ON_CLASS ON_MeshParameters
 {
   // surface meshing perameters
 public:
+
+  enum MESH_STYLE
+  {
+    // All of these enum values must be in the range 0-255 because
+    // unsigned chars are use for storage in some locations.
+    unset_mesh_style      =   0,
+    render_mesh_fast      =   1, // Use ON_MeshParameters::FastRenderMesh
+    render_mesh_quality   =   2, // Use ON_MeshParameters::QualityRenderMesh
+    // 3 - 8 reserved for future predefined render mesh styles
+    render_mesh_custom    =   9,// Use ON_3dmSettings::m_CustomRenderMeshSettings
+    render_mesh_per_object = 10 // Use ON_Object::GetMeshParameters().
+  };
+
+  /*
+  Description:
+    Parameters that create render meshes where meshing
+    speed is prefered over mesh quality.
+  */
+  static 
+  const ON_MeshParameters FastRenderMesh;
+
+  /*
+  Description:
+    Parameters that create render meshes where mesh quality
+    is prefered over meshing speed.
+  */
+  static 
+  const ON_MeshParameters QualityRenderMesh;
+
   /*
   Description:
     Get a value to use for tolerance based on the relative_tolerance
@@ -97,16 +123,16 @@ public:
 
   /*
   Description:
-    Sets the meshing parameters to create "jagged and faster" 
-    render meshes.
+    Sets the meshing parameters to ON_MeshParameters::FastRenderMesh.
   */
+  ON_DEPRECATED
   void JaggedAndFasterMeshParameters();
 
   /*
   Description:
-    Sets the meshing parameters to create "smooth and slower" 
-    render meshes.
+    Sets the meshing parameters to ON_MeshParameters::QualityRenderMesh.
   */
+  ON_DEPRECATED
   void SmoothAndSlowerMeshParameters();
 
   /*
@@ -120,8 +146,19 @@ public:
   // Ignores m_min_tolerance setting.
   int Compare( const ON_MeshParameters& ) const;
 
+  /*
+  Description:
+    Compares all meshing parameters that control mesh geometry.
+    Does not compare m_bCustomSettings, m_bComputeCurvature, 
+    m_bDoublePrecision, m_min_tolerance, and m_texture_range.
+  */
+  int CompareGeometrySettings( const ON_MeshParameters& ) const;
+
+
   bool Write( ON_BinaryArchive& ) const;
   bool Read( ON_BinaryArchive& );
+  ON__UINT32 DataCRC(ON__UINT32) const;
+
 
   // Meshing happens in two stages.  The first stage creates a
   // rectangular grid.  The second stage refines the grid until
@@ -161,7 +198,10 @@ public:
                              //         values in the DoublePrecisionVertices()
                              //         array.  Float precision values will also
                              //         be returned in the m_V[] array.
-  unsigned char m_reserved1;
+  bool m_bCustomSettingsEnabled; // false - if these settings should be ignored
+                             //         when used as per object custom render mesh 
+                             //         settings.
+                             //  true - ignore these settings.
   unsigned char m_mesher;    // 0 = slow mesher, 1 = fast mesher
     
   int m_texture_range;       // 1: normalized
@@ -180,6 +220,10 @@ public:
                              //          of [0,1]x[0,1].  (This texture style 
                              //          is suitable for creating texture maps 
                              //          with popular 3D painting programs.)
+
+private:
+  unsigned int m_reserved2;
+public:
                            
   // These controls are used in both stages
 
@@ -226,6 +270,8 @@ public:
   int     m_face_type;         // 0 = mixed triangle and quads
                                // 1 = all triangles
                                // 2 = all quads
+private:
+  unsigned int m_reserved3;
 };
 
 class ON_CLASS ON_MeshCurvatureStats
@@ -376,12 +422,85 @@ class ON_CLASS ON_MeshFace
 {
 public:
   int vi[4]; // vertex index - vi[2]==vi[3] for tirangles
+
+  /*
+  Returns:
+    True if vi[2] == vi[3];
+  Remarks:
+    Assumes the face is valid.
+  */
   bool IsTriangle() const;
+
+  /*
+  Returns:
+    True if vi[2] != vi[3];
+  Remarks:
+    Assumes the face is valid.
+  */
   bool IsQuad() const;
+
+  /*
+  Description:
+    Determine if a face is valid by checking that the vertices
+    are distinct.
+  Parameters:
+    mesh_vertex_count - [in]
+      number of vertices in the mesh
+    V - [in]
+      optional array of mesh_vertex_count vertex locations.
+  Returns:
+    true
+      The face is valid.
+    false
+      The face is not valid. It may be possible to repair the
+      face by calling ON_MeshFace::Repair().
+  */
   bool IsValid( 
-          int // number of vertices in mesh
+        int mesh_vertex_count
         ) const;
+  bool IsValid(
+        int mesh_vertex_count,
+        const ON_3fPoint* V
+        ) const;
+  bool IsValid(
+        int mesh_vertex_count,
+        const ON_3dPoint* V
+        ) const;
+
+  /*
+  Description:
+    Reverses the order of the vertices in v[].
+    vi[0] is not changed.
+  */
   void Flip();
+
+  /*
+  Description:
+    If IsValid() returns false, then you can use Repair()
+    to attempt to create a valid triangle. 
+  Parameters:
+    mesh_vertex_count - [in]
+      number of vertices in the mesh
+    V - [in]
+      optional array of mesh_vertex_count vertex locations.
+  Returns:
+    true
+     repair was successful and v[0], v[1], vi[2] have distinct valid
+     values and v[2] == v[3].
+    false
+     this face's vi[] values cannot be repaired    
+  */
+  bool Repair(
+        int mesh_vertex_count
+        );
+  bool Repair(
+        int mesh_vertex_count,
+        const ON_3fPoint* V
+        );
+  bool Repair(
+        int mesh_vertex_count,
+        const ON_3dPoint* V
+        );
 };
 
 struct ON_MeshFaceSide
@@ -392,6 +511,24 @@ struct ON_MeshFaceSide
   unsigned char  dir;   // 0 = counterclockwise, 1 = clockwise (reversed)
   unsigned short value; // Set to zero by ON_Mesh::GetFaceSideList(). Can be used as needed.
 };
+
+
+/*
+Description:
+  Sort the sides[] array of ON_MeshFaceSide structs in dictionary
+  order by "vi[0]", "vi[1]", "fi", and "side" values.
+Paramters:
+  sides_count - [in]
+    number of elements in the sides[] array.
+  sides - [in/out]
+Remarks:
+  The function is thread safe.
+*/
+ON_DECL
+void ON_SortMeshFaceSidesByVertexIndex( 
+        int sides_count, 
+        struct ON_MeshFaceSide* sides 
+        );
 
 struct ON_MeshPart
 {
@@ -515,15 +652,16 @@ public:
   // returns index of edge that connects topological vertices
   // returns -1 if no edge is found.
   int TopEdge(
-    int, int // ON_MeshTopology vertex topology indices
+    int vtopi0,
+    int vtopi1 // ON_MeshTopology vertex topology indices
     ) const;
 
   ////////
   // returns ON_MeshTopology vertex topology index of a face
   // corner.  The face is triangle iv TopFaceVertex(2) = TopFaceVertex(3)
   bool GetTopFaceVertices(
-    int, // ON_MeshTopology face topology index (= ON_Mesh face index)
-    int[4] // ON_MeshTopology vertex indices returned here
+    int topfi,    // ON_MeshTopology face topology index (= ON_Mesh face index)
+    int topvi[4]  // ON_MeshTopology vertex indices returned here
     ) const;
 
   /*
@@ -644,9 +782,9 @@ private:
   } *m_memchunk;
 
   // NOTE: this field is a bool with valid values of 0 and 1.
-  int m_b32IsValid; //    0: Not Valid
+  volatile int m_b32IsValid; // sizeof(m_bIsValid) must be 4 - it is used in sleep locks.
+                    //    0: Not Valid
                     //    1: Valid
-
 private:
   // no implementation
   ON_MeshTopology(const ON_MeshTopology&);
@@ -774,11 +912,6 @@ public:
   void Transform( const ON_Xform& xform );
   void Set(const ON_TextureMapping& mapping);
 
-  /*
-  Description:
-    Sets the tag to the value the meshes have that
-    come out of ON_Brep::CreateMesh().
-  */
   void SetDefaultSurfaceParameterMappingTag();
 
   int Compare( const ON_MappingTag& other,
@@ -959,12 +1092,6 @@ public:
         );
 
   // virtual ON_Geometry override
-  bool Morph( const ON_SpaceMorph& morph );
-
-  // virtual ON_Geometry override
-  bool IsMorphable() const;
-
-  // virtual ON_Geometry override
   bool EvaluatePoint( const class ON_ObjRef& objref, ON_3dPoint& P ) const;
 
 
@@ -1060,6 +1187,7 @@ public:
   int FaceCount() const;
   int QuadCount() const; // number of faces that are quads
   int TriangleCount() const; // number of faces that are triangles
+  int InvalidFaceCount() const; // number of face that have invalid m_vi[] values.
   bool HasVertexNormals() const; // normals at vertices
   bool HasFaceNormals() const;
   bool HasTextureCoordinates() const;
@@ -1133,7 +1261,51 @@ public:
   bool ComputeFaceNormals();   // compute face normals for all faces
   bool ComputeFaceNormal(int); // computes face normal of indexed face
 
+  /*
+  Description:
+    Get a list of pairs of faces that clash.
+  Parameters:
+    max_pair_count - [in]
+      If max_pair_count > 0, then at most this many pairs
+      will be appended to the clashing_pairs[] array.
+      If max_pair_count <= 0, then all clashing pairs
+      will be appended to the clashing_pairs[] array.
+    clashing_pairs - [out]
+      The faces indices of clashing pairs are appended
+      to this array. 
+  Returns:
+    Number of pairs appended to clashing_pairs[].
+  */
+  int GetClashingFacePairs( 
+    int max_pair_count,
+    ON_SimpleArray< ON_2dex >& clashing_pairs
+    ) const;
+
+  /*
+  Description:
+    Cull clashing faces from the mesh.
+  Parameters:
+    what_to_cull - [in]
+      0: when a pair of faces clash, cull both faces
+      1: when a pair of faces clash, leave the face with the
+         longest edge.
+      2: when a pair of faces clash, cull the face with the
+         longest edge.
+      3: when a pair of faces clash, leave the face with
+         the largest area.
+      4: when a pair of faces clash, cull the face with
+         the largest area.
+  Returns:
+    Number of faces culled from the mesh.
+  Remarks:
+    If a large face clashes with many small faces, the large
+    face and one small face will be removed.  When a degenerate
+    face is encountered, it is also culled.
+  */
+  int CullClashingFaces( int what_to_cull );
+
   int CullDegenerateFaces(); // returns number of degenerate faces
+
   int CullUnusedVertices(); // returns number of culled vertices
 
   // Description:
@@ -1239,6 +1411,19 @@ public:
 
   /*
   Description:
+    Append a list of meshes. This function is much more efficient
+    than making repeated calls to ON_Mesh::Append(const ON_Mesh&)
+    when lots of meshes are being joined into a single large mesh.
+  Parameters:
+    count - [in]
+      length of meshes[] array.
+    meshes - [in]
+      array of meshes to append.
+  */
+  void Append( int count, const ON_Mesh* const* meshes );
+  
+  /*
+  Description:
     Expert user function to set m_is_closed member.  
     Setting this value correctly after a mesh is constructed 
     can save time when IsClosed() is called.
@@ -1342,6 +1527,36 @@ public:
     ON_Mesh::IsManifold
   */
   bool IsSolid() const;
+
+  /*
+  Description:
+    Determine if a point is inside a solid brep.
+  Paramters:
+    test_point - [in]
+    tolerance - [in] >= 0.0
+      3d distance tolerance used for ray-mesh intersection
+      and determining strict inclusion.
+    bStrictlyInside - [in] 
+      If bStrictlyInside is true, then test_point must be inside mesh
+      by at least tolerance in order for this function to return
+      true. If bStrictlyInside is false, then this function will return
+      true if test_point is inside or the distance from test_point to
+      a mesh face is <= tolerance.
+  Returns:
+    True if test_point is inside the solid mesh.
+  Remarks:
+    The caller is responsible for making certing the mesh is
+    solid before calling this function. If the mesh is not
+    solid, the behavior is unpredictable.
+  See Also:
+    ON_Mesh::IsSolid()
+  */
+  bool IsPointInside(
+          ON_3dPoint test_point, 
+          double tolerance,
+          bool bStrictlyInside
+          ) const;
+
 
   /*
   Description:
@@ -1523,97 +1738,6 @@ public:
       int edge_type_partition[5] 
       ) const;
 
-
-
-
-
-#if defined(OPENNURBS_PLUS)
-
-  /*
-  Description:
-    Get the point on the mesh that is closest to P.
-  Parameters:
-    P - [in] test point
-    Q - [out] point on the mesh
-    maximum_distance = 0.0 - [in] 
-            optional upper bound on the distance 
-            from P to the mesh.  If you are only 
-            interested in finding a point Q on the 
-            mesh when P.DistanceTo(Q) < maximum_distance, 
-            then set maximum_distance to that value.
-  Returns:
-    True if successful.  If false, the value of Q
-    is undefined.
-  */
-  bool GetClosestPoint(
-          const ON_3dPoint& P,
-          ON_MESH_POINT* Q,
-          double maximum_distance = 0.0
-          ) const;
-
-  /*
-  Description:
-    Quickly intersect this mesh with meshB.  Ignore overlaps
-    and near misses.
-  Parameters:
-    meshB - [in]
-    lines - [out] Intersection lines are appended to
-                  this list.
-  Returns:
-    number of lines appended to lines[] array.
-  Remarks:
-    The InstersectMesh function will will create a meshtree, a mesh topology 
-    and face normals of this mesh and meshB. Note: if you create these in 
-    multiple memory pools you run the risk of crashing or leaking memory if
-    you are not careful.
-  */
-  int IntersectMesh( 
-          const ON_Mesh& meshB,
-          ON_SimpleArray<ON_Line>& lines
-          ) const;
-
-  /*
-  Description:
-    Carefully intersect this mesh with meshB.
-  Parameters:
-    meshB - [in]
-    x - [out] Each element of x is a polyline of ON_MMX_POINTs.
-    intersection_tolerance - [in]
-    overlap_tolerance - [in]
-  Returns:
-    number of olylines appended to x[] array.
-  Remarks:
-    The InstersectMesh function will will create a meshtree, a mesh topology 
-    and face normals of this mesh and meshB. Note: if you create these in 
-    multiple memory pools you run the risk of crashing or leaking memory if
-    you are not careful.
-  */
-  int IntersectMesh( 
-          const ON_Mesh& meshB,
-          ON_ClassArray< ON_SimpleArray< ON_MMX_POINT > >& x, 
-          double intersection_tolerance = 0.0,
-          double overlap_tolerance = 0.0
-          ) const;
-
-
-  /*
-  Description:
-    Intersect this mesh with an infinite plane.
-  Parameters:
-    plane_equation - [in]
-    lines - [out] Intersection lines are appended to
-                  this list.
-  Returns:
-    number of lines appended to lines[] array.
-  */
-  int IntersectPlane( 
-          ON_PlaneEquation plane_equation,
-          ON_SimpleArray<ON_Line>& lines
-          ) const;
-
-
-#endif
-
   ///////////////////////////////////////////////////////////////////////
   //
   // mesh editing
@@ -1789,6 +1913,20 @@ public:
     ON_Mesh* mesh 
     ) const;
 
+  /*
+  Description:
+    Create a mesh that is a single face of this mesh.
+  Parameters:
+  Returns:
+    A pointer to the submesh.  If the input mesh parameter is null,
+    then the caller must delete this mesh when it is no longer needed.
+    If the input is invalid, then null is returned.
+  */
+  ON_Mesh* DuplicateFace( 
+    int face_index,
+    ON_Mesh* mesh 
+    ) const;
+
   ///////////////////////////////////////////////////////////////////////
   //
   // mesh N-gon lists.  
@@ -1959,6 +2097,23 @@ public:
     values in this array, you must make the same modifications
     to the single precision vertices, or call 
     UpdateSinglePrecisonVertices().
+  Example:
+
+          // add a bunch of double precision information
+          ON_3dPointArray& dv = mesh.DoublePrecisionVertices();
+          for ( i = 0; i < lots; i++ )
+          {
+            dv[i] = ...
+          }
+          // This call updates the single precison values
+          // in m_V[] and sets all the counts and CRCs that
+          // are used in validity checking.
+          mesh.UpdateSinglePrecisonVertices();
+    
+  Remarks:
+    Avoid mulitple calls to DoublePrecisionVertices().
+    It is most efficient to make one call, save a local 
+    reference, and use the local reference as needed.
   */
   ON_3dPointArray& DoublePrecisionVertices();
   const ON_3dPointArray& DoublePrecisionVertices() const;
@@ -2473,7 +2628,6 @@ bool ON_ClosestPointToTriangle(
         double* a, double* b, double* c
         );
 
-
 /*
 Description:
   Finds the barycentric coordinates of the point on a 
@@ -2507,6 +2661,89 @@ bool ON_ClosestPointToTriangleFast(
           double* a, double* b, double* c
           );
 
+/*
+Description:
+  Finds the barycentric coordinates of a pair of points on two
+  triangles that are as close as any other pair.
+Parameters:
+  A - [in] first triangle corners
+  B - [in] second triangle corners
+  a - [out] barycentric coordinates for triangle A
+  b - [out] barycentric coordinates for triangle B
+
+        If ON_ClosestPointBetweenTriangles() returns true, then
+        (a[0])*A[0] + (a[1])*A[1] + (a[2])*A[2] is the point on  
+        triangle A and  (b[0])*B[0] + (b[1])*B[1] + (b[2])*B[2] is
+        the point on triangle B.  It is 
+        always the case that a[0]+a[1]+a[2] = 1, a[0]>=0, a[1]>0, a[2]>0,
+        b[0]+b[1]+b[2] = 1, b[0]>=0, b[1]>0, b[2]>0
+Returns:
+  True if successful.  
+*/
+ON_DECL
+bool ON_ClosestPointBetweenTriangles(const ON_3dPoint A[3],
+                                     const ON_3dPoint B[3],
+                                     double a[3],
+                                     double b[3]
+                                     );
+
+/*
+Description:
+  Finds the barycentric coordinates of a pair of points on two
+  triangles that are as close as any other pair.
+Parameters:
+  Tri - [in] triangle corners
+  Quad - [in] quad corners in order around the quad
+  t - [out] barycentric coordinates for Tri
+  q - [out] barycentric coordinates for Quad
+
+        If ON_ClosestPointBetweenTriangleAndQuad() returns true, then
+        (t[0])*Tri[0] + (t[1])*Tri[1] + (t[2])*Tri[2] is the point on  
+        Tri and  (q[0])*Quad[0] + (q[1])*Quad[1] + (q[2])*Quad[2] + (q[3])*Quad[3] is
+        the point on Quad.  It is 
+        always the case that t[0]+t[1]+t[2] = 1, t[0]>=0, t[1]>0, t[2]>0,
+        q[0]+q[1]+q[2]+q[3] = 1, q[0]>=0, q[1]>0, q[2]>0, q[3].
+        The surface of Quad is defined to be the two triangle surfaces, 
+        <Quad[0], Quad[1], Quad[2]> and <Quad[2], Quad[3], Quad[0]>.  It will always be
+        the case that either q[1]=0 or q[3]=0.
+Returns:
+  True if successful.  
+*/
+ON_DECL
+bool ON_ClosestPointBetweenTriangleAndQuad(const ON_3dPoint Tri[3],
+                                           const ON_3dPoint Quad[4],
+                                           double t[3],
+                                           double q[4]
+                                           );
+
+/*
+Description:
+  Finds the barycentric coordinates of a pair of points on two
+  triangles that are as close as any other pair.
+Parameters:
+  A - [in] first quad corners, in order around the quad
+  B - [in] second quad corners, in order around the quad
+  a - [out] barycentric coordinates for quad A
+  b - [out] barycentric coordinates for quad B
+
+        If ON_ClosestPointBetweenQuads() returns true, then
+        (a[0])*A[0] + (a[1])*A[1] + (a[2])*A[2] + (a[3])*A[3] is the point on  
+        quad A and  (b[0])*B[0] + (b[1])*B[1] + (b[2])*B[2] + (b[3])*B[3] is
+        the point on quad B.  It is 
+        always the case that a[0]+a[1]+a[2]+a[3] = 1, a[0]>=0, a[1]>0, a[2]>0, a[3]>0.
+        b[0]+b[1]+b[2]+b[3] = 1, b[0]>=0, b[1]>0, b[2]>0, b[3]>0
+        The surface of Quad is defined to be the two triangle surfaces, 
+        <Quad[0], Quad[1], Quad[2]> and <Quad[2], Quad[3], Quad[0]>.  It will always be
+        the case that either q[1]=0 or q[3]=0.
+Returns:
+  True if successful.  
+*/
+ON_DECL
+bool ON_ClosestPointBetweenQuads(const ON_3dPoint A[4],
+                                 const ON_3dPoint B[4],
+                                 double a[4],
+                                 double b[4]
+                                 );
 
 /*
 Description:
@@ -2574,6 +2811,159 @@ ON_3dVector ON_TriangleNormal(
         const ON_3dPoint& B,
         const ON_3dPoint& C
         );
+
+
+/*
+Description:
+  Finds the unit normal to the triangle
+Parameters:
+  A - [in] triangle corner
+  B - [in] triangle corner
+  C - [in] triangle corner
+  a - [out] must not be null
+  b - [out] must not be null
+  c - [out] must not be null
+  d - [out] must not be null
+    The equation of the plane is a*x + b*y + c*z + d = 0
+  ev_tol - [out]
+    If ev_tol is not null, then it is the maximum absolute
+    value of the plane equation evaluated at A,B,C.  Mathematically,
+    ev_tol is zero.  Since these computations are performed with
+    finite precision doubles, ev_tol is generally not zero.
+Returns:
+  Unit normal
+*/
+ON_DECL
+bool ON_GetTrianglePlaneEquation(
+        const ON_3dPoint& A,
+        const ON_3dPoint& B,
+        const ON_3dPoint& C,
+        double* a,
+        double* b,
+        double* c,
+        double* d,
+        double* evaluation_tol
+        );
+
+/*
+Description:
+  Triangulate a 2D simple closed polygon.
+Parameters:
+  point_count - [in] number of points in polygon ( >= 3 )
+  point_stride - [in]
+  P - [in] 
+    i-th point = (P[i*point_stride], P[i*point_stride+1])
+  tri_stride - [in]
+  triangle - [out]
+    array of (point_count-2)*tri_stride integers
+Returns:
+  True if successful.  In this case, the polygon is trianglulated into 
+  point_count-2 triangles.  The indices of the 3 points that are the 
+  corner of the i-th (0<= i < point_count-2) triangle are
+    (triangle[i*tri_stride], triangle[i*tri_stride+1], triangle[i*tri_stride+2]).
+Remarks:
+  Do NOT duplicate the start/end point; i.e., a triangle will have
+  a point count of 3 and P will specify 3 distinct non-collinear points.
+*/
+ON_DECL
+bool ON_Mesh2dPolygon( 
+          int point_count,
+          int point_stride,
+          const double* P,
+          int tri_stride,
+          int* triangle 
+          );
+
+/*
+Description:
+  Fill in a 2d region with triangles.
+Parameters:
+  point_count - [in] number of 2d points.
+  point_stride - [in] i-th point = (point[j],point[j+1]), where
+                      j = i*point_stride.
+  point - [in] 2d point locations.  It is ok to include points that are inside the region
+               but not at the ednd of an edge.  Duplicate points are not permitted.
+  edge_count - [in] number of edges (if 0, then the input list of point
+                    is treated as a counterclockwise closed polyline.
+  edge_stride - [in] i-th edge connects points (edge[j],edge[j+1]) where
+                     j = i*edge_stride.
+  edge - [in] indices of edge ends.  Edges should intersect only at shared end points.
+  edge_side - [in] if NULL, the triangles are built on the left side
+                   of the edges.  If not NULL, then
+                   edge[i] determines which side(s) of the edge need
+                   triangles.  1 = left side only, 2 = right side only, 3 = both sides
+  triangles - [out]  triangles are appended to this list.  The (i,j,k) are
+                     vertex indices.
+  new_points - [out] 
+    If this paramter is present and the edges intersect, then a point is
+    created at the intersection. The index used in the triangles to
+    reference the point new_points[i] is (point_count+i).
+Returns:
+  Number of triangles appended to triangles[] array.
+*/
+ON_DECL
+int ON_Mesh2dRegion(
+          int point_count,
+          int point_stride,
+          const double* point,
+          int edge_count,
+          int edge_stride,
+          const int* edge,
+          const int* edge_side,
+          ON_SimpleArray<ON_3dex>& triangles
+          );
+
+/*
+Description:
+  Fill in a 2d region with triangles.
+Parameters:
+  point_count - [in] 
+    number of 2d points.
+  point_stride - [in] 
+    i-th point = (point[j],point[j+1]), where j = i*point_stride.
+  point - [in] 
+    2d point locations.  It is ok to include points that are inside 
+    the region but not at the end of an edge.  
+    Duplicate points are not permitted.
+  edge_count - [in] 
+    number of edges (if 0, then the input list of point
+    is treated as closed polyline.
+  edge_stride - [in] 
+    i-th edge connects points (edge[j],edge[j+1]) where j = i*edge_stride.
+  edge - [in] 
+    indices of edge ends. If any edges intersect, then the intersection point is
+    returned in new_points[].
+  edge_side_stride - [in]
+    i-th edge_side value is edge_side[i*edge_side_stride].
+    If the edge_side values are contant, you can set edge_side_stride = 0 
+    and pass the address of an unsigned char for edge_side.
+  edge_side - [in] 
+    If not null, then edge[i] determines which side(s) of the edge needs
+    triangles.  1 = left side only, 2 = right side only, 3 = both sides
+    If null, then the both sides of interior edges get triangles.
+  triangles - [out]  
+    triangles are appended to this list.  The (i,j,k) are
+    vertex indices.
+  new_points - [out] 
+    If this paramter is present and the edges intersect, then a point is
+    created at the intersection. The index used in the triangles to
+    reference the point new_points[i] is (point_count+i).
+Returns:
+  Number of triangles appended to triangles[] array.
+*/
+ON_DECL
+int ON_Mesh2dRegion(
+          unsigned int point_count,
+          unsigned int point_stride,
+          const double* point,
+          unsigned int edge_count,
+          unsigned int edge_stride,
+          const unsigned int* edge,
+          unsigned int edge_side_stride,
+          const unsigned char* edge_side,
+          ON_SimpleArray<ON_3dex>& triangles,
+          ON_SimpleArray<ON_2dPoint>& new_points
+          );
 
 #endif
 

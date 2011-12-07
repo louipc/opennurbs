@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -160,7 +161,6 @@ ON_BOOL32
 ON_ArcCurve::Transform( const ON_Xform& xform )
 {
   TransformUserData(xform);
-	DestroyCurveTree();
   return m_arc.Transform( xform );
 }
 
@@ -243,7 +243,6 @@ ON_BOOL32 ON_ArcCurve::SetDomain( double t0, double t1 )
     m_t.Set(t0,t1);
     rc = true;
   }
-	DestroyCurveTree();
   return rc;
 }
 
@@ -253,7 +252,6 @@ bool ON_ArcCurve::ChangeDimension( int desired_dimension )
   bool rc = (desired_dimension>=2 && desired_dimension<=3);
   if ( rc && m_dim != desired_dimension )
   {
-  	DestroyCurveTree();
     if ( desired_dimension == 2 )
       m_dim = 2;
     else
@@ -371,7 +369,6 @@ ON_ArcCurve::Reverse()
   if (rc)
 	{
     m_t.Reverse();
-		DestroyCurveTree();
 	}	
   return true;
 }
@@ -409,7 +406,6 @@ ON_BOOL32 ON_ArcCurve::SetStartPoint(ON_3dPoint start_point)
       }
     }
   }
-	DestroyCurveTree();
   return rc;  
 }
 
@@ -444,7 +440,6 @@ ON_BOOL32 ON_ArcCurve::SetEndPoint(ON_3dPoint end_point)
       }
     }
   }
-	DestroyCurveTree();
   return rc;  
 }
 
@@ -507,7 +502,6 @@ ON_BOOL32 ON_ArcCurve::Trim( const ON_Interval& in )
     {
       rc = false;
     }
-    DestroyCurveTree();
   }
   return rc;
 }
@@ -531,8 +525,6 @@ bool ON_ArcCurve::Extend(
     changed = true;
   }
   if (!changed) return false;
-
-  DestroyCurveTree();
 
   double a0 = m_arc.Domain().ParameterAt(Domain().NormalizedParameterAt(s0));
   double a1 = m_arc.Domain().ParameterAt(Domain().NormalizedParameterAt(s1));
@@ -573,7 +565,6 @@ ON_BOOL32 ON_ArcCurve::Split(
     left_arc = ON_ArcCurve::Cast(left_side);
     if ( 0 == left_arc )
       return false;
-    left_arc->DestroyCurveTree();
   }
 
   if ( 0 != right_side )
@@ -581,7 +572,6 @@ ON_BOOL32 ON_ArcCurve::Split(
     right_arc = ON_ArcCurve::Cast(right_side);
     if ( 0 == right_arc )
       return false;
-    right_arc->DestroyCurveTree();
   }
 
   if ( 0 == left_arc )
@@ -632,8 +622,8 @@ ON_BOOL32 ON_ArcCurve::Split(
     }
     if ( 0 == right_side && this != right_arc )
     {
-      right_arc = 0;
       delete right_arc;
+      right_arc = 0;
     }
   }
   return rc;
@@ -989,129 +979,6 @@ bool ON_Arc::GetNurbFormParameterFromRadian(double RadianParameter, double* Nurb
 	return true;
 
 }
-
-bool ON_ArcCurve::GetClosestPoint( const ON_3dPoint& test_point,
-        double* t,       // parameter of local closest point returned here
-        double maximum_distance,
-        const ON_Interval* sub_domain
-        ) const
-{
-  double a, s, d;
-  ON_Interval domain = Domain();
-  if (sub_domain)
-  {
-    if ( !sub_domain->IsIncreasing() )
-      return false;
-    domain.Intersection(*sub_domain);
-    if ( !domain.IsIncreasing() )
-      return false;
-  }
-
-
-  bool rc = m_arc.ClosestPointTo( test_point, &a );
-  if ( rc ) 
-  {
-    s = m_t.ParameterAt( m_arc.DomainRadians().NormalizedParameterAt(a) );
-    if ( sub_domain ) 
-    {
-      if ( s < sub_domain->Min() || s > sub_domain->Max())
-      {
-        double dist0 = test_point.DistanceTo(PointAt(domain[0]));
-        double dist1 = test_point.DistanceTo(PointAt(domain[1]));
-        s = domain[(dist0 <= dist1)?0:1];
-      }
-    }
-    if ( maximum_distance > 0.0 ) 
-    {
-      d = test_point.DistanceTo(PointAt(s));
-      if ( d > maximum_distance )
-        rc = false;
-    }
-    if (rc && t)
-      *t = s;
-  }
-  return rc;
-}
-
-ON_BOOL32 ON_ArcCurve::GetLength(
-        double* length,               // length returned here
-        double, // fractional_tolerance - formal parameter intentionally ignored in this virtual function
-        const ON_Interval* sub_domain // default = NULL
-        ) const
-{
-	if( sub_domain && sub_domain->IsDecreasing() ) 
-		return false;
-  else if ( sub_domain ) {
-		ON_Interval scratch_domain = m_t;
-		if( !scratch_domain.Intersection(*sub_domain))
-			return false;
-		else
-			sub_domain=&scratch_domain;
-    double a0 = m_arc.DomainRadians().ParameterAt(m_t.NormalizedParameterAt(sub_domain->Min()));
-    double a1 = m_arc.DomainRadians().ParameterAt(m_t.NormalizedParameterAt(sub_domain->Max()));
-    *length = fabs((a1-a0)*m_arc.radius);
-  }
-  else {
-    *length = m_arc.Length();
-  }
-  return true;
-}
-
-ON_BOOL32 ON_ArcCurve::GetNormalizedArcLengthPoint(
-        double s,
-        double* t,
-        double, // fractional_tolerance - formal parameter intentionally ignored in this virtual function
-        const ON_Interval* sub_domain
-        ) const
-{
-  ON_Interval domain = (sub_domain) ? *sub_domain : Domain();
-  *t = domain.ParameterAt(s);
-  return true;
-}
-
-ON_BOOL32 ON_ArcCurve::GetNormalizedArcLengthPoints(
-        int count,
-        const double* s,
-        double* t,
-        double, // absolute_tolerance   - formal parameter intentionally ignored in this virtual function
-        double, // fractional_tolerance - formal parameter intentionally ignored in this virtual function
-        const ON_Interval* sub_domain
-        ) const
-{
-  if ( count > 0 || s != NULL && t != NULL )
-  {
-    if ( !sub_domain )
-      sub_domain = &m_t;
-    int i;
-    for ( i = 0; i < count; i++ )
-    {
-      t[i] = sub_domain->ParameterAt( s[i] );
-    }
-  }
-  return true;
-}
-
-ON_BOOL32 ON_ArcCurve::GetLocalClosestPoint( const ON_3dPoint& test_point,
-        double seed_parameter,
-        double* t,
-        const ON_Interval* sub_domain
-        ) const
-{
-  if (!GetClosestPoint( test_point, t, 0.0, sub_domain ))
-    return false;
-
-  if (IsCircle() && (!sub_domain || sub_domain->Includes(Domain()))){
-    //if closest point is near seam, use seed do determine which side.
-    if (seed_parameter < Domain().ParameterAt(0.01) && *t > Domain().ParameterAt(0.99))
-      *t = Domain()[0];
-    else if (seed_parameter > Domain().ParameterAt(0.99) && *t < Domain().ParameterAt(0.01))
-      *t = Domain()[1];
-  }
-
-  return true;
-
-}
-
 
 int ON_ArcCurve::GetNurbForm( // returns 0: unable to create NURBS representation
                  //            with desired accuracy.

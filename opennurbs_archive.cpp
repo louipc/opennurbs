@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -14,6 +15,250 @@
 */
 
 #include "opennurbs.h"
+
+FILE* ON_FileStream::Open( const wchar_t* filename, const wchar_t* mode )
+{
+  FILE* fp = 0;
+
+  if ( 0 == filename || 0 == filename[0] || 0 == mode || 0 == mode[0] )
+    return fp;
+
+#if defined(ON_OS_WINDOWS)
+  errno_t e = _wfopen_s(&fp,filename,mode); 
+  if ( 0 != e && 0 == fp )
+    fp = 0; // reference e to keep lint quiet.
+#else
+  // I can't find an wfopen() or _wfopen() in
+  // gcc version egcs-2.91.66 19990314/Linux (egcs-1.1.2 release)
+  ON_String fnameUTF8(filename);
+  ON_String modeUTF8(mode);
+  fp = fopen(fnameUTF8,modeUTF8);
+#endif
+
+  return fp;
+}
+
+FILE* ON_FileStream::Open( const char* filename, const char* mode )
+{
+  FILE* fp = 0;
+
+  if ( 0 == filename || 0 == filename[0] || 0 == mode || 0 == mode[0] )
+    return fp;
+
+#if defined(ON_OS_WINDOWS)
+  errno_t e = fopen_s(&fp,filename,mode); 
+  if ( 0 != e && 0 == fp )
+    fp = 0; // reference e to keep lint quiet.
+#else
+  fp = fopen(filename,mode);
+#endif
+
+  return fp;
+}
+
+int ON_FileStream::Close( FILE* fp )
+{
+  return ( ( 0 != fp ) ? fclose(fp) : -1 );
+}
+
+ON__INT64 ON_FileStream::CurrentPosition( FILE* fp )
+{
+  if ( 0 == fp )
+    return -1;
+#if defined(ON_OS_WINDOWS)
+  return _ftelli64(fp);
+#else
+  return ftell(fp);
+#endif
+}
+
+bool ON_FileStream::SeekFromCurrentPosition( FILE* fp, ON__INT64 offset )
+{
+  return ON_FileStream::Seek(fp,offset,SEEK_CUR);
+}
+
+bool ON_FileStream::SeekFromStart( FILE* fp, ON__INT64 offset )
+{
+  return ON_FileStream::Seek(fp,offset,SEEK_SET);
+}
+
+bool ON_FileStream::SeekFromEnd( FILE* fp, ON__INT64 offset )
+{
+  return ON_FileStream::Seek(fp,offset,SEEK_END);
+}
+
+bool ON_FileStream::Seek( FILE* fp, ON__INT64 offset, int origin )
+{
+  if ( 0 == fp )
+    return false;
+
+  if ( origin < 0 || origin > 2 )
+    return false;
+
+  if ( 0 == offset )
+    return true;
+  
+#if defined(ON_OS_WINDOWS)
+
+  if ( 0 != _fseeki64(fp,offset,origin) )
+    return false;
+
+#else
+
+  const int i = 2147483646;
+  const ON__INT64 i64 = i;
+  while ( offset > i64 )
+  {
+    if ( 0 != fseek( fp, i, origin ) )
+      return false;
+    offset -= i64;
+  }
+  while ( offset < -i64 )
+  {
+    if ( 0 != fseek( fp, -i, origin ) )
+      return false;
+    offset += i64;
+  }
+  if ( 0 != offset )
+  {
+    int ioffset = (int)offset;
+    if ( 0 != fseek( fp, ioffset, origin ) )
+      return false;
+  }
+
+#endif
+
+  return true;
+}
+
+ON__UINT64 ON_FileStream::Read( FILE* fp, ON__UINT64 count, void* buffer )
+{
+  ON__UINT64 rc = 0;
+  if ( 0 == fp || count <= 0 || 0 == buffer )
+    return rc;
+
+  if ( count <= ON_MAX_SIZE_T )
+  {
+    rc = (ON__UINT64)fread(buffer,1,(size_t)count,fp);
+  }
+  else
+  {
+    size_t sz, szread;
+    while ( count > 0 )
+    {
+      sz = ( count > ON_MAX_SIZE_T ) ? ON_MAX_SIZE_T : ((size_t)count);
+      szread = fread(buffer,1,sz,fp);
+      rc += szread;
+      if ( szread != sz )
+        break;
+      count -= sz;
+      buffer = ((unsigned char*)buffer) + sz;
+    }
+  }
+
+ return rc;
+}
+
+ON__UINT64 ON_FileStream::Write( FILE* fp, ON__UINT64 count, const void* buffer )
+{
+  ON__UINT64 rc = 0;
+  if ( 0 == fp || count <= 0 || 0 == buffer )
+    return rc;
+
+  if ( count <= ON_MAX_SIZE_T )
+  {
+    rc = fwrite(buffer,1,(size_t)count,fp);
+  }
+  else
+  {
+    size_t sz, szwrite;
+    while ( count > 0 )
+    {
+      sz = ( count > ON_MAX_SIZE_T ) ? ON_MAX_SIZE_T : ((size_t)count);
+      szwrite = fwrite(buffer,1,sz,fp);
+      rc += szwrite;
+      if ( szwrite != sz )
+        break;
+      count -= sz;
+      buffer = ((unsigned char*)buffer) + sz;
+    }
+  }
+
+ return rc;
+}
+
+bool ON_FileStream::Flush( FILE* fp )
+{
+  if ( 0 == fp )
+    return false;
+  if ( 0 != fflush(fp) )
+    return false;
+  return true;
+}
+
+
+bool ON_FileStream::GetFileInformation( 
+    FILE* fp,
+    ON__UINT64* file_size,
+    ON__UINT64* file_create_time,
+    ON__UINT64* file_last_modified_time
+    )
+{
+  bool rc = false;
+
+  if (file_size)
+    *file_size = 0;
+  if (file_create_time)
+    *file_create_time = 0;
+  if (file_last_modified_time)
+    *file_last_modified_time = 0;
+
+  if ( fp )
+  {
+
+#if defined(ON_COMPILER_MSC)
+
+    // Microsoft compilers
+    int fd = _fileno(fp);    
+#if (_MSC_VER >= 1400)
+    // VC 8 (2005) 
+    // works for file sizes > 4GB 
+    // when size_t is a 64 bit integer
+    struct _stat64 sb;
+    memset(&sb,0,sizeof(sb));
+    int fstat_rc = _fstat64(fd, &sb);
+#else
+    // VC6 compiler
+    // works on most compilers
+    struct _stat sb;
+    memset(&sb,0,sizeof(sb));
+    int fstat_rc = _fstat(fd, &sb);
+#endif
+
+#else
+    // works on most compilers
+    int fd = fileno(fp);
+    struct stat sb;
+    memset(&sb,0,sizeof(sb));
+    int fstat_rc = fstat(fd, &sb);
+#endif
+
+
+    if (0 == fstat_rc)
+    {
+      if (file_size)
+        *file_size = (ON__UINT64)sb.st_size;
+      if (file_create_time)
+        *file_create_time = (ON__UINT64)sb.st_ctime;
+      if (file_last_modified_time)
+        *file_last_modified_time = (ON__UINT64)sb.st_mtime;
+      rc = true;
+    }
+  }
+
+  return rc;
+}
+
 
 class ON_ReadChunkHelper
 {
@@ -543,6 +788,38 @@ ON_BinaryArchive::ReadInt( // Read a single 32 bit unsigned integer
 {
   return ReadInt( 1, p );
 }
+
+bool ON_BinaryArchive::ReadBigInt( // Read an array of 64 bit integers
+		size_t count,
+		ON__INT64* p 
+		)
+{
+  return ReadInt64(1,p);
+}
+
+bool ON_BinaryArchive::ReadBigInt( // Read an array of 64 bit integers
+		size_t count,
+		ON__UINT64* p
+		)
+{
+  return ReadInt64(1,(ON__INT64*)p);
+}
+
+bool ON_BinaryArchive::ReadBigInt( // Read a single 64 bit integer
+		ON__INT64* p
+		)
+{
+  return ReadInt64(1,p);
+}
+
+bool ON_BinaryArchive::ReadBigInt( // Read a single 64 bit unsigned integer
+		ON__UINT64* p
+		)
+{
+  return ReadInt64(1,(ON__INT64*)p);
+}
+
+
 
 bool
 ON_BinaryArchive::ReadLong( // Read an array of 32 bit integers
@@ -1087,6 +1364,33 @@ bool ON_BinaryArchive::WriteArray( const ON_ClassArray<ON_MaterialRef>& a)
   return rc;
 }
 
+
+bool ON_BinaryArchive::WriteArray( int count, const ON_Layer* a)
+{
+  int i;
+  if ( count < 0 || 0 == a )
+    count = 0;
+  bool rc = WriteInt( count );
+  for  ( i = 0; i < count && rc; i++ )
+  {
+    rc = WriteObject(a[i]);
+  }
+  return rc;
+}
+
+bool ON_BinaryArchive::WriteArray( int count, const ON_Layer*const* a)
+{
+  int i;
+  if ( count < 0 || 0 == a )
+    count = 0;
+  bool rc = WriteInt( count );
+  for  ( i = 0; i < count && rc; i++ )
+  {
+    rc = WriteObject(a[i]);
+  }
+  return rc;
+}
+
 bool ON_BinaryArchive::WriteArray( const ON_ClassArray<ON_MappingRef>& a )
 {
   int i, count = a.Count();
@@ -1162,6 +1466,58 @@ bool ON_BinaryArchive::ReadArray( ON_ClassArray<ON_MaterialRef>& a)
   return rc;
 }
 
+bool ON_BinaryArchive::ReadArray( ON_ObjectArray<class ON_Layer>& a)
+{
+  a.Empty();
+  int i, count;
+  bool rc = ReadInt( &count );
+  if (rc)
+  {
+    a.SetCapacity(count);
+    for  ( i = 0; i < count && rc; i++ )
+    {
+      rc = (1 == ReadObject(a.AppendNew()));
+      if (!rc)
+      {
+        a.Remove();
+        break;
+      }
+    }
+  }
+  return rc;
+}
+
+
+bool ON_BinaryArchive::ReadArray( ON_SimpleArray<class ON_Layer*>& a)
+{
+  a.Empty();
+  ON_Layer* layer;
+  int i, count;
+  bool rc = ReadInt( &count );
+  if (rc)
+  {
+    a.SetCapacity(count);
+    for  ( i = 0; i < count && rc; i++ )
+    {
+      layer = 0;
+      ON_Object* p = 0;
+      rc = (1==ReadObject(&p));
+      if (rc)
+      {
+        layer = ON_Layer::Cast(p);
+      }
+      if (!rc || 0 == layer)
+      {
+        if ( p )
+          delete p;
+        rc = false;
+        break;
+      }
+      a.Append(layer);
+    }
+  }
+  return rc;
+}
 
 bool ON_BinaryArchive::ReadArray( ON_ClassArray<ON_MappingRef>& a)
 {
@@ -2143,6 +2499,38 @@ ON_BinaryArchive::WriteInt( // Write a single 32 bit integer
 {
   return WriteInt( 1, &i );
 }
+
+bool ON_BinaryArchive::WriteBigInt( // Write an array of 64 bit integers
+		size_t count,
+		const ON__INT64* p      
+		)
+{
+  return WriteInt64(count,p);
+}
+
+bool ON_BinaryArchive::WriteBigInt( // Write an array of 64 bit integers
+		size_t count,
+		const ON__UINT64* p     
+		)
+{
+  return WriteInt64(count,(const ON__INT64*)p);
+}
+
+bool ON_BinaryArchive:: WriteBigInt( // Write a single 64 bit integer
+		ON__INT64 i
+		)
+{
+  return WriteInt64(1,&i);
+}
+
+bool ON_BinaryArchive::WriteBigInt( // Write a single 64 bit unsigned integer
+		ON__UINT64 u
+		)
+{
+  return WriteInt64(1,(const ON__INT64*)&u);
+}
+
+
 
 bool
 ON_BinaryArchive::WriteLong( // Write an array of longs
@@ -4440,8 +4828,6 @@ ON_BinaryArchive::BeginRead3dmChunk(
   }
   return rc;
 }
-
-
 bool ON_BinaryArchive::EndRead3dmChunk()
 {
   return EndRead3dmChunk(false);
@@ -4571,10 +4957,10 @@ bool ON_BinaryArchive::EndRead3dmChunk(bool bSupressPartiallyReadChunkWarning)
             // There should not be any partially read chunks.
             if (!bSupressPartiallyReadChunkWarning)
             {
-              ON_WARNING("ON_BinaryArchive::EndRead3dmChunk: partially read chunk - skipping bytes at end of current chunk.");
-            }
+            ON_WARNING("ON_BinaryArchive::EndRead3dmChunk: partially read chunk - skipping bytes at end of current chunk.");
           }
         }
+      }
       }
       //int delta =  (end_offset >= file_offset) 
       //          ?  ((int)(end_offset-file_offset)) 
@@ -5130,6 +5516,13 @@ bool ON_BinaryArchive::SaveUserData() const
   return m_bSaveUserData;
 }
 
+int ON_BinaryArchive::CurrentArchiveVersion()
+{
+  // Latest version of opennurbs binary archives supported by
+  // this version of opennurbs.
+  return 50; // Rhino 5.0 files
+}
+
 bool ON_BinaryArchive::Write3dmStartSection( int version, const char* sInformation )
 {
   // 2009 November 6 
@@ -5141,7 +5534,7 @@ bool ON_BinaryArchive::Write3dmStartSection( int version, const char* sInformati
     version *= 10;
   if ( version >= 5 && 0 != (version % 10) )
   {
-    ON_ERROR("3dm archive version must be 2,3,4,5,50,60,...");
+    ON_ERROR("3dm archive version must be 2, 3, 4 or 50");
     return false;
   }
 
@@ -5153,16 +5546,8 @@ bool ON_BinaryArchive::Write3dmStartSection( int version, const char* sInformati
   char sVersion[64];
   memset( sVersion, 0, sizeof(sVersion) );
   if ( version < 1 )
-    version = 2;
-  // TEMPORARY 2 = X
-  //if ( version == 2 ) 
-  //{
-  //  sprintf(sVersion,"3D Geometry File Format        X",version);
-  //}
-  //else 
-  {
-    sprintf(sVersion,"3D Geometry File Format %8d",version);
-  }
+    version = ON_BinaryArchive::CurrentArchiveVersion();
+  sprintf(sVersion,"3D Geometry File Format %8d",version);
   bool rc = WriteByte( 32, sVersion );
   if ( rc )
     rc = BeginWrite3dmBigChunk( TCODE_COMMENTBLOCK, 0 );
@@ -5176,9 +5561,6 @@ bool ON_BinaryArchive::Write3dmStartSection( int version, const char* sInformati
       size_t s_len = 0;
       memset( s, 0, sizeof(s) );
       sprintf(s," 3DM I/O processor: OpenNURBS toolkit version %d",ON::Version());
-      //strncat(s,sVERSION_FILENAME,sizeof(s) - 100 - strlen(s));
-      //strcat(s," ");
-      //strncat(s,sVERSION_NUMBER,sizeof(s) - 100 - strlen(s));
       strcat(s," (compiled on ");
       strcat(s,__DATE__);
       strcat(s,")\n");
@@ -5195,11 +5577,11 @@ bool ON_BinaryArchive::Write3dmStartSection( int version, const char* sInformati
 
 bool ON_BinaryArchive::Read3dmStartSection( int* version, ON_String& s )
 {
-  // The first 24 buts of a 3dm file must be "3D Geometry File Format "
+  // The first 24 bytes of a 3dm file must be "3D Geometry File Format "
   // The next 8 bytes must be a right justified ASCII integer >= 1.  For
   // example, prior to March 2000, all 3DM files were version 1 files and
   // they began with "3D Geometry File Format        1".  At the time of
-  // this writing (March 2000) there are version 1 and version 2 files.
+  // this writing (May 2011) there are version 1,2,3,4,5 and 50 files.
   //
   // The next section must contain a long chunk with typecode 1.
   m_bad_CRC_count = 0;
@@ -5769,7 +6151,7 @@ bool ON_BinaryArchive::Write3dmSettings(
       m_V3_plugin_id_list.Append( ON_rhino3_id );
       m_V3_plugin_id_list.Append( ON_rhino4_id );
       m_V3_plugin_id_list.Append( ON_rhino5_id );
-      m_V3_plugin_id_list.HeapSort( ON_UuidCompare );
+      m_V3_plugin_id_list.QuickSort( ON_UuidCompare );
     }
   }
   return rc;
@@ -11694,6 +12076,50 @@ ON_BinaryArchive::Read3dmV1Object(
   return rc;
 }
 
+#if 1
+class ON_OBSOLETE_CCustomMeshUserData : public ON_UserData
+{
+public:
+	ON_OBJECT_DECLARE(ON_OBSOLETE_CCustomMeshUserData);
+  ON_OBSOLETE_CCustomMeshUserData();
+	~ON_OBSOLETE_CCustomMeshUserData();
+	ON_BOOL32 GetDescription( ON_wString& );
+  ON_BOOL32 Read(ON_BinaryArchive& binary_archive);
+  bool m_bInUse;
+  ON_MeshParameters m_mp;
+};
+
+ON_OBJECT_IMPLEMENT(ON_OBSOLETE_CCustomMeshUserData, ON_UserData, "69F27695-3011-4FBA-82C1-E529F25B5FD9");
+
+ON_OBSOLETE_CCustomMeshUserData::ON_OBSOLETE_CCustomMeshUserData()
+{
+	m_userdata_copycount = 0;
+	m_userdata_uuid = ON_OBSOLETE_CCustomMeshUserData::m_ON_OBSOLETE_CCustomMeshUserData_class_id.Uuid();
+  m_application_uuid = ON_nil_uuid;
+  m_bInUse = false;
+}
+
+ON_OBSOLETE_CCustomMeshUserData::~ON_OBSOLETE_CCustomMeshUserData()
+{
+}
+
+ON_BOOL32 ON_OBSOLETE_CCustomMeshUserData::Read(ON_BinaryArchive& ba)
+{
+  int i = 0;
+  if ( !ba.ReadInt( &i ) )
+    return false;    
+  if( !ba.ReadBool( &m_bInUse ) )
+    return false;    
+  return m_mp.Read( ba );
+}
+
+ON_BOOL32 ON_OBSOLETE_CCustomMeshUserData::GetDescription( ON_wString& s )
+{
+	s = "OBSOLETE CustomMeshUserData";
+	return true;
+}
+#endif
+
 
 int
 ON_BinaryArchive::Read3dmObject( 
@@ -11789,6 +12215,19 @@ ON_BinaryArchive::Read3dmObject(
             //   Added support for saving user data on object attributes
             if ( !ReadObjectUserData(*pAttributes))
               rc = -1;
+            else
+            {
+#if 1
+              // 3 March 2011 - convert obsolete user data
+              ON_OBSOLETE_CCustomMeshUserData* ud = ON_OBSOLETE_CCustomMeshUserData::Cast(pAttributes->GetUserData(ON_OBSOLETE_CCustomMeshUserData::m_ON_OBSOLETE_CCustomMeshUserData_class_id.Uuid()));
+              if ( ud )
+              {
+                ud->m_mp.m_bCustomSettingsEnabled = ud->m_bInUse ? true : false;
+                pAttributes->SetCustomRenderMeshParameters(ud->m_mp);
+                delete ud;
+              }
+#endif
+            }
           }
         }
 
@@ -12157,7 +12596,12 @@ bool ON_BinaryArchive::EndRead3dmUserTable()
     ON_ERROR("ON_BinaryArchive::EndRead3dmTable() m_chunk.Last()->typecode != TCODE_USER_RECORD");
     return false;
   }
-  bool rc = EndRead3dmChunk(); // end of TCODE_USER_RECORD chunk
+
+
+  // end of TCODE_USER_RECORD chunk
+  // Suppress the partially read chunk warning because plug-in IO
+  // is too upredictable for this warning to be helpful.
+  bool rc = EndRead3dmChunk(true); 
 
   if (rc) {
     // end of table chunk
@@ -12375,6 +12819,24 @@ ON_BinaryArchive::ReadByte( size_t count, void* p )
             // when reading v1 files, there are some situations where
             // it is reasonable to attempt to read 4 bytes at the end
             // of a file.
+            break;
+          }
+          if (    0 == m_3dm_version
+               && 0 == m_3dm_opennurbs_version
+               && 0 == m_3dm_start_section_offset
+               && ON_BinaryArchive::no_active_table == m_active_table
+               && 0 == m_chunk
+               && ON::read3dm == m_mode
+               )
+          {
+            // In Read3dmStartSection(), we search for the string 
+            // "3D Geometry File Format ...".  When a non-.3dm file
+            // is searched, we eventually reach the end of the file.
+            // This error condition is reported by the returning
+            // false from ON_BinaryArchive::Read3dmStartSection().
+            // ON_ERROR is not called to prevent annoying everyone
+            // when the open file dialog is digging around looking
+            // for files.
             break;
           }
           ON_ERROR("ON_BinaryArchive::ReadByte() Read() failed.");
@@ -13069,6 +13531,7 @@ const char* ON_BinaryArchive::TypecodeName( unsigned int tcode )
   CASEtcode2string(TCODE_OPENNURBS_CLASS_USERDATA);
   CASEtcode2string(TCODE_OPENNURBS_CLASS_USERDATA_HEADER);
   CASEtcode2string(TCODE_OPENNURBS_CLASS_END);
+  CASEtcode2string(TCODE_OPENNURBS_BUFFER);
   CASEtcode2string(TCODE_ANNOTATION_SETTINGS);
   CASEtcode2string(TCODE_TEXT_BLOCK);
   CASEtcode2string(TCODE_ANNOTATION_LEADER);
@@ -13476,37 +13939,7 @@ bool Dump3dmChunk_UserDataHeaderHelper( size_t offset, ON_BinaryArchive& file,
   return rc;
 }
 
-//static void Dump3dmChunk_SkipPartiallyReadChunk( 
-//  ON_BinaryArchive& file,
-//  size_t offset0,
-//  ON__INT64 big_value,
-//  ON_TextLog& dump
-//  )
-//{
-//  // used to skip to ends of partially read chunks.
-//  const size_t sizeof_chunk_header = 4 + file.SizeofChunkLength();
-//  const size_t offset1 = file.CurrentPosition();
-//  if ( offset1 < offset0 )
-//  {
-//    Dump3dmChunk_ErrorReportHelper(offset0,"BeginRead3dmChunk() current postion is before start of chunk header.",dump);
-//  }
-//  else
-//  {
-//    ON__INT64 delta = ((ON__INT64)(((ON__UINT64)offset1) - ((ON__UINT64)offset0))) - ((ON__INT64)sizeof_chunk_header);
-//    if ( delta < 0 )
-//    {
-//      Dump3dmChunk_ErrorReportHelper(offset0,"BeginRead3dmChunk() current postion is before end of chunk header.",dump);
-//    }
-//    else if ( delta > 0 )
-//    {
-//      if ( !file.BigSeekFromCurrentPosition(delta) )
-//      {
-//        Dump3dmChunk_ErrorReportHelper(offset0,"BeginRead3dmChunk() failed to skip to end of partially read chunk.",dump);
-//      }
-//    }
-//  }
-//}
-//
+
 unsigned int 
 ON_BinaryArchive::Dump3dmChunk( ON_TextLog& dump, int recursion_depth )
 {
@@ -14117,6 +14550,8 @@ ON_Write3dmBufferArchive::ON_Write3dmBufferArchive(
 {
   if ( initial_sizeof_buffer > 0 )
     AllocBuffer(initial_sizeof_buffer);
+  if ( archive_3dm_version < 2 )
+    archive_3dm_version = ON_BinaryArchive::CurrentArchiveVersion();
   SetArchive3dmVersion(archive_3dm_version);
   ON_SetBinaryArchiveOpenNURBSVersion(*this,archive_opennurbs_version);
 }
@@ -14230,10 +14665,10 @@ size_t ON_Write3dmBufferArchive::Write( size_t sz, const void* buffer )
   if ( m_buffer_position + sz > m_sizeof_buffer )
     return 0;
 
-  memcpy( m_buffer + m_sizeof_buffer, buffer, sz );
-  m_sizeof_buffer += sz;
-  if ( m_sizeof_buffer > m_sizeof_archive )
-    m_sizeof_archive = m_sizeof_buffer;
+  memcpy( m_buffer + m_buffer_position, buffer, sz );
+  m_buffer_position += sz;
+  if ( m_buffer_position > m_sizeof_archive )
+    m_sizeof_archive = m_buffer_position;
 
   return sz;
 }
@@ -14275,7 +14710,544 @@ size_t ON_Write3dmBufferArchive::SizeOfArchive() const
 
 
 
+
+ON_BinaryArchiveBuffer::ON_BinaryArchiveBuffer( ON::archive_mode mode, ON_Buffer* buffer )
+: ON_BinaryArchive(mode)
+, m_buffer(buffer)
+{
+}
+
+ON_BinaryArchiveBuffer::~ON_BinaryArchiveBuffer()
+{
+  m_buffer = 0;
+}
+
+bool ON_BinaryArchiveBuffer::SetBuffer( ON_Buffer* buffer )
+{
+  if ( 0 == m_buffer )
+  {
+    m_buffer = buffer;
+    return true;
+  }
+
+  return false;
+}
+
+ON_Buffer* ON_BinaryArchiveBuffer::Buffer() const
+{
+  return m_buffer;
+}
+
+size_t ON_BinaryArchiveBuffer::CurrentPosition() const
+{
+  if ( 0 != m_buffer )
+    return (size_t)m_buffer->CurrentPosition();
+
+  return 0;
+}
+
+bool ON_BinaryArchiveBuffer::SeekFromCurrentPosition(int offset)
+{
+  if ( 0 != m_buffer )
+    return m_buffer->SeekFromCurrentPosition(offset);
+
+  return false;
+}
+
+bool ON_BinaryArchiveBuffer::SeekFromStart(size_t offset)
+{
+  if ( 0 != m_buffer )
+    return m_buffer->SeekFromStart((ON__INT64)offset);
+
+  return false;
+}
+
+bool ON_BinaryArchiveBuffer::AtEnd() const
+{
+  if ( 0 != m_buffer )
+    return m_buffer->AtEnd();
+
+  return false;
+}
+
+bool ON_BinaryArchiveBuffer::SeekFromEnd( ON__INT64 offset )
+{
+  if ( 0 != m_buffer )
+    return m_buffer->SeekFromEnd(offset);
+
+  return false;
+}
+
+size_t ON_BinaryArchiveBuffer::Read( size_t count, void* a )
+{
+  if ( 0 != m_buffer )
+    return (size_t)m_buffer->Read(count,a);
+
+  return 0;
+}
+
+size_t ON_BinaryArchiveBuffer::Write( size_t count, const void* a )
+{
+  if ( 0 != m_buffer )
+    return (size_t)m_buffer->Write(count,a);
+
+  return 0;
+}
+
+bool ON_BinaryArchiveBuffer::Flush()
+{
+  if ( 0 != m_buffer )
+    return true;
+
+  return false;
+}
+
+ON_FileIterator::ON_FileIterator()
+: m_count(0)
 #if defined(ON_COMPILER_MSC)
+, m_file_attributes_mask(0)
+, m_h(0)
+#else
+, m_dir(0)
+, m_current_file_attributes(0)
+, m_current_file_size(0)
+, m_current_create_time(0)
+, m_current_last_modified_time(0)
+, m_current_last_access_time(0)
+#endif
+{
+  Destroy();
+#if defined(ON_COMPILER_MSC)
+  memset(&m_fd,0,sizeof(m_fd));
+#else
+  memset(&m_dirent,0,sizeof(m_dirent));
+  m_dirent.d_name[0] = 0;
+  memset(&m_dirent_name_buffer[0],0,sizeof(m_dirent_name_buffer));
+  memset(&m_current_name[0],0,sizeof(m_current_name));
+#endif
+}
+
+ON_FileIterator::~ON_FileIterator()
+{
+  Destroy();
+}
+
+void ON_FileIterator::Destroy()
+{
+#if defined(ON_COMPILER_MSC)
+  if ( 0 != m_h )
+  {
+    ::FindClose(m_h);
+    m_h = 0;
+  }
+  m_file_attributes_mask = 0;
+  memset(&m_fd,0,sizeof(m_fd));
+#else
+  if ( 0 != m_dir )
+  {
+    closedir(m_dir);
+    m_dir = 0;
+  }
+  memset(&m_dirent,0,sizeof(m_dirent));
+  m_dirent.d_name[0] = 0;
+  memset(&m_dirent_name_buffer[0],0,sizeof(m_dirent_name_buffer));
+  m_file_name_filter.Destroy();
+  m_utf8_file_name_filter.Destroy();
+  memset(&m_current_name[0],0,sizeof(m_current_name));
+  m_current_file_attributes = 0;
+  m_current_file_size = 0;
+  m_current_create_time = 0;
+  m_current_last_modified_time = 0;
+  m_current_last_access_time = 0;
+#endif
+  m_count = 0;
+  m_directory.Empty();
+}
+
+ON__UINT64 ON_FileIterator::Count() const
+{
+  return m_count;
+}
+
+#if defined(ON_COMPILER_MSC)
+static bool IsDotOrDotDotDir( const wchar_t* s )
+#else
+static bool IsDotOrDotDotDir( const char* s )
+#endif
+{
+  bool rc = false;
+  for (;;)
+  {
+    if ( 0 == s )
+      break;
+    if ( '.' != s[0] )
+      break;
+    if ( 0 != s[1] )
+    {
+      if ( '.' != s[1] )
+        break;
+      if ( 0 != s[2] )
+        break;
+    }
+    rc = true; // s = "." or s = ".."
+    break;
+  }
+  return rc;
+}
+
+const wchar_t* ON_FileIterator::FirstFile(
+    const wchar_t* directory_name, 
+    const wchar_t* file_name_filter 
+    )
+{
+#if defined(ON_COMPILER_MSC)
+  const ON__UINT32 saved_mask = m_file_attributes_mask;
+  Destroy();
+  m_file_attributes_mask = saved_mask;
+
+  ON_wString s(directory_name);
+  
+  if ( 0 == file_name_filter )
+  {
+    // A null file file_name_filter means iterate 
+    // through all items in the directory.  To do
+    // this using Windows' ::FindFirstFile, set the
+    // filter to "*.*", even though some items will
+    // not contain a "dot".
+    file_name_filter = L"*.*";  
+  }
+  
+  if ( 0 != file_name_filter[0] )
+  {
+    s += L"\\";
+    s += file_name_filter;
+  }
+
+  m_h = ::FindFirstFile(s, &m_fd);
+  if ( 0 == m_h || INVALID_HANDLE_VALUE == m_h || 0 == m_fd.cFileName[0] )
+  {
+    // Happens on "fake" directories like "My Music" and "My Videos"
+    m_h = 0;
+    Destroy();
+    m_file_attributes_mask = saved_mask;
+    return 0;
+  }
+
+  m_directory = directory_name;
+
+  if ( IsDotOrDotDotDir(m_fd.cFileName) || 0 != (m_file_attributes_mask & m_fd.dwFileAttributes) )
+  {
+    return NextFile();
+  }
+  
+  m_count++;
+  m_fd.cFileName[(sizeof(m_fd.cFileName)/sizeof(m_fd.cFileName[0]))-1] = 0;
+  return m_fd.cFileName;
+
+#else
+
+  // gcc code
+  Destroy();
+  m_directory = directory_name;
+  m_file_name_filter = file_name_filter;
+  m_utf8_file_name_filter = file_name_filter;
+  const ON_String utf8_str(m_directory); // convert wchar_t to utf8 string
+  const char* s = utf8_str;
+  m_dir = (0 != s && 0 != s[0]) ? opendir(s) : 0;
+  if ( 0 != m_dir )
+    return NextFile();
+  Destroy();
+  return 0;
+
+#endif
+}
+
+const wchar_t* ON_FileIterator::NextFile()
+{
+#if defined(ON_COMPILER_MSC)
+  const ON__UINT32 saved_mask = m_file_attributes_mask;
+  if ( 0 == m_h || INVALID_HANDLE_VALUE == m_h || 0 == m_fd.cFileName[0] )
+  {
+    Destroy();
+    m_file_attributes_mask = saved_mask;
+    return 0;
+  }
+
+  for (;;)
+  {
+    if ( !::FindNextFile( m_h, &m_fd) || 0 == m_fd.cFileName[0] )
+    {
+      Destroy();
+      m_file_attributes_mask = saved_mask;
+      return 0;
+    }
+
+    if ( IsDotOrDotDotDir(m_fd.cFileName) || 0 != (m_file_attributes_mask & m_fd.dwFileAttributes) )
+    {
+      continue;
+    }
+
+    break;
+  }
+
+  m_count++;
+  m_fd.cFileName[(sizeof(m_fd.cFileName)/sizeof(m_fd.cFileName[0]))-1] = 0;
+  return m_fd.cFileName;
+#else
+
+  // gcc code
+  ON__UINT64 current_file_attributes = 0;
+  wchar_t current_name[ sizeof(m_current_name)/sizeof(m_current_name[0]) ];
+  for(;;)
+  {
+    current_file_attributes = 0;
+    struct dirent* dp = 0;
+    int readdir_errno = readdir_r(m_dir, &m_dirent, &dp);
+    if ( 0 !=  readdir_errno )
+      break;
+    if ( 0 == dp )
+      break;
+    if ( 0 == m_dirent.d_name[0] )
+      break;
+
+    if ( IsDotOrDotDotDir(m_dirent.d_name) )
+      continue;
+
+    memset( current_name, 0, sizeof(current_name) );
+    ON_ConvertUTF8ToWideChar(
+      &m_dirent.d_name[0],-1, // null terminated utf8 string
+      &current_name[0], ((int)(sizeof(current_name)/sizeof(current_name[0]))) - 1, // output wchar_t string
+      0, // null output error status
+      (4|8|16), // mask common conversion errors
+      0, // error_code_point = null terminator inserted at point of conversion error
+      0  // null ouput end-of-string pointer
+      );
+    // TODO
+    //   Test m_dirent.d_name to make sure it passes m_file_name_filter
+
+    ON_wString wpath = m_directory;
+    wpath += '/';
+    wpath += current_name;
+
+    // get a utf8 version of the full path to pass to stat
+    const ON_String utf8buffer(wpath);
+    const char* utf8path = utf8buffer;
+    if ( 0 == utf8path )
+      continue;
+
+    struct stat buf;
+    memset(&buf,0,sizeof(buf));
+    int stat_errno = stat( utf8path, &buf);
+    if ( 0 != stat_errno )
+      continue;
+
+    if ( S_ISDIR(buf.st_mode) )
+      current_file_attributes = 2;
+    else if ( S_ISREG(buf.st_mode) )
+      current_file_attributes = 1;
+    else
+      continue;
+
+    // save current item information
+    memcpy( m_current_name, current_name, sizeof(m_current_name) );
+    m_current_file_attributes = current_file_attributes;
+    m_current_file_size = buf.st_size;
+    m_current_create_time = buf.st_mtime; // create time is not available on struct stat
+    m_current_last_modified_time = buf.st_mtime;
+    m_current_last_access_time = buf.st_atime;
+
+    return m_current_name;
+  }
+
+  Destroy();
+  return 0;
+#endif
+}
+
+
+const wchar_t* ON_FileIterator::CurrentFileName() const
+{
+#if defined(ON_COMPILER_MSC)
+  return ( 0 != m_h && 0 != m_fd.cFileName[0] ) ? m_fd.cFileName : 0;
+#else
+  return ( 0 != m_current_name[0] ) ? m_current_name : 0;
+#endif
+}
+
+ON__UINT64 ON_FileIterator::CurrentFileSize() const
+{
+  ON__UINT64 file_size = 0;
+
+#if defined(ON_COMPILER_MSC)
+  if ( 0 != CurrentFileName() ) 
+  {
+    file_size  = m_fd.nFileSizeHigh;
+    file_size *= ((ON__UINT64)0xFFFFFFFF);
+    file_size += m_fd.nFileSizeLow;
+  }
+#else
+  file_size = m_current_file_size;
+#endif
+
+  return file_size;
+}
+
+bool ON_FileIterator::CurrentFileIsDirectory() const
+{
+  bool rc = false;
+#if defined(ON_COMPILER_MSC)
+  if ( 0 != CurrentFileName() && 0 != (FILE_ATTRIBUTE_DIRECTORY & m_fd.dwFileAttributes) )
+  {
+    rc = true;
+  }
+#else
+  if ( 2 == m_current_file_attributes)
+    rc = true;
+#endif
+  return rc;
+}
+
+
+bool ON_FileIterator::GetCurrentFullPathFileName( ON_wString& filename ) const
+{
+  bool rc = false;
+
+#if defined(ON_COMPILER_MSC)
+  if ( 0 == m_h || 0 == m_fd.cFileName )
+  {
+    filename.Empty();
+  }
+  else
+  {
+    filename = m_directory;
+    filename += L"\\";
+    filename += m_fd.cFileName;
+    rc = true;
+  }
+#else
+
+  // gcc implementation
+  if ( 0 == m_current_name[0] )
+  {
+    filename.Empty();
+  }
+  else
+  {
+    filename = m_directory;
+    filename += L"/";
+    filename += m_current_name;
+    rc = true;
+  }
+
+#endif
+
+  return rc;
+}
+
+
+#if defined(ON_COMPILER_MSC)
+static ON__UINT64 SecondsSinceJanOne1970( FILETIME ft )
+{
+  // The FILETIME is in 100-nanosecond intervals since January 1, 1601 UCT.
+  //
+  // Between midnight January 1, 1601 and midnight January 1, 1970 there 
+  // were 134774 days = 11644473600 seconds. Each second has 10^7 intervals
+  // that are one hundred nanoseconds long.  So, if N = number of one hundred
+  // nanosecond intervals since midnight January 1, 1601, then
+  // (N / 10000000) - 11644473600 = number of seconds since midnight
+  // January 1, 1970.
+  //
+  // January 1, 1601 was the start of a Gregorian calendary 400 year cycle
+  // and "the internet" sometimes cites that as the reason that date is 
+  // the "beginning of time" for Windows' FILETIME values.  This convention
+  // would slightly simplify the formulae used to account for leap years, 
+  // so it is plausable this might might even be true.
+
+  ON__UINT64 ft_since_jan_1_1601 = ft.dwHighDateTime;
+  ft_since_jan_1_1601 *= 0xFFFFFFFF;
+  ft_since_jan_1_1601 += ft.dwLowDateTime;
+
+  ON__UINT64 hundrednanoseconds_per_second = 10000000;
+
+  ON__UINT64 seconds_since_jan_1_1601 = ft_since_jan_1_1601 / hundrednanoseconds_per_second;
+                                                   
+  ON__UINT64 seconds_since_jan_1_1970 = seconds_since_jan_1_1601 - 11644473600;
+
+  return seconds_since_jan_1_1970;
+}
+#endif
+
+ON__UINT64 ON_FileIterator::CurrentFileCreateTime() const
+{
+#if defined(ON_COMPILER_MSC)
+  return SecondsSinceJanOne1970(m_fd.ftCreationTime);
+#else
+  time_t current_time = 0;
+  time(&current_time);
+  return current_time;
+#endif
+}
+
+ON__UINT64 ON_FileIterator::CurrentFileLastModifiedTime() const
+{
+#if defined(ON_COMPILER_MSC)
+  return SecondsSinceJanOne1970(m_fd.ftLastWriteTime);
+#else
+  return m_current_last_modified_time;
+#endif
+}
+
+ON__UINT64 ON_FileIterator::CurrentFileLastAccessTime() const
+{
+#if defined(ON_COMPILER_MSC)
+  return SecondsSinceJanOne1970(m_fd.ftLastAccessTime);
+#else
+  return m_current_last_access_time;
+#endif
+}
+
+#if defined(ON_COMPILER_MSC)
+
+static wchar_t ON_sDebugWriteObjectDirectory[1024] = {0};
+
+void ON_SetDebugWriteObjectDirectory(const wchar_t* directory_name)
+{
+  size_t i;
+  const size_t maxi = sizeof(ON_sDebugWriteObjectDirectory)/sizeof(ON_sDebugWriteObjectDirectory[0]) - 1;
+  ON_sDebugWriteObjectDirectory[maxi] = 0;
+
+  if ( 0 == directory_name || 0 == directory_name[0] )
+  {
+    ON_sDebugWriteObjectDirectory[0] = 0;
+  }
+  else 
+  {
+    for ( i = 0; i < maxi; i++ )
+    {
+      ON_sDebugWriteObjectDirectory[i] = directory_name[i];
+      if ( 0 == ON_sDebugWriteObjectDirectory[i] )
+      {
+        while ( i > 0 )
+        {
+          if (    '/' != ON_sDebugWriteObjectDirectory[i-1]
+               && '\\' != ON_sDebugWriteObjectDirectory[i-1]
+               && ':' != ON_sDebugWriteObjectDirectory[i-1]
+               && ON_sDebugWriteObjectDirectory[i-1] >= 32
+             )
+            break;
+          i--;
+          ON_sDebugWriteObjectDirectory[i] = 0;
+        }
+        break;
+      }
+    }
+  }
+}
+
+const wchar_t* ON_DebugWriteObjectDirectory()
+{
+  return (0 != ON_sDebugWriteObjectDirectory[0] ? ON_sDebugWriteObjectDirectory : 0);
+}
 
 int ON_DebugWriteObject( const ON_Object* pObject )
 {
@@ -14283,30 +15255,52 @@ int ON_DebugWriteObject( const ON_Object* pObject )
   // from the debug evaluate expression window to dump objects for
   // future inspection.
 
+  wchar_t filename[sizeof(ON_sDebugWriteObjectDirectory)/sizeof(ON_sDebugWriteObjectDirectory[0]) + 64];
+  size_t i;
+  size_t maxi = sizeof(ON_sDebugWriteObjectDirectory)/sizeof(ON_sDebugWriteObjectDirectory[0])-1;
   int N = -1;
-  char filename[64];
+  errno_t e;
 
   if (pObject)
   {
-    filename[0] = 0;
+    filename[maxi] = 0;
+    for ( i = 0; i < maxi; i++ )
+    {
+      filename[i] = ON_sDebugWriteObjectDirectory[i];
+      if ( 0 == filename[i] )
+        break;
+    }
+    maxi = sizeof(filename)/sizeof(filename[0])-1;
+    filename[maxi] = 0;
     for ( N = 0; N < 10000; N++ )
     {
-      sprintf(filename,"\\debug_file_%05d.3dm",N);
-      if ( -1 == _access( filename, 0 ))
+      swprintf_s( &filename[i], maxi-i, L"\\debug_file_%05d.3dm", N );
+      e = _waccess_s( filename, 0 );
+      if ( 0 == e )
+      {
+        // file exists
+        filename[i] = 0;
+        continue;
+      }
+
+      if ( ENOENT == e )
       {
         // file does not exist
-        FILE* fp = ON::OpenFile( filename, "wb" );
+        FILE* fp = ON_FileStream::Open( filename, L"wb" );
         if ( fp )
         {
           ON_BinaryFile archive( ON::write3dm, fp );
           ON_WriteOneObjectArchive( archive, 5, *pObject );
-          ON::CloseFile( fp );
+          ON_FileStream::Close( fp );
           break; // done
         }
       }
-      filename[0] = 0;
+
+      // unable to write to this file
+      filename[i] = 0;
+      break;
     }
-    if ( 0 == filename[0] )
+    if ( 0 == filename[0] || 0 == filename[i] )
       N = -1;
   }
   return N;

@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2008 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -14,9 +15,6 @@
 */
 
 #include "opennurbs.h"
-
-
-
 void ON_Brep::MemoryRelocate()
 {
   int i, count;
@@ -348,3 +346,4 @@ ON_Brep* ON_Brep::SubBrep(
   leak_stopper.m_sub_brep = 0;
   return sub_brep;
 }
+

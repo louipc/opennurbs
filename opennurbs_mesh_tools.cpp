@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -299,7 +300,7 @@ bool ON_Mesh::CollapseEdge( int topei )
   // Sort me_list[] so edges using same vertices are adjacent
   // to each other in the list.  This is needed so that non-manifold
   // crease edges will be properly collapsed.
-  qsort(me_list,me_list_count,sizeof(me_list[0]),(QSORTCMPFUNC)CompareMESHEDGE);
+  ON_qsort(me_list,me_list_count,sizeof(me_list[0]),(QSORTCMPFUNC)CompareMESHEDGE);
 
   // create new vertex or vertices that edge will be
   // collapsed to.
@@ -495,7 +496,7 @@ bool ON_Mesh::CollapseEdge( int topei )
 
   // sort old2new_map[] so we can use a fast bsearch() call
   // to update faces.
-  qsort(old2new_map,old2new_map_count,sizeof(old2new_map[0]),(QSORTCMPFUNC)CompareNEWVI);
+  ON_qsort(old2new_map,old2new_map_count,sizeof(old2new_map[0]),(QSORTCMPFUNC)CompareNEWVI);
 
   // count faces that use the vertices that are being changed
   int bad_fi_count = 0;
@@ -594,7 +595,7 @@ bool ON_Mesh::CollapseEdge( int topei )
   if ( bad_fi_count > 0 )
   {
     // remove collapsed faces
-    qsort(bad_fi,bad_fi_count,sizeof(bad_fi[0]),CompareInt);
+    ON_qsort(bad_fi,bad_fi_count,sizeof(bad_fi[0]),CompareInt);
     int bfi = 1;
     int dest_fi = bad_fi[0];
     for ( fi = dest_fi+1; fi < F_count && bfi < bad_fi_count; fi++ )

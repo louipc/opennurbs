@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -224,10 +225,10 @@ int ON_CompareKnotVector( // returns
 
 ON_DECL
 bool ON_IsValidKnotVector(
-          int,           // order (>=2)
-          int,           // cv count
-          const double*, // knot[] array
-          ON_TextLog* text_log = NULL
+          int order,
+          int cv_count, 
+          const double* knot, 
+          ON_TextLog* text_log = 0
           );
 
 ON_DECL

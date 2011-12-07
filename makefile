@@ -88,7 +88,7 @@ LINKFLAGS =
 OPENNURBS_LIB_NAME = openNURBS
 OPENNURBS_LIB_FILE = lib$(OPENNURBS_LIB_NAME).a
 
-ON_INC=	opennurbs.h \
+ON_INC= opennurbs.h \
 		opennurbs_3dm.h \
 		opennurbs_3dm_attributes.h \
 		opennurbs_3dm_properties.h \
@@ -109,8 +109,8 @@ ON_INC=	opennurbs.h \
 		opennurbs_brep.h \
 		opennurbs_circle.h \
 		opennurbs_color.h \
+		opennurbs_compress.h \
 		opennurbs_cone.h \
-		opennurbs_crashtest.h \
 		opennurbs_crc.h \
 		opennurbs_curve.h \
 		opennurbs_curveonsurface.h \
@@ -125,10 +125,13 @@ ON_INC=	opennurbs.h \
 		opennurbs_extensions.h \
 		opennurbs_font.h \
 		opennurbs_fpoint.h \
+		opennurbs_fsp.h \
+		opennurbs_fsp_defs.h \
 		opennurbs_geometry.h \
 		opennurbs_gl.h \
 		opennurbs_group.h \
 		opennurbs_hatch.h \
+		opennurbs_hsort_template.h \
 		opennurbs_instance.h \
 		opennurbs_intersect.h \
 		opennurbs_knot.h \
@@ -164,6 +167,7 @@ ON_INC=	opennurbs.h \
 		opennurbs_polyedgecurve.h \
 		opennurbs_polyline.h \
 		opennurbs_polylinecurve.h \
+		opennurbs_qsort_template.h \
 		opennurbs_rand.h \
 		opennurbs_rendering.h \
 		opennurbs_revsurface.h \
@@ -178,16 +182,16 @@ ON_INC=	opennurbs.h \
 		opennurbs_texture.h \
 		opennurbs_texture_mapping.h \
 		opennurbs_torus.h \
+		opennurbs_unicode.h \
 		opennurbs_userdata.h \
 		opennurbs_uuid.h \
 		opennurbs_version.h \
 		opennurbs_viewport.h \
 		opennurbs_workspace.h \
-		opennurbs_x.h \
 		opennurbs_xform.h \
 		opennurbs_zlib.h
-		
-ON_SRC=	opennurbs_3dm_attributes.cpp \
+
+ON_SRC= opennurbs_3dm_attributes.cpp \
 		opennurbs_3dm_properties.cpp \
 		opennurbs_3dm_settings.cpp \
 		opennurbs_annotation.cpp \
@@ -205,16 +209,15 @@ ON_SRC=	opennurbs_3dm_attributes.cpp \
 		opennurbs_bounding_box.cpp \
 		opennurbs_box.cpp \
 		opennurbs_brep.cpp \
-		opennurbs_brep_changesrf.cpp \
 		opennurbs_brep_extrude.cpp \
 		opennurbs_brep_io.cpp \
 		opennurbs_brep_isvalid.cpp \
-		opennurbs_brep_kinky.cpp \
 		opennurbs_brep_region.cpp \
 		opennurbs_brep_tools.cpp \
 		opennurbs_brep_v2valid.cpp \
 		opennurbs_circle.cpp \
 		opennurbs_color.cpp \
+		opennurbs_compress.cpp \
 		opennurbs_cone.cpp \
 		opennurbs_crc.cpp \
 		opennurbs_curve.cpp \
@@ -225,13 +228,14 @@ ON_SRC=	opennurbs_3dm_attributes.cpp \
 		opennurbs_detail.cpp \
 		opennurbs_dimstyle.cpp \
 		opennurbs_ellipse.cpp \
+		opennurbs_embedded_file.cpp \
 		opennurbs_error.cpp \
 		opennurbs_error_message.cpp \
 		opennurbs_evaluate_nurbs.cpp \
 		opennurbs_extensions.cpp \
 		opennurbs_font.cpp \
+		opennurbs_fsp.cpp \
 		opennurbs_geometry.cpp \
-		opennurbs_gl.cpp \
 		opennurbs_group.cpp \
 		opennurbs_hatch.cpp \
 		opennurbs_instance.cpp \
@@ -275,6 +279,7 @@ ON_SRC=	opennurbs_3dm_attributes.cpp \
 		opennurbs_rand.cpp \
 		opennurbs_revsurface.cpp \
 		opennurbs_rtree.cpp \
+		opennurbs_sort.cpp \
 		opennurbs_sphere.cpp \
 		opennurbs_string.cpp \
 		opennurbs_sum.cpp \
@@ -283,17 +288,17 @@ ON_SRC=	opennurbs_3dm_attributes.cpp \
 		opennurbs_surfaceproxy.cpp \
 		opennurbs_textlog.cpp \
 		opennurbs_torus.cpp \
+		opennurbs_unicode.cpp \
 		opennurbs_userdata.cpp \
 		opennurbs_uuid.cpp \
 		opennurbs_viewport.cpp \
 		opennurbs_workspace.cpp \
 		opennurbs_wstring.cpp \
-		opennurbs_x.cpp \
 		opennurbs_xform.cpp \
 		opennurbs_zlib.cpp \
 		opennurbs_zlib_memory.cpp
 
-ON_OBJ=	opennurbs_3dm_attributes.o \
+ON_OBJ= opennurbs_3dm_attributes.o \
 		opennurbs_3dm_properties.o \
 		opennurbs_3dm_settings.o \
 		opennurbs_annotation.o \
@@ -311,16 +316,15 @@ ON_OBJ=	opennurbs_3dm_attributes.o \
 		opennurbs_bounding_box.o \
 		opennurbs_box.o \
 		opennurbs_brep.o \
-		opennurbs_brep_changesrf.o \
 		opennurbs_brep_extrude.o \
 		opennurbs_brep_io.o \
 		opennurbs_brep_isvalid.o \
-		opennurbs_brep_kinky.o \
 		opennurbs_brep_region.o \
 		opennurbs_brep_tools.o \
 		opennurbs_brep_v2valid.o \
 		opennurbs_circle.o \
 		opennurbs_color.o \
+		opennurbs_compress.o \
 		opennurbs_cone.o \
 		opennurbs_crc.o \
 		opennurbs_curve.o \
@@ -331,11 +335,13 @@ ON_OBJ=	opennurbs_3dm_attributes.o \
 		opennurbs_detail.o \
 		opennurbs_dimstyle.o \
 		opennurbs_ellipse.o \
+		opennurbs_embedded_file.o \
 		opennurbs_error.o \
 		opennurbs_error_message.o \
 		opennurbs_evaluate_nurbs.o \
 		opennurbs_extensions.o \
 		opennurbs_font.o \
+		opennurbs_fsp.o \
 		opennurbs_geometry.o \
 		opennurbs_group.o \
 		opennurbs_hatch.o \
@@ -380,6 +386,7 @@ ON_OBJ=	opennurbs_3dm_attributes.o \
 		opennurbs_rand.o \
 		opennurbs_revsurface.o \
 		opennurbs_rtree.o \
+		opennurbs_sort.o \
 		opennurbs_sphere.o \
 		opennurbs_string.o \
 		opennurbs_sum.o \
@@ -388,12 +395,12 @@ ON_OBJ=	opennurbs_3dm_attributes.o \
 		opennurbs_surfaceproxy.o \
 		opennurbs_textlog.o \
 		opennurbs_torus.o \
+		opennurbs_unicode.o \
 		opennurbs_userdata.o \
 		opennurbs_uuid.o \
 		opennurbs_viewport.o \
 		opennurbs_workspace.o \
 		opennurbs_wstring.o \
-		opennurbs_x.o \
 		opennurbs_xform.o \
 		opennurbs_zlib.o \
 		opennurbs_zlib_memory.o
@@ -439,6 +446,7 @@ EXAMPLE_OBJ = example_read/example_read.o \
       example_write/example_write.o \
       example_dump/example_dump.o \
       example_brep/example_brep.o \
+      example_fileit/example_fileit.o \
       example_userdata/example_ud.o \
       example_userdata/example_userdata.o \
       example_roundtrip/example_roundtrip.o
@@ -447,6 +455,7 @@ EXAMPLES = example_read/example_read \
       example_write/example_write \
       example_dump/example_dump \
       example_brep/example_brep \
+      example_fileit/example_fileit \
       example_roundtrip/example_roundtrip \
       example_userdata/example_userdata
 
@@ -481,6 +490,9 @@ example_write/example_write : example_write/example_write.o example_userdata/exa
 
 example_brep/example_brep : example_brep/example_brep.o $(OPENNURBS_LIB_FILE)
 	$(LINK) $(LINKFLAGS) example_brep/example_brep.o -L. -l$(OPENNURBS_LIB_NAME) -lm -o $@
+
+example_fileit/example_fileit : example_fileit/example_fileit.o $(OPENNURBS_LIB_FILE)
+	$(LINK) $(LINKFLAGS) example_fileit/example_fileit.o -L. -l$(OPENNURBS_LIB_NAME) -lm -o $@
 
 example_dump/example_dump : example_dump/example_dump.o
 	$(LINK) $(LINKFLAGS) example_dump/example_dump.o -L. -l$(OPENNURBS_LIB_NAME) -lm -o $@

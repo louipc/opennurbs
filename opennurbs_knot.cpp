@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -675,14 +676,20 @@ int ON_CompareKnotVector( // returns
 // Used to validate knot vectors
 //
 
-static bool ON_KnotVectorIsNotValid()
+static bool ON_KnotVectorIsNotValid(bool bSilentError)
 {
-  return ON_IsNotValid(); // <-- good place for a breakpoint
+  return bSilentError ? false : ON_IsNotValid(); // <-- good place for a breakpoint
 }
 
-
-bool ON_IsValidKnotVector( int order, int cv_count, const double* knot, ON_TextLog* text_log )
+bool ON_IsValidKnotVector( int order, int cv_count, const double* knot, ON_TextLog* text_logx )
 {
+  // If low bit of text_log pointer is 1, then ON_Error is not called when the
+  // knot vector is invalid.
+  const ON__INT_PTR lowbit = 1;
+  const ON__INT_PTR hightbits = ~lowbit;
+  bool bSilentError = ( 0 != (lowbit & ((ON__INT_PTR)text_logx)) );
+  ON_TextLog* text_log = (ON_TextLog*)(((ON__INT_PTR)text_logx) & hightbits);
+
   const double *k0, *k1;
   int i;
   if ( order < 2 )
@@ -691,7 +698,7 @@ bool ON_IsValidKnotVector( int order, int cv_count, const double* knot, ON_TextL
     {
       text_log->Print("Knot vector order = %d (should be >= 2 )\n",order);
     }
-    return ON_KnotVectorIsNotValid();
+    return ON_KnotVectorIsNotValid(bSilentError);
   }
   if ( cv_count < order )
   {
@@ -699,7 +706,7 @@ bool ON_IsValidKnotVector( int order, int cv_count, const double* knot, ON_TextL
     {
       text_log->Print("Knot vector cv_count = %d (should be >= order=%d )\n",cv_count,order);
     }
-    return ON_KnotVectorIsNotValid();
+    return ON_KnotVectorIsNotValid(bSilentError);
   }
   if ( knot == NULL )
   {
@@ -707,7 +714,7 @@ bool ON_IsValidKnotVector( int order, int cv_count, const double* knot, ON_TextL
     {
       text_log->Print("Knot vector knot array = NULL.\n");
     }
-    return ON_KnotVectorIsNotValid();
+    return ON_KnotVectorIsNotValid(bSilentError);
   }
 
   for ( i = 0; i < cv_count+order-2; i++ )
@@ -718,7 +725,7 @@ bool ON_IsValidKnotVector( int order, int cv_count, const double* knot, ON_TextL
       {
         text_log->Print("Knot vector knot[%d]=%g is not valid.\n",i,knot[i]);
       }
-      return ON_KnotVectorIsNotValid();
+      return ON_KnotVectorIsNotValid(bSilentError);
     }
   }
 
@@ -729,7 +736,7 @@ bool ON_IsValidKnotVector( int order, int cv_count, const double* knot, ON_TextL
       text_log->Print("Knot vector order=%d and knot[%d]=%g >= knot[%d]=%g (should have knot[order-2] < knot[order-1]).\n",
                        order,order-2,knot[order-2],order-1,knot[order-1]);
     }
-    return ON_KnotVectorIsNotValid();
+    return ON_KnotVectorIsNotValid(bSilentError);
   }
   if ( !(knot[cv_count-2] < knot[cv_count-1]) )
   {
@@ -738,7 +745,7 @@ bool ON_IsValidKnotVector( int order, int cv_count, const double* knot, ON_TextL
       text_log->Print("Knot vector cv_count=%d and knot[%d]=%g >= knot[%d]=%g (should have knot[cv_count-2] < knot[cv_count-1]).\n",
                        cv_count,cv_count-2,knot[cv_count-2],cv_count-1,knot[cv_count-1]);
     }
-    return ON_KnotVectorIsNotValid();
+    return ON_KnotVectorIsNotValid(bSilentError);
   }
 
   // entire array must be monotone increasing
@@ -753,7 +760,7 @@ bool ON_IsValidKnotVector( int order, int cv_count, const double* knot, ON_TextL
         text_log->Print("Knot vector must be increasing but knot[%d]=%g > knot[%d]=%g\n",
                          order+cv_count-4-i, *k0, order+cv_count-3-i, *k1 );
       }
-      return ON_KnotVectorIsNotValid();
+      return ON_KnotVectorIsNotValid(bSilentError);
     }
     k0++;
     k1++;
@@ -771,7 +778,7 @@ bool ON_IsValidKnotVector( int order, int cv_count, const double* knot, ON_TextL
         text_log->Print("Knot vector order = %d but knot[%d]=%g >= knot[%d]=%g\n",
                          order, cv_count-2-i, *k0, cv_count-1-i, *k1 );
       }
-      return ON_KnotVectorIsNotValid();
+      return ON_KnotVectorIsNotValid(bSilentError);
     }
     k0++;
     k1++;

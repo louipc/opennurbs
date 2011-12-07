@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -246,6 +247,62 @@ public:
   //   m_material_index will take care of your needs.
   int m_material_index;
   ON_ObjectRenderingAttributes m_rendering_attributes;
+
+  //////////////////////////////////////////////////////////////////
+  //
+  // BEGIN: Per object mesh parameter support
+  //
+
+  /*
+  Parameters:
+    mp - [in]
+      per object mesh parameters
+  Returns:
+    True if successful.
+  */
+  bool SetCustomRenderMeshParameters(const class ON_MeshParameters& mp);
+
+  /*
+  Parameters:
+    bEnable - [in]
+      true to enable use of the per object mesh parameters.
+      false to disable use of the per object mesh parameters.
+  Returns:
+    False if the object doe not have per object mesh parameters
+    and bEnable was true.  Use SetMeshParameters() to set
+    per object mesh parameters.
+  Remarks:
+    Sets the value of ON_MeshParameters::m_bCustomSettingsDisabled 
+    to !bEnable
+  */
+  bool EnableCustomRenderMeshParameters(bool bEnable);
+
+  /*
+  Returns:
+    Null or a pointer to fragile mesh parameters.
+    If a non-null pointer is returned, copy it and use the copy.
+    * DO NOT SAVE THIS POINTER FOR LATER USE. A call to 
+      DeleteMeshParameters() will delete the class.
+    * DO NOT const_cast the returned pointer and change its
+      settings.  You must use either SetMeshParameters()
+      or EnableMeshParameters() to change settings.
+  Remarks:
+    If the value of ON_MeshParameters::m_bCustomSettingsDisabled is
+    true, then do no use these parameters to make a render mesh.
+  */
+  const ON_MeshParameters* CustomRenderMeshParameters() const;
+
+  /*
+  Description:
+    Deletes any per object mesh parameters.
+  */
+  void DeleteCustomRenderMeshParameters();
+
+  //
+  // END: Per object mesh parameter support
+  //
+  //////////////////////////////////////////////////////////////////
+
 
   /*
   Description:

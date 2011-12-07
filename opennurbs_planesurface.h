@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -123,23 +124,6 @@ public:
   ON_Interval Domain(
     int // 0 gets first parameter's domain, 1 gets second parameter's domain
     ) const;
-
-  /*
-  Description:
-    Get an estimate of the size of the rectangle that would
-    be created if the 3d surface where flattened into a rectangle.
-  Parameters:
-    width - [out]  (corresponds to the first surface parameter)
-    height - [out] (corresponds to the first surface parameter)
-  Remarks:
-    overrides virtual ON_Surface::GetSurfaceSize
-  Returns:
-    true if successful.
-  */
-  ON_BOOL32 GetSurfaceSize( 
-      double* width, 
-      double* height 
-      ) const;
 
   int SpanCount(
     int // 0 gets first parameter's domain, 1 gets second parameter's domain
@@ -336,55 +320,6 @@ public:
          int dir,         
          double c
          ) const;
-
-  /*
-  Description:
-    Compute a 3d curve that is the composite of a 2d curve
-    and the surface map.
-  Parameters:
-    curve_2d - [in] a 2d curve whose image is in the surface's domain.
-    tolerance - [in] the maximum acceptable distance from the returned
-       3d curve to the image of curve_2d on the surface.
-    curve_2d_subdomain - [in] optional subdomain for curve_2d
-  Returns:
-    3d curve.
-  See Also:
-    ON_Surface::IsoCurve
-    ON_Surface::Pullback
-  Remarks:
-    Overrides virtual ON_Surface::Pushup.
-  */
-  ON_Curve* Pushup( const ON_Curve& curve_2d,
-                    double tolerance,
-                    const ON_Interval* curve_2d_subdomain = NULL
-                    ) const;
-
-  /*
-  Description:
-    Pull a 3d curve back to the surface's parameter space.
-  Parameters:
-    curve_3d - [in] a 3d curve
-    tolerance - [in] the maximum acceptable 3d distance between
-       from surface(curve_2d(t)) to the locus of points on the
-       surface that are closest to curve_3d.
-    curve_3d_subdomain - [in] optional subdomain for curve_3d
-    start_uv - [in] optional starting point (if known)
-    end_uv - [in] optional ending point (if known)
-  Returns:
-    2d curve.
-  See Also:
-    ON_Surface::IsoCurve
-    ON_Surface::Pushup
-  Remarks:
-    Overrides virtual ON_Surface::Pullback.
-  */
-  ON_Curve* Pullback( const ON_Curve& curve_3d,
-                    double tolerance,
-                    const ON_Interval* curve_3d_subdomain = NULL,
-                    ON_3dPoint start_uv = ON_UNSET_POINT,
-                    ON_3dPoint end_uv = ON_UNSET_POINT
-                    ) const;
-
   /*
   Description:
     Removes the portions of the surface outside of the specified interval.
@@ -509,31 +444,6 @@ public:
           const ON_Interval* = NULL, // first parameter sub_domain
           const ON_Interval* = NULL  // second parameter sub_domain
           ) const;
-
-
-  /*
-  Description:
-    Offset surface.
-  Parameters:
-    offset_distance - [in] offset distance
-    tolerance - [in] Some surfaces do not have an exact offset that
-      can be represented using the same class of surface definition.
-      In that case, the tolerance specifies the desired accuracy.
-    max_deviation - [out] If this parameter is not NULL, the maximum
-      deviation from the returned offset to the true offset is returned
-      here.  This deviation is zero except for cases where an exact
-      offset cannot be computed using the same class of surface definition.
-  Remarks:
-    Overrides virtual ON_Surface::Offset.
-  Returns:
-    Offset surface.
-  */
-  ON_Surface* Offset(
-        double offset_distance, 
-        double tolerance, 
-        double* max_deviation = NULL
-        ) const;
-
 
   int GetNurbForm( // returns 0: unable to create NURBS representation
                    //            with desired accuracy.

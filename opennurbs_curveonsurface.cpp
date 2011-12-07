@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -208,7 +209,6 @@ ON_BOOL32
 ON_CurveOnSurface::Transform( const ON_Xform& xform )
 {
   TransformUserData(xform);
-	DestroyCurveTree();
   return ( m_s ) ? m_s->Transform(xform) : false;
 }
 
@@ -316,7 +316,6 @@ ON_CurveOnSurface::Reverse()
 {
   ON_BOOL32 rc = ( m_c2 ) ? m_c2->Reverse() : false;
   if ( rc && m_c3 ) rc = m_c3->Reverse();
-	DestroyCurveTree();
   return rc;
 }
 

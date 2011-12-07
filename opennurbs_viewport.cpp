@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -634,6 +635,38 @@ bool ON_Viewport::GetFarPlaneEquation(
 }
 
 
+bool ON_Viewport::GetViewPlane( 
+  double view_plane_depth,
+  ON_Plane& view_plane 
+  ) const
+{
+  bool rc = IsValidFrustum() && IsValidCamera();
+  if ( rc ) 
+  {
+    view_plane.origin = m_CamLoc - view_plane_depth*m_CamZ;
+    view_plane.xaxis = m_CamX;
+    view_plane.yaxis = m_CamY;
+    view_plane.zaxis = m_CamZ;
+    view_plane.UpdateEquation();
+  }
+  return rc;
+}
+
+bool ON_Viewport::GetViewPlaneEquation( 
+  double view_plane_depth,
+  ON_PlaneEquation& view_plane_equation 
+  ) const
+{
+  bool rc = m_bValidCamera && m_bValidFrustum;
+  if (rc)
+  {
+    view_plane_equation.ON_3dVector::operator=(m_CamZ);
+    view_plane_equation.d = -view_plane_equation.ON_3dVector::operator*(m_CamLoc - view_plane_depth*m_CamZ);
+  }
+  return rc;
+}
+
+
 bool ON_Viewport::GetNearRect( 
        ON_3dPoint& left_bottom,
        ON_3dPoint& right_bottom,
@@ -681,6 +714,34 @@ bool ON_Viewport::GetFarRect(
   }
   return rc;
 }
+
+bool ON_Viewport::GetViewPlaneRect(
+        double view_plane_depth,
+        ON_3dPoint& left_bottom,
+        ON_3dPoint& right_bottom,
+        ON_3dPoint& left_top,
+        ON_3dPoint& right_top
+        ) const
+{
+  ON_Plane view_plane;
+  bool rc = GetViewPlane( view_plane_depth, view_plane );
+  if (rc )
+  {
+    double s = IsPerspectiveProjection()
+            ? view_plane_depth/m_frus_near
+            : 1.0;
+    double x = 1.0, y = 1.0;
+    GetViewScale(&x,&y);
+    x = 1.0/x;
+    y = 1.0/y;
+    left_bottom  = view_plane.PointAt( s*x*m_frus_left,  s*y*m_frus_bottom );
+    right_bottom = view_plane.PointAt( s*x*m_frus_right, s*y*m_frus_bottom );
+    left_top     = view_plane.PointAt( s*x*m_frus_left,  s*y*m_frus_top );
+    right_top    = view_plane.PointAt( s*x*m_frus_right, s*y*m_frus_top );
+  }
+  return rc;
+}
+
 
 ON_BOOL32 ON_Viewport::GetBBox( 
        double* boxmin,
@@ -1869,6 +1930,18 @@ bool ON_Viewport::GetScreenPort(
   return m_bValidPort;
 }
 
+int ON_Viewport::ScreenPortWidth() const
+{
+  int width = m_port_right - m_port_left;
+  return width >= 0 ? width : -width;
+}
+
+int ON_Viewport::ScreenPortHeight() const
+{
+  int height = m_port_top - m_port_bottom;
+  return height >= 0 ? height : -height;
+}
+
 bool ON_Viewport::GetScreenPortAspect(double& aspect) const
 {
   const double width = m_port_right - m_port_left;
@@ -2975,7 +3048,7 @@ void ON_Viewport::Dump( ON_TextLog& dump ) const
     dump.Print("invalid\n");
     break;
   }
-  dump.Print("Camera: (m_bValidCamera = %s\n",(m_bValidCamera?"true":"false"));
+  dump.Print("Camera: (m_bValidCamera = %s)\n",(m_bValidCamera?"true":"false"));
   dump.PushIndent();
   dump.Print("Location: "); if ( CameraLocationIsLocked() ) dump.Print("(locked) "); dump.Print(m_CamLoc); dump.Print("\n");
   dump.Print("Direction: "); if ( CameraDirectionIsLocked() ) dump.Print("(locked) "); dump.Print(m_CamDir); dump.Print("\n");
@@ -2989,7 +3062,7 @@ void ON_Viewport::Dump( ON_TextLog& dump ) const
 
   double frus_aspect=0.0;
   GetFrustumAspect(frus_aspect);
-  dump.Print("Frustum: (m_bValidFrustum = %s\n",(m_bValidFrustum?"true":"false"));
+  dump.Print("Frustum: (m_bValidFrustum = %s)\n",(m_bValidFrustum?"true":"false"));
   dump.PushIndent();
   dump.Print("left/right symmetry locked = %s\n",FrustumIsLeftRightSymmetric()?"true":"false");
   dump.Print("top/bottom symmetry locked = %s\n",FrustumIsTopBottomSymmetric()?"true":"false");
@@ -3000,6 +3073,14 @@ void ON_Viewport::Dump( ON_TextLog& dump ) const
   dump.Print("near: "); dump.Print(m_frus_near); dump.Print("\n");
   dump.Print("far: "); dump.Print(m_frus_far); dump.Print("\n");
   dump.Print("aspect (width/height): "); dump.Print(frus_aspect); dump.Print("\n");
+  if ( ON::perspective_view == m_projection )
+  {
+    dump.PushIndent();
+    dump.Print("near/far: %g\n",m_frus_near/m_frus_far);
+    dump.Print("suggested minimum near: = %g\n",m__MIN_NEAR_DIST);
+    dump.Print("suggested minimum near/far: = %g\n",m__MIN_NEAR_OVER_FAR);
+    dump.PopIndent();
+  }
   dump.PopIndent();
 
   double port_aspect=0.0;
@@ -3033,6 +3114,22 @@ bool ON_Viewport::GetPointDepth(
       *near_dist = depth;
     if ( 0 != far_dist && (*far_dist == ON_UNSET_VALUE || !bGrowNearFar || *far_dist < depth) )
       *far_dist = depth;
+    rc = true;
+  }
+  return rc;
+}
+
+bool ON_Viewport::GetPointDepth(       
+       ON_3dPoint point,
+       double* view_plane_depth
+       ) const
+{
+  bool rc = false;
+  if ( point.x != ON_UNSET_VALUE )
+  {
+    double depth = (m_CamLoc - point)*m_CamZ;
+    if ( 0 != view_plane_depth )
+      *view_plane_depth = depth;
     rc = true;
   }
   return rc;
@@ -3744,6 +3841,9 @@ void ON_Viewport::GetViewScale( double* x, double* y ) const
        && 1.0 == m_clip_mods.m_xform[3][3]
      )
   {
+    // 04 November 2011 S. Baer (RR93636)
+    //   See comments in SetViewScale about why we are ignoring the test for 1
+    //   on either sx or sy
     double sx = m_clip_mods.m_xform[0][0];
     double sy = m_clip_mods.m_xform[1][1];
     if (    sx > ON_ZERO_TOLERANCE
@@ -3752,7 +3852,7 @@ void ON_Viewport::GetViewScale( double* x, double* y ) const
          && 0.0 == m_clip_mods.m_xform[0][2]
          && 0.0 == m_clip_mods.m_xform[1][0]
          && 0.0 == m_clip_mods.m_xform[1][2]
-         && (1.0 == sx || 1.0 == sy )
+         // && (1.0 == sx || 1.0 == sy )
         )
     {
       if ( x ) *x = sx;
@@ -3776,11 +3876,18 @@ bool ON_Viewport::SetViewScale( double x, double y )
   //   Someday I will fix this.  In the mean time, I want all scaling requests
   //   to flow through SetViewScale/GetViewScale so I can easly find and fix
   //   things when I have time to do it right.
+  // 04 November 2011 S. Baer (RR93636)
+  //   This function is used for printer calibration and it is commonly possible
+  //   to need to apply a scale in both x and y.  The reason for the need of x
+  //   or y to be one is because the view scale is encoded in the clip mod xform
+  //   and it is hard to be sure that we could accurately extract these values
+  //   when calling GetViewScale.  Removing the requirement to have one of the
+  //   values == 1
   bool rc = false;
   if (    !IsPerspectiveProjection() 
        && x > ON_ZERO_TOLERANCE && ON_IsValid(x) 
        && y > ON_ZERO_TOLERANCE && ON_IsValid(y) 
-       && (1.0 == x || 1.0 == y) // ask Dale Lear if you are confused by this line
+       // && (1.0 == x || 1.0 == y)
        )
   {
     ON_Xform xform(1.0);
@@ -3788,6 +3895,97 @@ bool ON_Viewport::SetViewScale( double x, double y )
     xform.m_xform[1][1] = y;
     rc = SetClipModXform(xform);
   }
+  return rc;
+}
+
+double ON_Viewport::ClipCoordDepthBias( double relative_depth_bias, double clip_z, double clip_w ) const
+{
+  double d;
+  if ( m_frus_far > m_frus_near 
+       && 0.0 != relative_depth_bias 
+       && 0.0 != clip_w
+     )
+  {
+    if ( ON::perspective_view == m_projection )
+    {
+      // To get the formula for the code in this claus:
+      //
+      // Set M = [Camera2Clip]*[translation by (0,0,relative_depth_bias*(f-n)]*[Clip2Camera]
+      // Note that M maps clipping coordinates to clipping coordinates.
+      //
+      // Calculate M([x,y,z,w]) = [p,q,r,s]
+      //
+      // This function returns (r/s - z/w)*w
+      //
+      // If you are actually doing this calculation and trying to 
+      // get the formula used in the code below, it helps to notice
+      // that (f+n)/(f-n) = a/b.
+      //
+      // Note that there "should" be a small adjustment to the
+      // x and y coordinates that is not performed by tweaking
+      // the z clipping coordiante
+      //    z += vp->ClipCoordDepthBias( rel_bias, z, w );
+      // but the effect is actually better when the goal is to
+      // make wires that are on shaded surfaces appear because
+      // their horizons are not altered.
+      // 
+      // This method is more complicated that adding a constant
+      // depth buffer bias but is required for high quality images
+      // when values of far/near get to be around 1e4 or larger.
+      //
+      double a = m_frus_far + m_frus_near;
+      double b = m_frus_far - m_frus_near;
+      double c = 0.5*relative_depth_bias/(m_frus_far*m_frus_near);
+      double t = a + b*clip_z/clip_w;
+      d = c*t*t*clip_w/(1.0 - c*b*t);
+    }
+    else
+    {
+      // The "2.0*" is here because clipping coordinates run from
+      // -1 to +1, a distance of 2 units.
+      d = 2.0*relative_depth_bias*clip_w;
+    }
+  }
+  else
+  {
+    d = 0.0;
+  }
+  return d;
+}
+
+bool ON_Viewport::GetClipCoordDepthBiasXform( 
+    double relative_depth_bias,
+    ON_Xform& clipbias 
+    ) const
+{
+  bool rc = false;
+
+  while ( 0.0 != relative_depth_bias
+       && m_frus_far > m_frus_near
+       )
+  {
+    if ( ON::perspective_view == m_projection )
+    {
+      ON_Xform clip2cam, cam_delta(1.0), cam2clip;
+      if ( !cam2clip.CameraToClip(true,m_frus_left,m_frus_right,m_frus_bottom,m_frus_top,m_frus_near,m_frus_far) )
+        break;
+      if ( !clip2cam.ClipToCamera(true,m_frus_left,m_frus_right,m_frus_bottom,m_frus_top,m_frus_near,m_frus_far) )
+        break;
+      cam_delta.m_xform[2][3] = relative_depth_bias*(m_frus_far-m_frus_near);
+      clipbias = cam2clip*cam_delta*clip2cam;
+    }
+    else
+    {
+      clipbias.Identity();
+      clipbias.m_xform[2][3] = 2.0*relative_depth_bias;
+    }
+    rc = true;
+    break;
+  }
+
+  if (!rc)
+    clipbias.Identity();
+
   return rc;
 }
 
@@ -4075,7 +4273,7 @@ bool ON_IntersectViewFrustumPlane(
   }
   ppt_list[0].m_Q.x = 0.0;
   ppt_list[0].m_Q.y = 0.0;
-  ON_hsort(ppt_list+1,ppt_count-1,sizeof(ppt_list[0]),comparePptAngle);
+  ON_qsort(ppt_list+1,ppt_count-1,sizeof(ppt_list[0]),comparePptAngle);
 
   points.Append(ppt_list[0].m_P);
   i0 = 0;
@@ -4117,6 +4315,10 @@ void ON_Viewport::GetPerspectiveClippingPlaneConstraints(
 
   if ( camera_location.IsValid() )
   {
+    /*
+
+    // This code was used prior to 14 July 2011.
+    //
     d = camera_location.DistanceTo(ON_3dPoint::Origin);
     if ( d >= 1.0e5 )
     {
@@ -4139,6 +4341,22 @@ void ON_Viewport::GetPerspectiveClippingPlaneConstraints(
       else
         depth_buffer_bit_depth = 8;
     }
+    */
+
+    // 14 July 2011 - Dale Lear
+    //   The reductions above were too harsh and were
+    //   generating clipping artifacts in the perspective
+    //   view in bug report 88216.  Changing to
+    //   to the code below gets rid of those
+    //   artifacts at the risk of having a meaninless
+    //   view to clip transform if the transformation is
+    //   calculated with single precision numbers.
+    //   If these values require further tuning, please
+    //   discuss changes with me and attach example files
+    //   to bug report 88216.
+    d = camera_location.MaximumCoordinate();
+    if ( d > 1.0e6 && depth_buffer_bit_depth >= 16 )
+      depth_buffer_bit_depth -= 8;
   }
 
   if ( depth_buffer_bit_depth >= 32 )

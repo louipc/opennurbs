@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -159,7 +160,6 @@ ON_BOOL32 ON_NurbsSurface::SetDomain(
         }
       }
 			rc = true;
-      DestroySurfaceTree();
     }
   }
   return rc;
@@ -247,7 +247,6 @@ bool ON_NurbsSurface::MakeClampedUniformKnotVector(
 {
   if ( dir < 0 || dir > 1 )
     return false;
-	DestroySurfaceTree();
   ReserveKnotCapacity( dir, ON_KnotCount( m_order[dir], m_cv_count[dir] ) );
   return ON_MakeClampedUniformKnotVector( m_order[dir], m_cv_count[dir], m_knot[dir], delta );
 }
@@ -259,7 +258,6 @@ bool ON_NurbsSurface::MakePeriodicUniformKnotVector(
 {
   if ( dir < 0 || dir > 1 )
     return false;
-	DestroySurfaceTree();
   ReserveKnotCapacity( dir, ON_KnotCount( m_order[dir], m_cv_count[dir] ) );
   return ON_MakePeriodicUniformKnotVector( m_order[dir], m_cv_count[dir], m_knot[dir], delta );
 }
@@ -277,7 +275,6 @@ ON_BOOL32 ON_NurbsSurface::Create(
         int cv_count1   // cv count1 (>= order1)
         )
 {
-  DestroySurfaceTree();
   if ( dim < 1 )
     return false;
   if ( order0 < 2 )
@@ -447,7 +444,6 @@ ON_NurbsSurface& ON_NurbsSurface::operator=( const ON_NurbsSurface& src )
 ON_NurbsSurface& ON_NurbsSurface::operator=( const ON_BezierSurface& bezier_surface )
 {
   int i, j;
-  DestroySurfaceTree();
 
   m_dim = bezier_surface.m_dim;
   m_is_rat = bezier_surface.m_is_rat;
@@ -627,7 +623,6 @@ ON_BOOL32 ON_NurbsSurface::GetBBox( // returns true if successful
 
 ON_BOOL32 ON_NurbsSurface::Transform( const ON_Xform& xform )
 {
-  DestroySurfaceTree();
   TransformUserData(xform);
   if ( 0 == m_is_rat )
   {
@@ -703,7 +698,6 @@ ON_BOOL32 ON_NurbsSurface::Read(
        ON_BinaryArchive&  file // open binary file
      )
 {
-  DestroySurfaceTree();
   // NOTE - check legacy I/O code if changed
   int major_version = 0;
   int minor_version = 0;
@@ -784,25 +778,6 @@ double ON_NurbsSurface::ControlPolygonLength( int dir ) const
   }
 
   return max_length;
-}
-
-
-ON_BOOL32 ON_NurbsSurface::GetSurfaceSize( 
-    double* width, 
-    double* height 
-    ) const
-{
-  // TODO - get lengths of polygon
-  ON_BOOL32 rc = true;
-  if ( width )
-  {
-    *width = ControlPolygonLength( 0 );
-  }
-  if ( height )
-  {
-    *height = ControlPolygonLength( 1 );
-  }
-  return rc;
 }
 
 int ON_NurbsSurface::SpanCount( int dir ) const
@@ -975,8 +950,6 @@ static ON_BOOL32 FromCurve( ON_NurbsCurve& crv,
                                    ON_NurbsSurface& srf, 
                                    int dir )
 {
-  srf.DestroySurfaceTree();
-  crv.DestroyCurveTree();
   if ( dir < 0 || dir > 1 )
     return false;
   if ( !crv.m_cv )
@@ -1028,8 +1001,6 @@ ON_BOOL32 ON_NurbsSurface::Trim(
        && trim_domain[1] == current_domain[1] )
     return true;
 
-  DestroySurfaceTree();
-
   ON_NurbsCurve crv;
   if ( ToCurve(*this,dir,&crv) )
   {
@@ -1059,9 +1030,6 @@ bool ON_NurbsSurface::Extend(
     FromCurve( crv, *this, dir );
   }
 
-  if (rc){
-    DestroySurfaceTree();
-  }
   return rc;
 
 }
@@ -1085,7 +1053,6 @@ ON_BOOL32 ON_NurbsSurface::Split(
     left_srf = ON_NurbsSurface::Cast( west_or_south_side );
     if ( !left_srf )
       return false;
-    left_srf->DestroySurfaceTree();
   }
 
   if ( east_or_north_side )
@@ -1093,7 +1060,6 @@ ON_BOOL32 ON_NurbsSurface::Split(
     right_srf = ON_NurbsSurface::Cast( east_or_north_side );
     if ( !right_srf )
       return false;
-    right_srf->DestroySurfaceTree();
   }
 
   ON_NurbsCurve crv, left_crv, right_crv;
@@ -1194,18 +1160,6 @@ ON_NurbsSurface::GetNurbForm( // returns 0: unable to create NURBS representatio
   ON_NurbsSurfaceCopyHelper(*this,srf); // does not copy user data
   return 1;
 }
-
-ON_Surface* ON_NurbsSurface::Offset(
-      double offset_distance, 
-      double tolerance, 
-      double* max_deviation
-      ) const
-{
-  // 3rd party developers who want to enhance openNURBS
-  // may provide a working offset here.
-  return NULL;
-}
-
 
 ON_BOOL32 ON_NurbsSurface::IsPlanar(
       ON_Plane* plane,
@@ -1340,7 +1294,6 @@ ON_NurbsSurface::ChangeSurfaceSeam(
 		rc = false;
 	
 	if(rc && IsClosed(dir) ){
-		DestroySurfaceTree();
 		ON_NurbsCurve crv;
 		rc = ToCurve(*this, dir, &crv)!=NULL;
 		if(rc)
@@ -1709,8 +1662,6 @@ ON_NurbsSurface::IsSingular( // true if surface side is collapsed to a point
 ON_BOOL32 
 ON_NurbsSurface::SetWeight( int i, int j, double w )
 {
-  DestroySurfaceTree();
-
   ON_BOOL32 rc = false;
   if ( m_is_rat ) {
     double* cv = CV(i,j);
@@ -1728,8 +1679,6 @@ ON_NurbsSurface::SetWeight( int i, int j, double w )
 ON_BOOL32 
 ON_NurbsSurface::SetCV( int i, int j, ON::point_style style, const double* Point )
 {
-  DestroySurfaceTree();
-
   ON_BOOL32 rc = true;
   int k;
   double w;
@@ -1790,8 +1739,6 @@ ON_NurbsSurface::SetCV( int i, int j, ON::point_style style, const double* Point
 ON_BOOL32 
 ON_NurbsSurface::SetCV( int i, int j, const ON_3dPoint& point )
 {
-  DestroySurfaceTree();
-
   ON_BOOL32 rc = false;
   double* cv = CV(i,j);
   if ( cv ) {
@@ -1812,8 +1759,6 @@ ON_NurbsSurface::SetCV( int i, int j, const ON_3dPoint& point )
 ON_BOOL32 
 ON_NurbsSurface::SetCV( int i, int j, const ON_4dPoint& point )
 {
-  DestroySurfaceTree();
-
   ON_BOOL32 rc = false;
   double* cv = CV(i,j);
   if ( cv ) {
@@ -1919,7 +1864,6 @@ ON_NurbsSurface::GetCV( int i, int j, ON_4dPoint& point ) const
 ON_BOOL32 
 ON_NurbsSurface::SetKnot( int dir, int knot_index, double k )
 {
-  DestroySurfaceTree();
   if ( dir ) dir = 1;
   if ( knot_index < 0 || knot_index >= KnotCount(dir) )
     return false;
@@ -1949,7 +1893,6 @@ ON_BOOL32
 ON_NurbsSurface::Reverse(int dir)
 {
   if (dir < 0 || dir > 1) return false;
-  DestroySurfaceTree();
   ON_BOOL32 rc0 = ON_ReverseKnotVector( m_order[dir], m_cv_count[dir], m_knot[dir] );
   ON_BOOL32 rc1 = ON_ReversePointGrid( 3, m_is_rat, m_cv_count[0], m_cv_count[1], m_cv_stride[0], m_cv_stride[1], m_cv, dir );
   return rc0 && rc1;
@@ -1958,7 +1901,6 @@ ON_NurbsSurface::Reverse(int dir)
 ON_BOOL32
 ON_NurbsSurface::Transpose()
 {
-  DestroySurfaceTree();
   int i;
   // transpose CV grid
   i = m_order[0]; m_order[0] = m_order[1]; m_order[1] = i;
@@ -1974,7 +1916,6 @@ ON_NurbsSurface::Transpose()
 ON_BOOL32
 ON_NurbsSurface::SwapCoordinates( int i, int j )
 {
-  DestroySurfaceTree();
   ON_BOOL32 rc = true;
   int k;
   if ( m_cv_count[0] <= m_cv_count[1] ) {
@@ -1997,7 +1938,6 @@ ON_BOOL32 ON_NurbsSurface::SetCVRow(
        const ON_3dPoint& point
        )
 {
-  DestroySurfaceTree();
   int i;
 
   if ( row_index < 0 || row_index > m_cv_count[1] )
@@ -2017,7 +1957,6 @@ ON_BOOL32 ON_NurbsSurface::SetCVRow(
        const double* v // values (same dim and is_rat as surface)
        )
 {
-  DestroySurfaceTree();
   int i;
   unsigned int s;
   double* cv;
@@ -2047,7 +1986,6 @@ ON_BOOL32 ON_NurbsSurface::SetCVColumn(
        const ON_3dPoint& point
        )
 {
-  DestroySurfaceTree();
   int j;
 
   if ( col_index < 0 || col_index > m_cv_count[0] )
@@ -2067,7 +2005,6 @@ ON_BOOL32 ON_NurbsSurface::SetCVColumn(
        const double* v // values (same dim and is_rat as surface)
        )
 {
-  DestroySurfaceTree();
   int i;
   unsigned int s;
   double* cv;
@@ -2118,7 +2055,6 @@ bool ON_NurbsSurface::SetClampedGrevilleKnotVector(
          const double* g // g[], Greville abcissa
          )
 {
-  DestroySurfaceTree();
   if ( !m_knot[dir] && m_order[dir] >= 2 && m_cv_count[dir] >= m_order[dir] )
     ReserveKnotCapacity(dir,KnotCount(dir));
   return ON_GetGrevilleKnotVector( g_stride, g, false, Order(dir), CVCount(dir), m_knot[dir] );
@@ -2130,7 +2066,6 @@ bool ON_NurbsSurface::SetPeriodicGrevilleKnotVector(
          const double* g // g[], Greville abcissa
          )
 {
-  DestroySurfaceTree();
   if ( !m_knot[dir] && m_order[dir] >= 2 && m_cv_count[dir] >= m_order[dir] )
     ReserveKnotCapacity(dir,KnotCount(dir));
   return ON_GetGrevilleKnotVector( g_stride, g, true, Order(dir), CVCount(dir), m_knot[dir] );
@@ -2139,7 +2074,6 @@ bool ON_NurbsSurface::SetPeriodicGrevilleKnotVector(
 
 bool ON_NurbsSurface::ZeroCVs()
 {
-  DestroySurfaceTree();
   bool rc = false;
   int i, j;
   if ( m_cv ) {
@@ -2185,7 +2119,6 @@ static void ConvertToCurve( const ON_NurbsSurface& srf, int dir, ON_NurbsCurve& 
 {
   // DO NOT MAKE THIS FUNCTION PUBLIC - IT IS DELICATE AND DEDICATED TO USE IN THIS FILE
 
-  crv.DestroyCurveTree();
   if (dir)
     dir = 1;
   const int Sdim = srf.CVSize();
@@ -2238,8 +2171,6 @@ static void ConvertFromCurve( ON_NurbsCurve& crv, int dir, ON_NurbsSurface& srf 
 {
   // DO NOT MAKE THIS FUNCTION PUBLIC - IT IS DELICATE AND DEDICATED TO USE IN THIS FILE
 
-  crv.DestroyCurveTree();
-  srf.DestroySurfaceTree();
   if (dir)
     dir = 1;
   const int Sdim = srf.CVSize();
@@ -2301,7 +2232,6 @@ bool ON_NurbsSurface::ClampEnd(
           int end// 0 = clamp start, 1 = clamp end, 2 = clamp start and end
           )
 {
-  DestroySurfaceTree();
   if (dir)
     dir = 1;
   ON_NurbsCurve crv;
@@ -2318,7 +2248,6 @@ bool ON_NurbsSurface::InsertKnot(
          int knot_multiplicity // default = 1
          )
 {
-  DestroySurfaceTree();
   bool rc = false;
 
   if ( (dir == 0 || dir == 1) && IsValid() && knot_multiplicity > 0 && knot_multiplicity < Order(dir) ) 
@@ -2349,7 +2278,6 @@ bool ON_NurbsSurface::MakeRational()
 {
   if ( !IsRational() ) 
   {
-    DestroySurfaceTree();
     ON_BezierSurface b;
     b.m_dim = m_dim;
     b.m_is_rat = m_is_rat;
@@ -2379,8 +2307,6 @@ bool ON_NurbsSurface::ChangeDimension(
     return false;
   if ( desired_dimension == m_dim )
     return true;
-
-  DestroySurfaceTree();
 
   if ( desired_dimension < m_dim ) 
   {
@@ -2474,7 +2400,6 @@ bool ON_NurbsSurface::IncreaseDegree(
          int desired_degree  //  desired_degree
          )
 {
-  DestroySurfaceTree();
   bool rc = false;
 
   if ( (dir == 0 || dir == 1) && IsValid() && desired_degree >= 1 )
@@ -2501,7 +2426,6 @@ bool ON_NurbsSurface::MakeNonRational()
 {
   if ( IsRational() ) 
   {
-    DestroySurfaceTree();
     ON_BezierSurface b;
     b.m_dim = m_dim;
     b.m_is_rat = m_is_rat;
@@ -2532,7 +2456,6 @@ ON_BOOL32 ON_NurbsSurface::TensorProduct(
       ON_TensorProduct& tensor
       )
 {
-  DestroySurfaceTree();
   //   The resulting surface will satisfy
   // 	 NurbSrf(s,t) = T( NurbA(s), NurbB(t) )
   // 
@@ -2769,7 +2692,6 @@ int ON_NurbsSurface::CreateRuledSurface(
        const ON_Interval* curveB_domain
        )
 {
-  DestroySurfaceTree();
   int rcA=1, rcB=1;
   ON_NurbsCurve nurbs_curveA, nurbs_curveB;
   if ( m_cv && m_cv_capacity == 0 )
@@ -2948,7 +2870,6 @@ int ON_NurbsSurface::CreateConeSurface(
        const ON_Interval* curve_domain
        )
 {
-  DestroySurfaceTree();
   ON_NurbsCurve nurbs_curve;
   if ( m_cv && m_cv_capacity == 0 )
     nurbs_curve.m_cv = m_cv;

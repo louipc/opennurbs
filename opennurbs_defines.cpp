@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -693,23 +694,41 @@ void ON_wString::MakeLower()
   }
 }
 
-// on_wcsrev() calls _wcsrev() or wcsrev() depending on OS
 wchar_t* on_wcsrev(wchar_t* s)
 {
   if ( !s )
     return 0;
-#if defined(ON_OS_WINDOWS)
-  return _wcsrev(s);
-#else
   int i, j;
   wchar_t w;
-  for ( i = 0, j = wcslen(s)-1; i < j; i++, j-- ) {
+  for ( j = 0; 0 != s[j]; j++ )
+  {
+    // empty for body
+  }
+
+  for ( i = 0, j--; i < j; i++, j-- ) 
+  {
     w = s[i];
-    s[i] = s[j];
-    s[j] = w;
+    if ( w >= 0xD800 && w <= 0xDBFF && s[i+1] >= 0xDC00 && s[i+1] <= 0xDFFF )
+    {
+      // UTF-16 surrogate pair
+      if ( i+1 < j-1 )
+      {
+        s[i] = s[j-1];
+        s[j-1] = w;
+        w = s[i+1];
+        s[i+1] = s[j];
+        s[j] = w;
+      }
+      i++;
+      j--;
+    }
+    else
+    {
+      s[i] = s[j];
+      s[j] = w;
+    }
   }
   return s;
-#endif
 }
 
 int on_WideCharToMultiByte(
@@ -719,51 +738,24 @@ int on_WideCharToMultiByte(
     int cchMultiByte
     )
 {
-#if defined(ON_OS_WINDOWS)
-  unsigned int code_page = ON_GetStringConversionWindowsCodePage();
-  return ::WideCharToMultiByte( code_page, 0, 
-                        lpWideCharStr, cchWideChar, 
-                        lpMultiByteStr, cchMultiByte,
-                        NULL, NULL );
-#else
-  // use simple wchar_t -> char conversion since 
-  // wcsnrtombs() and wcsrtombs() tend to crash on various
-  // UNIX platforms.
-
-  // this union is used to get around issues invovling signed/unsigned
-  // behavior of "char" on various platforms and with various
-  // compiler flags.
-  union
+  // 14 March 2011 Dale Lear
+  //   It turns out that Windows WideCharToMultiByte does correctly
+  //   convert UTF-16 to UTF-8 in Windows 7 when the code page 
+  //   is CP_ACP and calls with CP_UTF8 sometimes fail to do
+  //   any conversion.  So, I wrote ON_ConvertWideCharToUTF8()
+  //   and opennurbs will use ON_ConvertWideCharToUTF8 to get 
+  //   consistent results on all platforms.
+  unsigned int error_status = 0;
+  unsigned int error_mask = 0xFFFFFFFF;
+  ON__UINT32 error_code_point = 0xFFFD;
+  const wchar_t* p1 = 0;
+  int count = ON_ConvertWideCharToUTF8(false,lpWideCharStr,cchWideChar,lpMultiByteStr,cchMultiByte,
+                                       &error_status,error_mask,error_code_point,&p1);
+  if ( 0 != error_status )
   {
-    char c;
-    unsigned char u;
-  } u;
-  int i;
-
-  if ( cchMultiByte > 0 && lpMultiByteStr ) {
-    for (i = 0; i < cchWideChar && i < cchMultiByte; i++ ) {
-      unsigned int w = lpWideCharStr[i];
-      if ( w >= 256 )
-        w = '_'; // default is underbar
-      u.u = (unsigned char)w;
-      lpMultiByteStr[i] = u.c;
-    }
-    if ( i < cchMultiByte )
-      lpMultiByteStr[i] = 0;
+    ON_ERROR("Error converting UTF-16 encoded wchar_t string to UTF-8 encoded char string.");
   }
-  return cchWideChar; // return number of characters required for conversion
-
-  /*
-#if defined(__USE_GNU)
-  // gcc extension is what we really need
-  return wcsnrtombs( lpMultiByteStr, &lpWideCharStr, cchWideChar, cchMultiByte, NULL );
-#else
-  // see http://www.datafocus.com/docs/man3/wcsrtombs.3.asp
-  return wcsrtombs( lpMultiByteStr, &lpWideCharStr, cchMultiByte, NULL );
-#endif
-  */
-
-#endif
+  return count;
 }
 
 int on_MultiByteToWideChar(
@@ -773,42 +765,25 @@ int on_MultiByteToWideChar(
     int cchWideChar
     )
 {
-#if defined(ON_OS_WINDOWS)
-  unsigned int code_page = ON_GetStringConversionWindowsCodePage();
-  return ::MultiByteToWideChar(code_page, 0, lpMultiByteStr, cchMultiByte, lpWideCharStr, cchWideChar);
-#else
-  // use simple char -> wchar_t conversion since 
-  // mbsnrtowcs() and mbsrtowcs() tend to crash on various
-  // UNIX platforms.
-  union
+  // 14 March 2011 Dale Lear
+  //   It turns out that Windows WideCharToMultiByte does correctly
+  //   convert UTF-16 to UTF-8 in Windows 7 when the code page 
+  //   is CP_ACP and calls with CP_UTF8 sometimes fail to do
+  //   any conversion.  So, I wrote ON_ConvertUTF8ToWideChar()
+  //   and opennurbs will use ON_ConvertUTF8ToWideChar to get 
+  //   consistent results on all platforms.
+  unsigned int error_status = 0;
+  unsigned int error_mask = 0xFFFFFFFF;
+  ON__UINT32 error_code_point = 0xFFFD;
+  const char* p1 = 0;
+  int count = ON_ConvertUTF8ToWideChar(lpMultiByteStr,cchMultiByte,lpWideCharStr,cchWideChar,
+                                       &error_status,error_mask,error_code_point,&p1);
+  if ( 0 != error_status )
   {
-    char c;
-    unsigned char u;
-  } u;
-  int i;
-
-  if ( cchWideChar > 0 && lpWideCharStr ) {
-    for (i = 0; i < cchMultiByte && i < cchWideChar; i++ ) {
-      u.c = lpMultiByteStr[i];
-      lpWideCharStr[i] = u.u;
-    }
-    if ( i < cchWideChar )
-      lpWideCharStr[i] = 0;
+    ON_ERROR("Error converting UTF-8 encoded char string to UTF-16 encoded wchar_t string.");
   }
-  return cchMultiByte; // return number of characters required for conversion
-
-  /*
-#if defined(__USE_GNU)
-  // gcc extension is what we really need
-  return mbsnrtowcs(lpWideCharStr, &lpMultiByteStr, cchMultiByte, cchWideChar, NULL );
-#else
-  // see http://www.datafocus.com/docs/man3/mbsrtowcs.3.asp
-  return mbsrtowcs(lpWideCharStr, &lpMultiByteStr, cchWideChar, NULL );
-#endif
-  */
-#endif
+  return count;
 }
-
 
 int on_vsnprintf( char *buffer, size_t count, const char *format, va_list argptr )
 {
@@ -841,8 +816,8 @@ int on_vsnwprintf( wchar_t *buffer, size_t count, const wchar_t *format, va_list
   ON_String aformat = format; // convert format from UNICODE to ASCII
 
   // format an ASCII buffer
-  char* abuffer = (char*)onmalloc(2*count*sizeof(*abuffer));
-  int rc = on_vsnprintf( abuffer, 2*count, aformat.Array(), argptr );
+  char* abuffer = (char*)onmalloc(4*count*sizeof(*abuffer));
+  int rc = on_vsnprintf( abuffer, 4*count, aformat.Array(), argptr );
 
   // convert formatted ASCII buffer to UNICODE
   on_MultiByteToWideChar( abuffer, strlen(abuffer), buffer, count );
@@ -871,7 +846,7 @@ FILE* ON::OpenFile( // like fopen() - needed when OpenNURBS is used as a DLL
         const char* filemode // file mode
         )
 {
-  return (filename && filename[0] && filemode && filemode[0]) ? fopen(filename,filemode) : 0;
+  return ON_FileStream::Open(filename,filemode);
 }
 
 FILE* ON::OpenFile( // like fopen() - needed when OpenNURBS is used as a DLL
@@ -879,22 +854,14 @@ FILE* ON::OpenFile( // like fopen() - needed when OpenNURBS is used as a DLL
         const wchar_t* filemode // file mode
         )
 {
-#if defined(ON_OS_WINDOWS)
-  return (filename && filename[0] && filemode && filemode[0]) ? _wfopen(filename,filemode) : 0;
-#else
-  // I can't find an wfopen() or _wfopen() in
-  // gcc version egcs-2.91.66 19990314/Linux (egcs-1.1.2 release)
-  ON_String ascii_filename = filename;
-  ON_String ascii_filemode = filemode;
-  return ON::OpenFile( ascii_filename.Array(), ascii_filemode.Array() );
-#endif
+  return ON_FileStream::Open(filename,filemode);
 }
 
 int ON::CloseFile( // like fclose() - needed when OpenNURBS is used as a DLL
         FILE* fp // pointer returned by OpenFile()
         )
 {
-  return fp ? fclose(fp) : EOF;
+  return ON_FileStream::Close(fp);
 }
 
 int ON::CloseAllFiles()
@@ -1470,12 +1437,12 @@ ON::surface_style ON::SurfaceStyle(int i)
 
 ON::sort_algorithm ON::SortAlgorithm(int i)
 {
-  sort_algorithm sa = heap_sort;
+  sort_algorithm sa = ON::quick_sort;
   
   switch (i) {
-  case heap_sort: sa = heap_sort; break;
-  case quick_sort: sa = quick_sort; break;
-  default: sa = heap_sort; break;
+  case ON::heap_sort: sa = ON::heap_sort; break;
+  case ON::quick_sort: sa = ON::quick_sort; break;
+  default: sa = ON::quick_sort; break;
   }
   return sa;
 }
@@ -2022,3 +1989,51 @@ unsigned int ON_GetStringConversionWindowsCodePage()
 {
   return g_s__windows_code_page;
 }
+
+/*
+ON_TimeLimit::ON_TimeLimit()
+{
+  m_time_limit[0] = 0;
+  m_time_limit[1] = 0;
+}
+
+ON_TimeLimit::ON_TimeLimit(ON__UINT64 time_limit_seconds)
+{
+  SetTimeLimit(time_limit_seconds);
+}
+
+void ON_TimeLimit::SetTimeLimit(ON__UINT64 time_limit_seconds)
+{
+  m_time_limit[0] = 0;
+  m_time_limit[1] = 0;
+  if ( time_limit_seconds > 0 )
+  {
+    // This is a crude implementation that works
+    // unless clock() is close to wrapping around
+    // or time_limit_seconds is unreasonably large.
+    clock_t max_ticks = (clock_t)(time_limit_seconds*((double)CLOCKS_PER_SEC));
+    if ( max_ticks > 0 )
+    {
+      clock_t now_clock = ::clock();
+      clock_t max_clock = max_ticks + now_clock;
+      time_t ::time()
+      if ( now_clock < max_clock )
+      {
+        *((clock_t*)(&m_time_limit[0])) = max_clock;
+      }
+    }
+  }
+}
+
+bool ON_TimeLimit::Continue() const
+{
+  clock_t max_clock = *((clock_t*)&m_time_limit[0]);
+  return ( max_clock <= 0 || ::clock() <= max_clock );
+}
+
+bool ON_TimeLimit::IsSet() const
+{
+  clock_t max_clock = *((clock_t*)&m_time_limit[0]);
+  return ( max_clock > 0 );
+}
+*/

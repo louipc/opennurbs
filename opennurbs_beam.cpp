@@ -1285,22 +1285,22 @@ void ON_Extrusion::Dump( ON_TextLog& text_log ) const
   text_log.Print("ON_Extrusion: \n");
   {
     text_log.PushIndent();
-    text_log.Print("Path: ");
-    text_log.Print(m_path.PointAt(m_t[0]));
-    text_log.Print(" ");
-    text_log.Print(m_path.PointAt(m_t[1]));
-    text_log.Print("\n");
-    text_log.Print("Up: ");
-    text_log.Print(m_up);
-    text_log.Print("\n");
-    text_log.Print("Profile:\n");
+  text_log.Print("Path: ");
+  text_log.Print(m_path.PointAt(m_t[0]));
+  text_log.Print(" ");
+  text_log.Print(m_path.PointAt(m_t[1]));
+  text_log.Print("\n");
+  text_log.Print("Up: ");
+  text_log.Print(m_up);
+  text_log.Print("\n");
+  text_log.Print("Profile:\n");
     {
-      text_log.PushIndent();
-      if ( !m_profile )
-        text_log.Print("NULL");
-      else
-        m_profile->Dump(text_log);
-      text_log.PopIndent();
+  text_log.PushIndent();
+  if ( !m_profile )
+    text_log.Print("NULL");
+  else
+    m_profile->Dump(text_log);
+  text_log.PopIndent();
     }
     text_log.PopIndent();
   }
@@ -1686,11 +1686,10 @@ ON_BOOL32 ON_Extrusion::Transform( const ON_Xform& xform )
   if ( !Q1.IsValid() )
     return ON_Extrusion_TransformFailed();
   ON_3dVector T = m_path.Tangent();
-  ON_3dVector QT = Q1-Q0;
-  if ( !QT.Unitize() )
+  ON_3dVector QT0 = Q1-Q0;
+  if ( !QT0.Unitize() )
     return ON_Extrusion_TransformFailed();
-  if ( fabs(QT*T - 1.0) <= ON_SQRT_EPSILON )
-    QT = T;
+  ON_3dVector QT = (( fabs(QT0*T - 1.0) <= ON_SQRT_EPSILON ) ? T : QT0);
   ON_3dVector X = ON_CrossProduct(m_up,T);
   if ( !X.IsUnitVector() && !X.Unitize() )
     return ON_Extrusion_TransformFailed();
@@ -1700,11 +1699,17 @@ ON_BOOL32 ON_Extrusion::Transform( const ON_Xform& xform )
   ON_3dPoint X1 = xform*(m_path.to + X);
   ON_3dPoint Y1 = xform*(m_path.to + m_up);
 
-  ON_3dVector QU = Y0-Q0;
-  if ( !QU.Unitize() )
+  ON_3dVector QU0 = Y0-Q0;
+  if ( !QU0.Unitize() )
     return ON_Extrusion_TransformFailed();
-  if ( fabs(QU*m_up - 1.0) <= ON_SQRT_EPSILON )
-    QU = m_up;
+  ON_3dVector QU = (( fabs(QU*m_up - 1.0) <= ON_SQRT_EPSILON ) ? m_up : QU0);
+
+  // 12 July 2008 Dale Lear - this test fixes http://dev.mcneel.com/bugtrack/?q=88130
+  if ( fabs(QU*QT) > fabs(QU0*QT0) )
+  {
+    QU = QU0;
+    QT = QT0;
+  }
 
   // profile_xform will be the transformation 
   // applied to the 2d profile curve.
@@ -2604,6 +2609,7 @@ ON_Brep* ON_Extrusion::BrepForm( ON_Brep* brep, bool bSmoothFaces ) const
   {
     // set a tight bounding box
     ((CMyBrepIsSolidSetter*)newbrep)->SetBBox(*this);
+    newbrep->SetTrimBoundingBoxes(true);
   }
 
 #if defined(ON_DEBUG)
@@ -2823,6 +2829,18 @@ bool ON_Extrusion::GetBrepFormComponentIndex(
   return true;
 }
 
+class CVertexInfo
+{
+  // Helper class used in ON_Extrusion::CreateMesh()
+  // It is declared out here to keep gcc happy.
+public:
+  ON_3dPoint P;  // profile 2d point
+  ON_3dVector T; // profile 3d tangent
+  double kappa;  // used if we need curvature
+  double t;      // profile parameter
+  int vi[2];     // mesh->m_V[] indices
+};
+
 ON_BOOL32 ON_Extrusion::SetDomain( 
   int dir, // 0 sets first parameter's domain, 1 gets second parameter's domain
   double t0, 
@@ -2854,44 +2872,6 @@ ON_Interval ON_Extrusion::Domain(
   return (path_dir == dir ) 
          ? m_path_domain 
          : ((1-path_dir == dir && m_profile) ? m_profile->Domain() : ON_Interval());
-}
-
-ON_BOOL32 ON_Extrusion::GetSurfaceSize( 
-    double* width, 
-    double* height 
-    ) const
-{
-  bool rc = true;
-  //int path_dir = PathParameter();
-  if ( PathParameter() )
-  {
-    double* p = width;
-    width = height;
-    height = p;
-  }
-  if ( width )
-  {
-    if ( m_path.IsValid() && m_t.IsIncreasing() )
-      *width = m_path.Length()*m_t.Length();
-    else
-    {
-      *width = 0.0;
-      rc = false;
-    }
-  }
-  if (height)
-  {
-    if ( m_profile )
-    {
-      rc = m_profile->GetLength(height)?true:false;
-    }
-    else 
-    {
-      rc = false;
-      *height = 0.0;
-    }
-  }
-  return rc;
 }
 
 int ON_Extrusion::SpanCount(
@@ -3009,7 +2989,7 @@ ON_BOOL32 ON_Extrusion::IsPlanar(
       ON_3dVector N = ON_CrossProduct(pathT,Q1-Q0);
       N.Unitize();
       plane->origin = Q0;
-      if ( m_bTransposed )
+      if ( false == m_bTransposed )
       {
         plane->yaxis = pathT;
         plane->zaxis = -N;
@@ -3466,7 +3446,6 @@ ON_BOOL32 ON_Extrusion::Trim(
           if ( bChanged )
           {
             m_path_domain = dom;
-            DestroySurfaceTree();
           }
         }
       }
@@ -3477,7 +3456,6 @@ ON_BOOL32 ON_Extrusion::Trim(
     if ( m_profile )
     {
       rc = m_profile->Trim(domain)?true:false;
-      DestroySurfaceTree();
     }
   }
   return rc;
@@ -3533,7 +3511,6 @@ bool ON_Extrusion::Extend(
       {
         m_path.from = P0;
         m_path.to = P1;
-        DestroySurfaceTree();
       }
     }
   }
@@ -3542,8 +3519,6 @@ bool ON_Extrusion::Extend(
     if ( m_profile )
     {
       rc = m_profile->Extend(domain);
-      if (rc) 
-        DestroySurfaceTree();
     }
   }
   return rc;
@@ -3717,286 +3692,6 @@ ON_BOOL32 ON_Extrusion::Split(
   return rc;
 }
 
-bool ON_Extrusion::GetClosestPoint( 
-        const ON_3dPoint& P,
-        double* s,
-        double* t,
-        double maximum_distance,
-        const ON_Interval* sdomain,
-        const ON_Interval* tdomain
-        ) const
-{
-  if ( 0 == m_profile )
-    return false;
-
-  if ( !P.IsValid() )
-    return false;
-
-  if ( m_bTransposed ) 
-  {
-    double* p1 = s; s=t; t = p1;
-    const ON_Interval* p2=sdomain;sdomain=tdomain;tdomain=p2;
-  }
-
-
-  ON_Interval profile_domain = m_profile->Domain();
-  if ( 0 != sdomain )
-  {
-    if ( !sdomain->IsValid() || sdomain->IsDecreasing() )
-      return false;
-    if (    sdomain->m_t[0] <= profile_domain.m_t[0] 
-         && sdomain->m_t[1] >= profile_domain.m_t[1] )
-    {
-      sdomain = 0;
-    }
-    else
-    {
-      if ( sdomain->m_t[0] > profile_domain.m_t[0] )
-        profile_domain.m_t[0] = sdomain->m_t[0];
-      if ( sdomain->m_t[1] < profile_domain.m_t[1] )
-        profile_domain.m_t[1] = sdomain->m_t[1];
-      if ( !profile_domain.IsValid() || profile_domain.IsDecreasing() )
-        return false;
-      sdomain = &profile_domain;
-    }
-  }
-
-  ON_Interval path_domain = m_path_domain;
-  if ( 0 != tdomain )
-  {
-    if ( !tdomain->IsValid() || tdomain->IsDecreasing() )
-      return false;
-    if (    tdomain->m_t[0] <= path_domain.m_t[0] 
-         && tdomain->m_t[1] >= path_domain.m_t[1] )
-    {
-      tdomain = 0;
-    }
-    else
-    {
-      if ( tdomain->m_t[0] > path_domain.m_t[0] )
-        path_domain.m_t[0] = tdomain->m_t[0];
-      if ( tdomain->m_t[1] < path_domain.m_t[1] )
-        path_domain.m_t[1] = tdomain->m_t[1];
-      if ( !path_domain.IsValid() || path_domain.IsDecreasing() )
-        return false;
-      tdomain = &path_domain;
-    }
-  }
-
-  // Use the ON_Line "m_path" to get a "profile_2dP", a 2d point, to used 
-  // to calculate the profile parameter.
-  double elevation_t = ON_UNSET_VALUE;
-  if ( !m_path.ClosestPointTo(P,&elevation_t) || !ON_IsValid(elevation_t) )
-    return false;
-  const ON_3dPoint elevation_P = m_path.PointAt(elevation_t);
-  const ON_3dVector zaxis = m_path.Tangent();
-  const ON_3dVector yaxis = m_up;
-  ON_3dVector xaxis = ON_CrossProduct(yaxis,zaxis);
-  if ( !xaxis.IsUnitVector() )
-    xaxis.Unitize();
-  const ON_3dPoint profile_2dP(xaxis*(P - elevation_P),yaxis*(P - elevation_P),0.0);
-  if ( !profile_2dP.IsValid() )
-    return false;
-  double profile_parameter = ON_UNSET_VALUE;
-  if ( 0 != sdomain && sdomain->IsSingleton() )
-  {
-    profile_parameter = sdomain->m_t[0];
-  }
-  else if ( !m_profile->GetClosestPoint(profile_2dP,&profile_parameter,maximum_distance,sdomain) 
-            || !ON_IsValid(profile_parameter)
-           )
-  {
-    return false;
-  }
-  const ON_3dPoint Q2d = m_profile->PointAt(profile_parameter);
-  if ( !Q2d.IsValid() )
-    return false;
-
-  // now calsulate "L", the extrusion line for the profile point.
-  ON_Line L;
-  const ON_3dPoint path_start = PathStart();
-  if ( !path_start.IsValid() )
-    return false;
-  const ON_3dPoint path_end = PathEnd();
-  if ( !path_end.IsValid() )
-    return false;
-  if ( IsMitered() )
-  {
-    ON_Xform xform0, xform1;
-    if ( !ON_GetEndCapTransformation(path_start, zaxis, m_up, m_bHaveN[0]?&m_N[0]:0, xform0, 0,0) )
-      return false;
-    if ( !ON_GetEndCapTransformation(path_end,   zaxis, m_up, m_bHaveN[1]?&m_N[1]:0, xform1, 0,0) )
-      return false;
-    L.from = xform0*Q2d;
-    L.to   = xform1*Q2d;
-  }
-  else
-  {
-    const ON_3dVector D = Q2d.x*xaxis + Q2d.y*yaxis;
-    L.from = path_start + D;
-    L.to   = path_end   + D;
-  }
-  
-  // ... and find the point on "L" closest to P.
-  double L_parameter = ON_UNSET_VALUE;
-  if ( !L.ClosestPointTo(P,&L_parameter) || !ON_IsValid(L_parameter) )
-    return false;
-  if ( L_parameter < 0.0 )
-    L_parameter = 0.0;
-  else if ( L_parameter > 1.0 )
-    L_parameter = 1.0;
-
-  // convert L_paramter into a path_paramter and make sure
-  // path_parameter satisfies any domain restrictions.
-  double path_parameter = m_path_domain.ParameterAt(L_parameter);
-  if ( 0 != tdomain )
-  {
-    // "path_domain" is a sub-domain of "m_path_domain".
-    if ( path_parameter < path_domain[0] )
-    {
-      path_parameter = path_domain[0];
-      // use m_path_domain to restrict L_paramter
-      L_parameter = m_path_domain.NormalizedParameterAt(path_parameter);
-    }
-    else if ( path_parameter > path_domain[1] )
-    {
-      path_parameter = path_domain[1];
-      // use m_path_domain to restrict L_paramter
-      L_parameter = m_path_domain.NormalizedParameterAt(path_parameter);
-    }
-  }
-
-  if ( maximum_distance > 0.0 )
-  {
-    ON_3dPoint Q = L.PointAt(L_parameter);
-    double d = Q.DistanceTo(P);
-    if ( d > maximum_distance )
-      return false;
-  }
-  if ( s )
-    *s = profile_parameter;
-  if ( t )
-    *t = path_parameter;
-
-  return true;
-}
-
-ON_BOOL32 ON_Extrusion::GetLocalClosestPoint( 
-    const ON_3dPoint& test_point,
-    double s0, double t0,     // seed_parameters
-    double* s, double* t,   // parameters of local closest point returned here
-    const ON_Interval* sdomain, // first parameter sub_domain
-    const ON_Interval* tdomain  // second parameter sub_domain
-    ) const
-{
-  if ( s )
-    *s = s0;
-  if ( t )
-    *t = t0;
-
-  if ( 0 == m_profile || !ON_IsValid(s0) || !ON_IsValid(t0) )
-    return false;
-
-  ON_NurbsSurface NS;
-  const int rc = GetNurbForm(NS);
-  if ( rc <= 0 ) 
-    return false;
-
-  double a = s0;
-  double b = t0;
-
-	// Domain restrictions must be transformed to nurbs parameter space
-	const ON_Interval* pNdom[2]={sdomain,tdomain};
-	ON_Interval NSdom;
-	ON_Interval NTdom;
-
-	// GBA 20-Oct-2010 Bug here fixes TRR#76044
-  const int profile_index = ProfileParameter();
-
-  double profile_input_parameter = ON_UNSET_VALUE;
-  double* profile_local_parameter = 0;
-  double* profile_output_parameter = 0;
-  const ON_Interval* profile_input_domain = 0;
-  ON_Interval* profile_local_domain = 0;
-
-  if ( 2 == rc )
-  {
-    if ( 0 == profile_index )
-    {
-      profile_input_parameter = s0;
-      profile_output_parameter = s;
-      profile_local_parameter = &a;
-      profile_input_domain = sdomain;
-      profile_input_domain = &NSdom;
-    }
-    else if (1 == profile_index )
-    {
-      profile_input_parameter = t0;
-      profile_output_parameter = t;
-      profile_local_parameter = &b;
-      profile_input_domain = tdomain;
-      profile_local_domain = &NTdom;
-    }
-    else
-    {
-      return false;
-    }
-    *profile_local_parameter = profile_input_parameter;
-    if (!m_profile->GetNurbFormParameterFromCurveParameter(profile_input_parameter, profile_local_parameter))
-      return false;
-		if ( 0 != profile_input_domain && 0 != profile_local_domain )
-		{
-      *profile_local_domain = *profile_input_domain;
-			if(!m_profile->GetNurbFormParameterFromCurveParameter(profile_input_domain->m_t[0], &profile_local_domain->m_t[0]))
-				return false;
-			if(!m_profile->GetNurbFormParameterFromCurveParameter(profile_input_domain->m_t[1], &profile_local_domain->m_t[1]))
-				return false;
-      pNdom[profile_index] = profile_local_domain;
-		}
-  }
-
-  // 29 September 2010 - Dale Lear
-  // Microsoft Compiler "Issue"
-  //   Calling NS directly does not use the runtime vtable.  When Rhino is
-  //   running the vtable entry for ON_NurbsSurface::GetLocalClosestPoint() 
-  //   actually does something useful.
-  //   The ((const ON_Surface*)(&NS))-> Mickey Mouse seems to be enough to
-  //   convince the compiler to actually use the vtable.
-  //
-  //if (!NS.GetLocalClosestPoint(test_point, a, b, &a, &b, pNdom[0], pNdom[1]))
-  //  return false;
-  if (!((const ON_Surface*)(&NS))->GetLocalClosestPoint(test_point, a, b, &a, &b, pNdom[0], pNdom[1]))
-    return false;
-
-  if ( s ) 
-    *s = a;
-  if ( t ) 
-    *t = b;
-
-  if ( 2 == rc 
-       && 0 != profile_local_parameter 
-       && 0 != profile_output_parameter 
-     )
-  {
-    if (!m_profile->GetCurveParameterFromNurbFormParameter(*profile_local_parameter, profile_output_parameter))
-      return false;
-  }
-
-  return true;
-}
-
-
-//ON_BOOL32 ON_Extrusion::GetLocalClosestPoint( const ON_3dPoint&, // test_point
-//        double,double,     // seed_parameters
-//        double*,double*,   // parameters of local closest point returned here
-//        const ON_Interval* = NULL, // first parameter sub_domain
-//        const ON_Interval* = NULL  // second parameter sub_domain
-//        ) const
-//ON_Surface* ON_Extrusion::Offset(
-//      double offset_distance, 
-//      double tolerance, 
-//      double* max_deviation = NULL
-//      ) const
 int ON_Extrusion::GetNurbForm(
       ON_NurbsSurface& nurbs_surface,
       double tolerance
@@ -4348,28 +4043,4 @@ ON_Extrusion* ON_Extrusion::Pipe(
 
   return extrusion_pipe;
 }
-
-
-#if !defined(OPENNURBS_PLUS_INC_)
-ON_Curve* ON_Extrusion::Pushup( 
-          const ON_Curve& curve_2d,
-          double tolerance,
-          const ON_Interval* curve_2d_subdomain
-          ) const
-{
-  return 0;
-}
-
-ON_Curve* ON_Extrusion::Pullback(
-          const ON_Curve& curve_3d,
-          double tolerance,
-          const ON_Interval* curve_3d_subdomain,
-          ON_3dPoint start_uv,
-          ON_3dPoint end_uv
-          ) const
-{
-  return 0;
-}
-#endif
-
 

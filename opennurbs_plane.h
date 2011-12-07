@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -344,18 +345,6 @@ public:
 
   /*
   Description:
-    Morph plane.
-  Parameters:
-    morph - [in] morph to apply to plane
-  Returns:
-    true if successful
-  Remarks:
-    The resulting plane still has an orthonormal frame
-  */
-  bool Morph( const ON_SpaceMorph& morph );
-
-  /*
-  Description:
     Transform a plane by swapping coordinates.
   Parameters:
     i - [in]
@@ -482,6 +471,8 @@ public:
   // C++ defaults for construction, destruction, copy construction
   // and operator= work fine.
 
+  // A point is visible if m_plane_equation.ValueAt(point) <= 0.
+  // (This is the opposite convention from what OpenGL uses.)
   ON_PlaneEquation m_plane_equation;
   ON_UUID m_plane_id;
   bool m_bEnabled;

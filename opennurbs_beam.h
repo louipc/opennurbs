@@ -175,10 +175,6 @@ public:
   ON_Interval Domain(
         int dir
         ) const;
-  ON_BOOL32 GetSurfaceSize( 
-        double* width, 
-        double* height 
-        ) const;
   int SpanCount(
         int dir
         ) const;
@@ -255,16 +251,6 @@ public:
          int dir,
          double c
          ) const;
-  ON_Curve* Pushup( const ON_Curve& curve_2d,
-                    double tolerance,
-                    const ON_Interval* curve_2d_subdomain = NULL
-                    ) const;
-  ON_Curve* Pullback( const ON_Curve& curve_3d,
-                    double tolerance,
-                    const ON_Interval* curve_3d_subdomain = NULL,
-                    ON_3dPoint start_uv = ON_UNSET_POINT,
-                    ON_3dPoint end_uv = ON_UNSET_POINT
-                    ) const;
   ON_BOOL32 Trim(
          int dir,
          const ON_Interval& domain
@@ -279,29 +265,6 @@ public:
          ON_Surface*& west_or_south_side,
          ON_Surface*& east_or_north_side
          ) const;
-
-  bool GetClosestPoint( 
-          const ON_3dPoint& P,
-          double* s,
-          double* t,
-          double maximum_distance = 0.0,
-          const ON_Interval* sdomain = 0,
-          const ON_Interval* tdomain = 0
-          ) const;
-
-  ON_BOOL32 GetLocalClosestPoint( const ON_3dPoint&, // test_point
-          double,double,     // seed_parameters
-          double*,double*,   // parameters of local closest point returned here
-          const ON_Interval* = NULL, // first parameter sub_domain
-          const ON_Interval* = NULL  // second parameter sub_domain
-          ) const;
-
-  //ON_Surface* Offset(
-  //      double offset_distance, 
-  //      double tolerance, 
-  //      double* max_deviation = NULL
-  //      ) const;
-
   int GetNurbForm(
         ON_NurbsSurface& nurbs_surface,
         double tolerance = 0.0

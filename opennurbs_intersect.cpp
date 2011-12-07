@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -411,46 +412,74 @@ bool ON_Intersect( const ON_Plane& R, const ON_Plane& S, const ON_Plane& T,
 }
 
 
-int ON_Intersect( // returns 0 = no intersections, 
-                  // 1 = intersection = single point, 
-                  // 2 = intersection = circle
-                  // If 0 is returned, returned circle has radius=0
-                  // and center = point on sphere closest to plane.
-                  // If 1 is returned, intersection is a single
-                  // point and returned circle has radius=0
-                  // and center = intersection point on sphere.
-                 const ON_Plane& plane, const ON_Sphere& sphere, ON_Circle& circle
-                  )
+int ON_Intersect(
+        const ON_Plane& plane,
+        const ON_Sphere& sphere, 
+        ON_Circle& circle
+        )
 {
+  // 16 April 2011 Dale Lear
+  //   Prior to this date, this function did not return the correct answer.
+
   int rc = 0;
-  const ON_3dPoint sphere_center = sphere.plane.origin;
   const double sphere_radius = fabs(sphere.radius);
   double tol = sphere_radius*ON_SQRT_EPSILON;
-  if ( tol < ON_ZERO_TOLERANCE )
+  if ( !(tol >= ON_ZERO_TOLERANCE) )
     tol = ON_ZERO_TOLERANCE;
+  const ON_3dPoint sphere_center = sphere.Center();
+  ON_3dPoint circle_center = plane.ClosestPointTo(sphere_center);
+  double d = circle_center.DistanceTo(sphere_center);
 
-  circle.plane = plane;
+  circle.radius = 0.0;
 
-  ON_3dPoint plane_center = plane.ClosestPointTo(sphere_center);
-  double d = plane_center.DistanceTo(sphere_center);
-
-  if ( d >= sphere_radius-tol ) {
-    rc = ( d <= sphere_radius-tol ) ? 1 : 0;
-    circle.plane.origin = sphere.ClosestPointTo(plane_center);
-    circle.plane.UpdateEquation();
-    circle.radius = 0.0;
-  }
-  else {
-    d /= sphere_radius;
-    circle.radius = sphere_radius*sqrt(1.0 - d*d);
-    if ( circle.radius <= ON_ZERO_TOLERANCE ) {
-      circle.radius = 0.0;
-      rc = 1;
+  if ( ON_IsValid(sphere_radius) && ON_IsValid(d) && d <= sphere_radius + tol )
+  {
+    if ( sphere_radius > 0.0 )
+    {
+      d /= sphere_radius;
+      d = 1.0 - d*d;
+      // The d > 4.0*ON_EPSILON was picked by testing spheres with
+      // radius = 1 and center = (0,0,0).  Do not make 4.0*ON_EPSILON 
+      // any smaller and please discuss changes with Dale Lear.
+      circle.radius = (d > 4.0*ON_EPSILON) ? sphere_radius*sqrt(d) : 0.0;
     }
     else
+      circle.radius = 0.0;
+
+    if ( circle.radius <= ON_ZERO_TOLERANCE )
+    {
+      // return a single point
+      rc = 1;
+      
+      circle.radius = 0.0;
+
+      //  When tolerance is in play, put the point on the sphere.
+      //  If the caller prefers the plane, then they can adjust the
+      //  returned answer to get the plane.
+      ON_3dVector R = circle_center - sphere_center;
+      double r0 = R.Length();
+      if ( r0 > 0.0 )
+      {
+        R.Unitize();
+        ON_3dPoint C1 = sphere_center + sphere_radius*R;
+        double r1 = C1.DistanceTo(sphere_center);
+        if ( fabs(sphere.radius-r1) < fabs(sphere.radius-r0) )
+          circle_center = C1;
+      }
+    }
+    else 
+    {
+      // return a circle
       rc = 2;
+    }
   }
-  //circle.UpdatePoints();    
+
+  // Update circle's plane here in case the input plane 
+  // is the circle's plane member.
+  circle.plane = plane;
+  circle.plane.origin = circle_center;
+  circle.plane.UpdateEquation();
+
   return rc;
 }
 

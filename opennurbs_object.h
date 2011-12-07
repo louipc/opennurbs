@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -437,11 +438,16 @@ public:
   bool CopyFrom( const ON_Object* src );
 
 public:
-
   ON_Object();
   ON_Object( const ON_Object& );
   ON_Object& operator=( const ON_Object& );
   virtual ~ON_Object();
+
+  /*
+  Description:
+    Sets m_user_data_list = 0.
+  */
+  void EmergencyDestroy();
 
   /*
   Description:
@@ -634,13 +640,9 @@ public:
   virtual
   ON_UUID ModelObjectId() const;
 
-  /////////////////////////////////////////////////////////////////
+  //////////////////////////////////////////////////////////////////
   //
-  // User data provides a standard way for extra information to
-  // be attached to any class derived from ON_Object.  The attached
-  // information can persist and be transformed.  If you use user
-  // data, please carefully read all the comments from here to the
-  // end of the file.
+  // BEGIN: User string support
   //
 
   /*
@@ -721,6 +723,20 @@ public:
     Number of user strings on the object.
   */
   int UserStringCount() const;
+
+  //
+  // END: User string support
+  //
+  //////////////////////////////////////////////////////////////////
+
+  /////////////////////////////////////////////////////////////////
+  //
+  // User data provides a standard way for extra information to
+  // be attached to any class derived from ON_Object.  The attached
+  // information can persist and be transformed.  If you use user
+  // data, please carefully read all the comments from here to the
+  // end of the file.
+  //
 
   /*
   Description:
@@ -862,7 +878,6 @@ public:
   virtual
   void DestroyRuntimeCache( bool bDelete = true );
 
-  void* m_mempool; // null
 private:
   friend int ON_BinaryArchive::ReadObject( ON_Object** );
   friend bool ON_BinaryArchive::WriteObject( const ON_Object& );

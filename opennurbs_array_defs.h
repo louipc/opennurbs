@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -132,6 +133,12 @@ int ON_SimpleArray<T>::Count() const
 }
 
 template <class T>
+unsigned int ON_SimpleArray<T>::UnsignedCount() const
+{
+  return ((unsigned int)m_count);
+}
+
+template <class T>
 int ON_SimpleArray<T>::Capacity() const
 {
   return m_capacity;
@@ -142,6 +149,13 @@ unsigned int ON_SimpleArray<T>::SizeOfArray() const
 {
   return ((unsigned int)(m_capacity*sizeof(T)));
 }
+
+template <class T>
+unsigned int ON_SimpleArray<T>::SizeOfElement() const
+{
+  return ((unsigned int)(sizeof(T)));
+}
+
 
 template <class T>
 ON__UINT32 ON_SimpleArray<T>::DataCRC(ON__UINT32 current_remainder) const
@@ -583,6 +597,56 @@ int ON_SimpleArray<T>::BinarySearch( const T* key, int (*compar)(const T*,const 
 }
 
 template <class T>
+int ON_SimpleArray<T>::BinarySearch( const T* key, int (*compar)(const T*,const T*), int count ) const
+{
+  if ( count > m_count )
+    count = m_count;
+  if ( count <= 0 )
+    return -1;
+  const T* found = (key&&m_a&&m_count>0) 
+                 ? (const T*)bsearch( key, m_a, count, sizeof(T), (int(*)(const void*,const void*))compar ) 
+                 : 0;
+
+  // This worked on a wide range of 32 bit compilers.
+
+  int rc;
+  if ( 0 != found )
+  {
+    // Convert "found" pointer to array index.
+
+#if defined(ON_COMPILER_MSC1300)
+    rc = ((int)(found - m_a));
+#elif 8 == ON_SIZEOF_POINTER
+    // In an ideal world, return ((int)(found - m_a)) would work everywhere.
+    // In practice, this should work any 64 bit compiler and we can hope
+    // the optimzer generates efficient code.
+    const ON__UINT64 fptr = (ON__UINT64)found;
+    const ON__UINT64 aptr = (ON__UINT64)m_a;
+    const ON__UINT64 sz   = (ON__UINT64)sizeof(T);
+    const ON__UINT64 i    = (fptr - aptr)/sz;
+    rc = (int)i;
+#else
+    // In an ideal world, return ((int)(found - m_a)) would work everywhere.
+    // In practice, this should work any 32 bit compiler and we can hope
+    // the optimzer generates efficient code.
+    const ON__UINT32 fptr = (ON__UINT32)found;
+    const ON__UINT32 aptr = (ON__UINT32)m_a;
+    const ON__UINT32 sz   = (ON__UINT32)sizeof(T);
+    const ON__UINT32 i    = (fptr - aptr)/sz;
+    rc = (int)i;
+#endif
+  }
+  else
+  {
+    // "key" not found
+    rc = -1;
+  }
+  return rc;
+}
+
+
+
+template <class T>
 bool ON_SimpleArray<T>::HeapSort( int (*compar)(const T*,const T*) )
 {
   bool rc = false;
@@ -600,7 +664,7 @@ bool ON_SimpleArray<T>::QuickSort( int (*compar)(const T*,const T*) )
   bool rc = false;
   if ( m_a && m_count > 0 && compar ) {
     if ( m_count > 1 )
-      qsort( m_a, m_count, sizeof(T), (int(*)(const void*,const void*))compar );
+      ON_qsort( m_a, m_count, sizeof(T), (int(*)(const void*,const void*))compar );
     rc = true;
   }
   return rc;
@@ -944,6 +1008,12 @@ int ON_ClassArray<T>::Count() const
 }
 
 template <class T>
+unsigned int ON_ClassArray<T>::UnsignedCount() const
+{
+  return ((unsigned int)m_count);
+}
+
+template <class T>
 int ON_ClassArray<T>::Capacity() const
 {
   return m_capacity;
@@ -953,6 +1023,12 @@ template <class T>
 unsigned int ON_ClassArray<T>::SizeOfArray() const
 {
   return ((unsigned int)(m_capacity*sizeof(T)));
+}
+
+template <class T>
+unsigned int ON_ClassArray<T>::SizeOfElement() const
+{
+  return ((unsigned int)(sizeof(T)));
 }
 
 template <class T>
@@ -1387,6 +1463,23 @@ int ON_ClassArray<T>::BinarySearch( const T* key, int (*compar)(const T*,const T
 }
 
 template <class T>
+int ON_ClassArray<T>::BinarySearch( const T* key, int (*compar)(const T*,const T*), int count ) const
+{
+  if ( count > m_count )
+    count = m_count;
+  if ( count <= 0 )
+    return -1;
+  const T* found = (key&&m_a&&m_count>0) ? (const T*)bsearch( key, m_a, count, sizeof(T), (int(*)(const void*,const void*))compar ) : 0;
+#if defined(ON_COMPILER_MSC1300)
+  // for 32 and 64 bit compilers - the (int) converts 64 bit size_t 
+  return found ? ((int)(found - m_a)) : -1;
+#else
+  // for lamer 64 bit compilers
+  return found ? ((int)((((ON__UINT64)found) - ((ON__UINT64)m_a))/sizeof(T))) : -1;
+#endif#endif
+}
+
+template <class T>
 bool ON_ClassArray<T>::HeapSort( int (*compar)(const T*,const T*) )
 {
   bool rc = false;
@@ -1406,7 +1499,7 @@ bool ON_ClassArray<T>::QuickSort( int (*compar)(const T*,const T*) )
   if ( m_a && m_count > 0 && compar ) 
   {
     if ( m_count > 1 )
-      qsort( m_a, m_count, sizeof(T), (int(*)(const void*,const void*))compar );
+      ON_qsort( m_a, m_count, sizeof(T), (int(*)(const void*,const void*))compar );
     rc = true;
   }
   return rc;
@@ -1449,7 +1542,7 @@ bool ON_ObjectArray<T>::QuickSort( int (*compar)(const T*,const T*) )
   {
     if ( this->m_count > 1 )
     {
-      qsort( this->m_a, this->m_count, sizeof(T), (int(*)(const void*,const void*))compar );
+      ON_qsort( this->m_a, this->m_count, sizeof(T), (int(*)(const void*,const void*))compar );
 
       // The MemoryRelocate step is required to synch userdata back pointers
       // so the user data destructor will work correctly.

@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -297,12 +298,6 @@ public:
         int, int        // indices of coords to swap
         );
 
-  // virtual ON_Geometry override
-  bool Morph( const ON_SpaceMorph& morph );
-
-  // virtual ON_Geometry override
-  bool IsMorphable() const;
-
   /////////////////////////////////////////////////////////////////
   // ON_Surface overrides
 
@@ -315,24 +310,6 @@ public:
   ON_Interval Domain(
     int // 0 gets first parameter's domain, 1 gets second parameter's domain
     ) const;
-
-
-  /*
-  Description:
-    Get an estimate of the size of the rectangle that would
-    be created if the 3d surface where flattened into a rectangle.
-  Parameters:
-    width - [out]  (corresponds to the first surface parameter)
-    height - [out] (corresponds to the first surface parameter)
-  Remarks:
-    overrides virtual ON_Surface::GetSurfaceSize
-  Returns:
-    true if successful.
-  */
-  ON_BOOL32 GetSurfaceSize( 
-      double* width, 
-      double* height 
-      ) const;
 
   int SpanCount(
     int // 0 gets first parameter's domain, 1 gets second parameter's domain
@@ -607,27 +584,6 @@ public:
          ON_Surface*& west_or_south_side,
          ON_Surface*& east_or_north_side
          ) const;
-
-  /*
-  Description:
-    Offset surface.
-  Parameters:
-    offset_distance - [in] offset distance
-    tolerance - [in] Some surfaces do not have an exact offset that
-      can be represented using the same class of surface definition.
-      In that case, the tolerance specifies the desired accuracy.
-    max_deviation - [out] If this parameter is not NULL, the maximum
-      deviation from the returned offset to the true offset is returned
-      here.  This deviation is zero except for cases where an exact
-      offset cannot be computed using the same class of surface definition.
-  Returns:
-    Offset surface.
-  */
-  ON_Surface* Offset(
-        double offset_distance, 
-        double tolerance, 
-        double* max_deviation = NULL
-        ) const;
 
   int GetNurbForm( // returns 0: unable to create NURBS representation
                    //            with desired accuracy.
@@ -1263,27 +1219,6 @@ public:
   bool MakeDeformable();
 
   /*
-  Description:
-    Overrides virtual ON_Geometry::Morph function.
-    Applies the space morph to the NURBS volume's control points.
-  Parameters:
-    morph - [in]
-  Returns:
-    True is successful.
-  */
-  bool Morph( 
-    const ON_SpaceMorph& morph 
-    );
-
-  /*
-  Description:
-    Overrides virtual ON_Geometry::IsMorphable function.
-  Returns:
-    True because NURBS volumes can be morphed by calling Morph().
-  */
-  bool IsMorphable() const;
-
-  /*
   Returns:
     True if the cage is a parallelogram within the tolerance.
     This means the cage can be used as a starting point
@@ -1819,10 +1754,6 @@ public:
   ON_BOOL32 Transform( 
          const ON_Xform& xform
          );
-
-  bool Morph( const ON_SpaceMorph& morph );
-
-  bool IsMorphable() const;
 
   ON_BOOL32 HasBrepForm() const;
 

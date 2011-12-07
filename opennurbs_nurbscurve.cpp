@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -179,7 +180,6 @@ double ON_NurbsCurve::SuperfluousKnot( int end ) const
 
 bool ON_NurbsCurve::MakePeriodicUniformKnotVector( double delta )
 {
-	DestroyCurveTree();
   ReserveKnotCapacity( ON_KnotCount( m_order, m_cv_count ) );
   return ON_MakePeriodicUniformKnotVector( m_order, m_cv_count, m_knot, delta );
 }
@@ -187,7 +187,6 @@ bool ON_NurbsCurve::MakePeriodicUniformKnotVector( double delta )
 
 bool ON_NurbsCurve::MakeClampedUniformKnotVector( double delta )
 {
-	DestroyCurveTree();
   ReserveKnotCapacity( ON_KnotCount( m_order, m_cv_count ) );
   return ON_MakeClampedUniformKnotVector( m_order, m_cv_count, m_knot, delta );
 }
@@ -245,7 +244,6 @@ bool ON_NurbsCurve::Create(
         int cv_count  // cv count (>= order)
         )
 {
-  DestroyCurveTree();
   if ( dim < 1 )
     return false;
   if ( order < 2 )
@@ -265,7 +263,6 @@ bool ON_NurbsCurve::Create(
 
 void ON_NurbsCurve::Destroy()
 {
-  DestroyCurveTree();
   double* cv = ( m_cv && m_cv_capacity ) ? m_cv : NULL;
   double* knot = ( m_knot && m_knot_capacity ) ? m_knot : NULL;
   Initialize();
@@ -296,7 +293,6 @@ void ON_NurbsCurve::Initialize()
 
 static void ON_NurbsCurveCopyHelper( const ON_NurbsCurve& src, ON_NurbsCurve& dest )
 {
-  dest.DestroyCurveTree();
   dest.m_dim       = src.m_dim;
   dest.m_is_rat    = src.m_is_rat;
   dest.m_order     = src.m_order;
@@ -614,7 +610,6 @@ ON_BOOL32 ON_NurbsCurve::GetBBox( // returns true if successful
 ON_BOOL32 ON_NurbsCurve::Transform( const ON_Xform& xform )
 {
   TransformUserData(xform);
-	DestroyCurveTree();
   if ( 0 == m_is_rat )
   {
     if ( xform.m_xform[3][0] != 0.0 || xform.m_xform[3][1] != 0.0 || xform.m_xform[3][2] != 0.0 )
@@ -751,15 +746,14 @@ ON_Interval ON_NurbsCurve::Domain() const
 ON_BOOL32 ON_NurbsCurve::SetDomain( double t0, double t1 )
 {
   ON_BOOL32 rc = false;
-  if ( m_order >= 2 && m_cv_count >= m_order && m_knot && t0 < t1 ) {
-	 //DestroyCurveTree();
+  if ( m_order >= 2 && m_cv_count >= m_order && m_knot && t0 < t1 ) 
+  {
    const double k0 = m_knot[m_order-2];
     const double k1 = m_knot[m_cv_count-1];
     if ( k0 == t0 && k1 == t1 )
       rc = true;
     else if ( k0 < k1 ) 
     {
-      DestroyCurveTree();
       const double d = (t1-t0)/(k1-k0);
       const double km = 0.5*(k0+k1);
       const int knot_count = KnotCount();
@@ -795,6 +789,7 @@ ON_BOOL32 ON_NurbsCurve::ChangeClosedCurveSeam( double t )
         s += 1.0;
       k = old_dom.ParameterAt(s);
     }
+		s = old_dom.NormalizedParameterAt( k);
     if ( old_dom.Includes(k,true) )
     {
       ON_NurbsCurve left, right;
@@ -1252,86 +1247,6 @@ ON_NurbsCurve::GetParameterTolerance( // returns tminus < tplus: parameters tmin
   }
   return rc;
 }
-
-
-bool ON_NurbsCurve::GetClosestPoint( 
-        const ON_3dPoint& P,
-        double* t,
-        double maximum_distance,
-        const ON_Interval* sub_domain
-        ) const
-{
-  if ( 2 == m_cv_count && 0 == m_is_rat && (m_dim >= 2 && m_dim <= 3) )
-  {
-    // fast special case for lines
-    ON_3dVector Q, P1;
-    double s, k, d;
-    const double* cv1 = m_cv + m_cv_stride;
-
-    Q.x = P.x - m_cv[0];
-    Q.y = P.y - m_cv[1];
-    P1.x = *cv1++ - m_cv[0];
-    P1.y = *cv1++ - m_cv[1];
-    if ( 3 == m_dim )
-    {
-      Q.z = P.z - m_cv[2];    
-      P1.z = *cv1 - m_cv[2];
-    }
-    else
-    {
-      Q.z = 0.0;
-      P1.z = 0.0;
-    }
-
-    s = P1.x*P1.x + P1.y*P1.y + P1.z*P1.z;
-    if ( 0.0 != s )
-    {
-      s = (Q.x*P1.x + Q.y*P1.y + Q.z*P1.z)/s;
-      if ( s <= 0.0 ) 
-        s = 0.0;
-      else if ( s > 1.0 )
-        s = 1.0;
-
-      k = (1.0-s)*m_knot[0] + s*m_knot[1];
-
-      if ( sub_domain )
-      {
-        if ( k < sub_domain->m_t[0]  )
-        {
-          if ( m_knot[1] < sub_domain->m_t[0] )
-            return false;
-          k = sub_domain->m_t[0];
-          s = (k - m_knot[0])/(m_knot[1] - m_knot[0]);
-        }
-        else if ( k > sub_domain->m_t[1] )
-        {
-          if ( m_knot[0] > sub_domain->m_t[1] )
-            return false;
-          k = sub_domain->m_t[1];
-          s = (k - m_knot[0])/(m_knot[1] - m_knot[0]);
-        }
-      }
-
-      if ( maximum_distance > 0.0 )
-      {
-        cv1 = m_cv + m_cv_stride;
-        d = 1.0-s;
-        Q.x = d*m_cv[0] + s* *cv1++ - P.x;
-        Q.y = d*m_cv[1] + s* *cv1++ - P.y;
-        Q.z = (3 == m_dim ) ? (d*m_cv[2] + s* *cv1 - P.z) : 0.0;
-        d = Q.Length();
-        if ( d > maximum_distance )
-          return false;
-      }
-      
-      *t = k;
-      return true;
-    }
-  }
-
-  return ON_Curve::GetClosestPoint(P,t,maximum_distance,sub_domain);
-}
-
 
 
 
@@ -2017,7 +1932,6 @@ ON_NurbsCurve::SetWeight( int i, double w )
   else if ( w == 1.0 ) {
     rc = true;
   }
-	DestroyCurveTree();
   return rc;
 }
 
@@ -2080,7 +1994,6 @@ ON_NurbsCurve::SetCV( int i, ON::point_style style, const double* Point )
     rc = false;
     break;
   }
-	DestroyCurveTree();
   return rc;
 }
 
@@ -2104,7 +2017,6 @@ ON_NurbsCurve::SetCV( int i, const ON_3dPoint& point )
     }
     rc = true;
   }
-	DestroyCurveTree();
   return rc;
 }
 
@@ -2148,7 +2060,6 @@ ON_NurbsCurve::SetCV( int i, const ON_4dPoint& point )
       }
     }
   }
-	DestroyCurveTree();
   return rc;
 }
 
@@ -2228,7 +2139,6 @@ bool ON_NurbsCurve::SetKnot( int knot_index, double k )
   if ( knot_index < 0 || knot_index >= KnotCount() )
     return false;
   m_knot[knot_index] = k;
-	DestroyCurveTree();
   return true;
 }
 
@@ -2248,8 +2158,7 @@ ON_BOOL32 ON_NurbsCurve::SetStartPoint(
       ClampEnd(2);
       double t;
       ON_Interval domain = Domain();
-      if ( !GetLocalClosestPoint( start_point, domain[0], &t ) )
-        t = domain[0];
+      t = domain[0];
       Trim( ON_Interval( t, domain[1] ) );
       //DestroyCurveTree();
       double w = 1.0;
@@ -2261,7 +2170,6 @@ ON_BOOL32 ON_NurbsCurve::SetStartPoint(
       if (IsRational())
         SetWeight(0, w);
       SetDomain(domain[0],domain[1]);
-      DestroyCurveTree();
       rc = true;
     }
   }
@@ -2284,10 +2192,8 @@ ON_BOOL32 ON_NurbsCurve::SetEndPoint(
       ClampEnd(2);
       double t;
       ON_Interval domain = Domain();
-      if ( !GetLocalClosestPoint( end_point, domain[1], &t ) )
-        t = domain[1];
+      t = domain[1];
       Trim( ON_Interval( domain[0], t ) );
-      DestroyCurveTree();
       double w = 1.0;
       if (IsRational()) {
         w = Weight(m_cv_count-1);
@@ -2297,7 +2203,6 @@ ON_BOOL32 ON_NurbsCurve::SetEndPoint(
       if (IsRational())
         SetWeight(m_cv_count-1, w);
       SetDomain(domain[0],domain[1]);
-    	DestroyCurveTree();
       rc = true;
     }
   }
@@ -2310,14 +2215,12 @@ ON_NurbsCurve::Reverse()
 {
   ON_BOOL32 rc0 = ON_ReverseKnotVector( m_order, m_cv_count, m_knot );
   ON_BOOL32 rc1 = ON_ReversePointList( m_dim, m_is_rat, m_cv_count, m_cv_stride, m_cv );
-	DestroyCurveTree();
   return rc0 && rc1;
 }
 
 ON_BOOL32
 ON_NurbsCurve::SwapCoordinates( int i, int j )
 {
-	DestroyCurveTree();
   return  ON_SwapPointListCoordinates( m_cv_count, m_cv_stride, m_cv, i, j );
 }
 
@@ -2362,7 +2265,6 @@ bool ON_NurbsCurve::ZeroCVs()
       rc = (i>0) ? true : false;
     }
   }
-	DestroyCurveTree();
   return rc;
 }
 
@@ -2632,8 +2534,6 @@ bool ON_NurbsCurve::InsertKnot( double knot_value, int knot_multiplicity )
     return rc;
   }
 
-  DestroyCurveTree();
-
   ON_BOOL32 bIsPeriodic = (degree>1) ? IsPeriodic() : false;
   int span_index = ON_NurbsSpanIndex( m_order, m_cv_count, m_knot, knot_value, 0, 0 );
 
@@ -2722,7 +2622,6 @@ bool ON_NurbsCurve::MakeNonRational()
       m_cv_stride = dim;
     }
   }
-	DestroyCurveTree();
   return ( !IsRational() ) ? true : false;
 }
 
@@ -2878,8 +2777,6 @@ bool ON_NurbsCurve::ChangeDimension( int desired_dimension )
   if ( desired_dimension == m_dim )
     return true;
 
-  DestroyCurveTree();
-
   if ( desired_dimension < m_dim ) 
   {
     if ( m_is_rat ) {
@@ -2920,19 +2817,6 @@ bool ON_NurbsCurve::ChangeDimension( int desired_dimension )
     rc = true;
   }
   return rc;
-}
-
-ON_BOOL32 ON_NurbsCurve::GetLength(
-        double* length,
-        double fractional_tolerance,
-        const ON_Interval* sub_domain
-        ) const
-{
-  // 3rd party developers who want to enhance openNURBS
-  // may provide a working GetLength here.
-  if ( length )
-    *length = 0;
-  return false;
 }
 
 bool ON_NurbsCurve::Append( const ON_NurbsCurve& c )
@@ -3077,9 +2961,6 @@ ON_BOOL32 ON_NurbsCurve::Trim( const ON_Interval& in )
 	if(in==Domain())
 	  return true;
 
-
-  DestroyCurveTree();
-
   // cut off right end (or extend if in.m_t[1] > Domain.Max()
   side = -1;
   t = in.m_t[1]; // trimming parameter
@@ -3137,7 +3018,6 @@ ON_BOOL32 ON_NurbsCurve::Trim( const ON_Interval& in )
 
   ClampEnd(2); // 26 June 2003 Dale Lear
 
-	DestroyCurveTree();
   return true;
 }
 
@@ -3168,9 +3048,6 @@ bool ON_NurbsCurve::Extend(
     changed = true;
   }
 
-  if (changed){
-    DestroyCurveTree();
-  }
   return changed;
 }
 
@@ -3198,8 +3075,6 @@ ON_BOOL32 ON_NurbsCurve::Split(
 
     if ( !right )
       right = new ON_NurbsCurve();
-    left->DestroyCurveTree();
-    right->DestroyCurveTree();
     
     int span_index = ON_NurbsSpanIndex(m_order,m_cv_count,m_knot,t,1,0);
     // if t is very close to a knot value, then split at the knot

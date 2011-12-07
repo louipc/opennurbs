@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -329,10 +330,14 @@ public:
 
   // Test if this dimstyle is the child of a given dimstyle
   // A dimstyle may have several child dimstyles, but only one parent
-  bool IsChildOf( ON_UUID& parent_uuid) const;
+  bool IsChildOf( const ON_UUID& parent_uuid) const;
+  bool IsChildOf( ON_UUID& parent_uuid) const; // decl error - const forgotten
+
+  ON_UUID ParentId() const;
 
   // Set the parent of this dimstyle
-  void SetParent( ON_UUID& parent_uuid);
+  void SetParentId( ON_UUID parent_uuid);
+  ON_DEPRECATED void SetParent( ON_UUID& parent_uuid); // use set parent id
 
   // Tolerances
   // Tolerance style
@@ -390,12 +395,17 @@ public:
   ON_UUID SourceDimstyle() const;
 
   // Defaults for values stored in Userdata extension
-  static int    DefaultToleranceStyle();
-  static int    DefaultToleranceResolution();
-  static double DefaultToleranceUpperValue();
-  static double DefaultToleranceLowerValue();
-  static double DefaultToleranceHeightScale();
-  static double DefaultBaselineSpacing();
+  static int      DefaultToleranceStyle();
+  static int      DefaultToleranceResolution();
+  static double   DefaultToleranceUpperValue();
+  static double   DefaultToleranceLowerValue();
+  static double   DefaultToleranceHeightScale();
+  static double   DefaultBaselineSpacing();
+  static bool     DefaultDrawTextMask(); // false
+  static int      DefaultMaskColorSource(); // 0;
+  static ON_Color DefaultMaskColor(); // .SetRGB(255,255,255);
+  static double   DefaultDimScale(); // 1.0;
+  static int      DefaultDimScaleSource(); // 0;
 
   bool CompareFields(const ON_DimStyle& other) const;
 
@@ -451,7 +461,8 @@ public:
 
   // Added March 23, 2008 -LW
   // This function is temporary and will be removed next time the SDK can be modified.
-  class ON_DimStyleExtra* DimStyleExtension();
+  class ON_DimStyleExtra* DimStyleExtension(); // can return null
+  const class ON_DimStyleExtra* DimStyleExtension() const; // can return null
 };
 
 #endif

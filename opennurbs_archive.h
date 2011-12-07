@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -21,6 +22,29 @@
 
 extern "C"
 {
+
+/*
+Description:
+  Set the directory where ON_DebugWriteObject() will write
+  the .3dm file.
+Parameters:
+  directory_name - [in]
+Remarks:
+  This function is not thread safe.  It stores directory_name
+  in a static array.
+*/
+ON_DECL
+void ON_SetDebugWriteObjectDirectory(const wchar_t* directory_name);
+
+/*
+Description:
+  Get the directory where ON_DebugWriteObject() will write
+  the .3dm file.
+Returns:
+  The directory name or null if the name has not been set.
+*/
+ON_DECL
+const wchar_t* ON_DebugWriteObjectDirectory();
 
 /*
 Description:
@@ -57,6 +81,609 @@ int ON_DebugWritePoint( const class ON_3dPoint* p3dPoint );
 }
 
 #endif
+
+class ON_CLASS ON_FileStream
+{
+public:
+  /*
+  Description:
+    Portable wrapper for C runtime fopen().
+  Parameters:
+    filename - [in]
+    mode - [in]
+  Remarks:
+    Use the ON_FileStream static functions for reading, writing, 
+    seeking, position finding with the FILE pointer returned
+    by this function.
+  */
+  static FILE* Open( const wchar_t* filename, const wchar_t* mode );
+
+  /*
+  Description:
+    Portable wrapper for C runtime fopen().
+  Parameters:
+    filename - [in]
+    mode - [in]
+  Remarks:
+    Use the ON_FileStream static functions for reading, writing, 
+    seeking, position finding with the FILE pointer returned
+    by this function.
+  */
+  static FILE* Open( const char* filename, const char* mode );
+  
+  /*
+  Description:
+    Portable wrapper for C runtime fclose().
+  Parameters:
+    fp - [in]
+      FILE pointer returned by ON_FileStream::Open().
+  Returns:
+       0: successful
+      -1: null fp parameter
+    != 0: fclose() failure code
+  */
+  static int Close( FILE* fp );
+
+  /*
+  Description:
+    Portable wrapper for C runtime ftell().
+  Parameters:
+    fp - [in]
+      FILE pointer returned by ON_FileStream::Open().
+  Returns:
+    >= 0: current file position
+      -1: an error occured
+  */
+  static ON__INT64 CurrentPosition( FILE* fp );
+
+  /*
+  Description:
+    Portable wrapper for C runtime fseek(fp,offset,SEEK_CUR).
+  Parameters:
+    fp - [in]
+      FILE pointer returned by ON_FileStream::Open().
+    offset - [in]
+  */
+  static bool SeekFromCurrentPosition( FILE* fp, ON__INT64 offset );
+
+  /*
+  Description:
+    Portable wrapper for C runtime fseek(fp,offset,SEEK_SET).
+  Parameters:
+    fp - [in]
+      FILE pointer returned by ON_FileStream::Open().
+    offset - [in]
+  */
+  static bool SeekFromStart( FILE* fp, ON__INT64 offset );
+
+  /*
+  Description:
+    Portable wrapper for C runtime fseek(fp,offset,SEEK_END).
+  Parameters:
+    fp - [in]
+      FILE pointer returned by ON_FileStream::Open().
+    offset - [in]
+  */
+  static bool SeekFromEnd( FILE* fp, ON__INT64 offset );
+
+  /*
+  Description:
+    Portable wrapper for C runtime fseek(fp,offset,origin).
+  Parameters:
+    fp - [in]
+      FILE pointer returned by ON_FileStream::Open().
+    offset - [in]
+    origin - [in]
+      SEEK_SET (0): seek from beginning of file.  
+      SEEK_CUR (1): seek from current position of file pointer.
+      SEEK_END (2): seek from end of file.
+  */
+  static bool Seek( FILE* fp, ON__INT64 offset, int orgin );
+
+  /*
+  Description:
+    Portable wrapper for C runtime fread(buffer,1,count,fp).
+  Parameters:
+    fp - [in]
+      FILE pointer returned by ON_FileStream::Open()
+    count - [in]
+      number of bytes to read.
+    buffer - [out]
+      read bytes are stored in this buffer
+  Returns:
+    number of bytes read
+  */
+  static ON__UINT64 Read( FILE* fp, ON__UINT64 count, void* buffer );
+
+  /*
+  Description:
+    Portable wrapper for C runtime fwrite(buffer,1,count,fp).
+  Parameters:
+    fp - [in]
+      FILE pointer returned by ON_FileStream::Open()
+    count - [in]
+      number of bytes to write
+    buffer - [in]
+      data to be written
+  Returns:
+    number of bytes written.
+  */
+  static ON__UINT64 Write( FILE* fp, ON__UINT64 count, const void* buffer );
+
+  /*
+  Description:
+    Portable wrapper for C runtime fflush(fp).
+  Parameters:
+    fp - [in]
+      FILE pointer returned by ON_FileStream::Open().
+  Returns:
+    true if flush was successful.  False if an error occured.
+  */
+  static bool Flush( FILE* fp );
+
+  /*
+  Description:
+    Portable wrapper for C runtime fstat().
+  Parameters:
+    fp - [in]
+      FILE pointer returned by ON_FileStream::Open().
+    file_size - [out]
+      If file_size is not null, the the size of the file
+      in bytes returned here
+    file_creation_time - [out]
+      If file_creation_time is not null, then the time the file 
+      was created is returned here as the number of seconds since
+      midnight January 1, 1970.
+    file_last_modified_time - [out]
+      If file_last_modified_time is not null, then the time the file
+      was last modified is returned here as the number of seconds
+      since midnight January 1, 1970.
+  Returns:
+    true if the query was successful.  False if an error occured.
+  */
+  static bool GetFileInformation( 
+    FILE* fp,
+    ON__UINT64* file_size,
+    ON__UINT64* file_create_time,
+    ON__UINT64* file_last_modified_time
+    );
+};
+
+class ON_CLASS ON_FileIterator
+{
+public:
+  ON_FileIterator();
+  ~ON_FileIterator();
+  void Destroy();
+
+  /*
+  Description:
+    Find the first matching file in the directory.
+  Parameters:
+    directory_name - [in]
+      The directory to look in.
+    file_name_filter - [in]
+      If this paramter is null, then the iteration
+      includes all names in the directory.
+      The file name to search for. This parameter can 
+      include wildcard characters, such as an
+      asterisk (*) or a question mark (?). For example,
+      "\rootdir\subdir\*.*"  will iterate all files in
+      the \rootdir\subdir\ directory.
+
+  Example:
+          // Iterate through the files in a directory named "\rootdir\subdir"
+          FILE* fp = 0;
+          ON_FileIterator fit;
+          const wchar_t* directory = L"\\rootdir\\subdir";
+          for ( const wchar_t* filename = fit.FirstFile( directory, L"*.3dm" );
+                0 != filename;
+                filename = fit.NextFile()
+              )
+          {
+            if ( fit.CurrentFileIsDirectory() )
+              continue;
+            ON_wString fullpath = directory;
+            fullpath += '\\';
+            fullpath += filename;
+            FILE* fp = ON_FileStream::Open(fullpath,L"rb");
+            if ( 0 == fp )
+            {
+              continue;
+            }
+            ...
+            ON_FileStream::Close(fp);
+            fp = 0;
+          }
+        }
+
+  Returns:
+    NULL if no matching files are present in the directory.
+  */
+  const wchar_t* FirstFile( 
+    const wchar_t* directory_name, 
+    const wchar_t* file_name_filter
+    );
+
+  /*
+  Description:
+    Find the next matching file in the directory.
+  Returns:
+    NULL if no more matching files are present in the directory.
+  */
+  const wchar_t* NextFile();
+
+  const wchar_t* CurrentFileName() const;
+
+  ON__UINT64 CurrentFileSize() const;
+
+  bool CurrentFileIsDirectory() const;
+
+  bool GetCurrentFullPathFileName( ON_wString& filename ) const;
+
+  /*
+  Returns:
+    File creation time in seconds since January 1, 1970
+  */
+  ON__UINT64 CurrentFileCreateTime() const;
+
+  /*
+  Returns:
+    File last modified time in seconds since January 1, 1970
+  */
+  ON__UINT64 CurrentFileLastModifiedTime() const;
+
+  /*
+  Returns:
+    File last access time in seconds since January 1, 1970
+  */
+  ON__UINT64 CurrentFileLastAccessTime() const;
+
+  /*
+  Returns:
+    Number of matching files returned so far.
+  */
+  ON__UINT64 Count() const;
+
+private:
+  // Used by Windows ::Find
+  ON__UINT64 m_count;
+  ON_wString m_directory;
+
+#if defined(ON_COMPILER_MSC)
+  ON__UINT32 m_file_attributes_mask;
+  HANDLE m_h;
+  WIN32_FIND_DATA m_fd;
+#else
+  ON_String m_file_name_filter;
+  ON_String m_utf8_file_name_filter;
+  DIR* m_dir;
+  struct dirent m_dirent;
+  char m_dirent_name_buffer[NAME_MAX+1]; // < this field provide storage for m_dirent.d_name[]
+
+  // information about the current file
+  wchar_t m_current_name[1024];
+  ON__UINT64 m_current_file_attributes; // 1 = regular file, 2 = directory
+  ON__UINT64 m_current_file_size;
+  ON__UINT64 m_current_create_time;
+  ON__UINT64 m_current_last_modified_time;
+  ON__UINT64 m_current_last_access_time;
+#endif
+};
+
+
+/////////////////////////////////////////////////////////////////////
+//
+// ON_Buffer 
+//
+
+typedef void (*ON_Buffer_ErrorHandler)(class ON_Buffer*);
+
+class ON_CLASS ON_Buffer
+{
+public:
+  ON_Buffer();
+  ~ON_Buffer();
+
+  ON_Buffer(const ON_Buffer& src);
+  ON_Buffer& operator=(const ON_Buffer& src);
+
+  /*
+  Description:
+    Compare contents of buffers.
+  Paramters:
+    a - [in]
+    b - [in]
+  Returns:
+    -1: a < b
+     0: a == b
+     1: a > b
+  */
+  static int Compare( const ON_Buffer& a, const ON_Buffer& b );
+
+  void Destroy();
+  void EmergencyDestroy();
+
+  /*
+  Returns:
+    True if Size() == CurrentPosition().
+  Remarks:
+    It is possible to seek beyond the end of the buffer.
+    In this case, the current position will be past the end
+    of the buffer and AtEnd() will return false.
+  */
+  bool AtEnd() const;
+
+  /*
+  Returns:
+    Number of bytes currently in the buffer.
+  Remarks:
+    It is possible to seek beyond the end of the buffer.
+    In this case, the current position will be past the end
+    of the buffer and CurrentPosition() will be greater than
+    Size().
+  */
+  ON__UINT64 Size() const;
+
+  /*
+  Returns:
+    32-bit CRC of the buffer contents.
+  Remarks:
+    
+  */
+  ON__UINT32 CRC32( ON__UINT32 current_remainder ) const;
+
+
+  /*
+  Returns:
+    Current position in the buffer.
+  Remarks:
+    It is possible to seek beyond the end of the buffer.
+    In this case, the current position will be past the end
+    of the buffer and CurrentPosition() will be greater than
+    Size().
+  */
+  ON__UINT64 CurrentPosition() const;
+  
+  /*
+  Parameters:
+    size - [in]
+      number of bytes to write.
+    buffer - [in]
+      values to write.
+  Returns:
+    Number of bytes written buffer.
+  */
+  ON__UINT64 Write( ON__UINT64 size, const void* buffer );
+
+  /*
+  Parameters:
+    size - [in]
+      number of bytes to read.
+    buffer - [out]
+      read values are returned in buffer.
+  Returns:
+    Number of bytes read into buffer. For example, 
+    if CurrentPosition() <= Size() and 
+    size > (Size() - CurrentPosition()) and
+    buffer is not null, then the value
+    (Size() - CurrentPosition()) is returned.
+  Remarks:
+    If the size parameter is zero, then nothing is done.
+    When CurrentPosition() <= Size(), attempts to read more 
+    than (Size() - CurrentPosition()) bytes do not generate 
+    an error. When CurrentPosition() > Size(), any attempt
+    to read generates an error.
+  */
+  ON__UINT64 Read( ON__UINT64 size, void* buffer );
+
+  enum
+  {
+    seek_from_beginning_of_file = 0,
+    seek_from_current_position = 1,
+    seek_from_end_of_file = 2
+  };
+
+  /*
+  Parameters:
+    offset - [in]
+      number of bytes to seek from origin
+    origin - [in]
+      initial position.
+        0 (SEEK_SET) Seek from beginning of file.
+        1 (SEEK_CUR) Seek from current position.
+        2 (SEEK_END) Seek from end of file.
+  Returns:
+    True if successful.
+    False if the seek would result in a file position
+    before the beginning of the file. If false is
+    returned, the current position is not changed.
+  Remarks:
+    Seeking beyond the end of the buffer is succeeds.
+    Seeking before the beginning of the buffer fails.
+  */
+  bool Seek( 
+    ON__INT64 offset, 
+    int origin 
+    );
+
+  /*
+  Parameters:
+    offset - [in] (>= 0)
+      number of bytes to seek from the start of the buffer.
+  Returns:
+    True if successful.
+    False if the seek would result in a file position
+    before the beginning of the file. If false is
+    returned, the current position is not changed.
+  Remarks:
+    Seeking beyond the end of the buffer is succeeds.
+    Seeking before the beginning of the buffer fails.
+  */
+  bool SeekFromStart( ON__INT64 offset ); 
+
+  /*
+  Parameters:
+    offset - [in]
+      number of bytes to seek from the current position.
+  Returns:
+    True if successful.
+    False if the seek would result in a file position
+    before the beginning of the file. If false is
+    returned, the current position is not changed.
+  Remarks:
+    Seeking beyond the end of the buffer is succeeds.
+    Seeking before the beginning of the buffer fails.
+  */
+  bool SeekFromCurrentPosition( ON__INT64 offset ); 
+
+  /*
+  Parameters:
+    offset - [in]
+      number of bytes to seek from the end fo the buffer.
+  Returns:
+    True if successful.
+    False if the seek would result in a file position
+    before the beginning of the file. If false is
+    returned, the current position is not changed.
+  Remarks:
+    Seeking beyond the end of the buffer is succeeds.
+    Seeking before the beginning of the buffer fails.
+  */
+  bool SeekFromEnd( ON__INT64 offset ); 
+
+  /*
+  Parameters:
+    buffer_size - [in]
+      new size of buffer.
+  Returns:
+    True if successful.    
+  Remarks:
+    The current position is not changed and may be beyond the
+    end of the file. Use Seek to set the current position after
+    calling ChangeSize().
+  */
+  bool ChangeSize( ON__UINT64 buffer_size );
+
+  /*
+  Description:
+    Return unused memory to heap.
+  Remarks:
+    Call this function after creating an ON_Buffer that will persist for
+    and extended amount of time. There are never more than 16 pages of
+    unsued memory (16*4096 bytes on most computers) in an ON_Buffer.
+    Compact() can be called at any time, but calling Compact() the then
+    writing at the end of the buffer is not an efficient use of time
+    or memory.
+  */
+  bool Compact();
+
+  /*
+  Returns
+    True if the ON_Buffer is valid.
+  */
+  bool IsValid( const ON_TextLog* text_log ) const;
+
+  /*
+  Returns:
+    Value that identifies most recent error.
+    0: no error
+    1: attempt to seek to a negative position
+  */
+  ON__UINT32 LastError() const;
+  
+  void ClearLastError();
+
+  ON_Buffer_ErrorHandler ErrorHandler() const;
+  
+  void SetErrorHandler(ON_Buffer_ErrorHandler error_handler);
+
+  /*
+  Description:
+    Use WriteToBinaryArchive() to save an entire ON_Buffer inside
+    a binary archive.  Use ReadFromBinaryArchive() to retrieve
+    the ON_Buffer from the ON_BinaryArchive.
+  */
+  bool WriteToBinaryArchive( ON_BinaryArchive& ) const;
+
+  /*
+  Description:
+    Use ReadFromBinaryArchive() to retrieve an entire ON_Buffer
+    that was written using WriteToBinaryArchive().
+  */
+  bool ReadFromBinaryArchive( ON_BinaryArchive& );
+
+  /*
+  Description:
+    Compress this buffer
+
+  Parameters:
+    compressed_buffer - [out]
+      (The reference can be *this)
+  
+  Example:
+
+        // compress a buffer in place
+        ON_Buffer buffer;
+        buffer = ...;
+        if ( !buffer.Compress(buffer) )
+        {
+           // compression failed
+        }
+        else
+        {
+           // buffer is now compressed
+        }
+
+  Returns:
+    True if successful.  False if failed.
+  */
+  bool Compress( ON_Buffer& compressed_buffer ) const;
+
+  /*
+  Description:
+    Uncompress this buffer which must have been compressed using
+    ON_Buffer::Compress().
+
+  Parameters:
+    uncompressed_buffer - [out]
+      (The reference can be *this)
+
+  Example:
+        // silly example that compresses and then uncompresses a buffer in place
+        // to show how to call the functions.
+        ON_Buffer buffer;
+        buffer = ...; // buffer is in it uncompressed form
+        if ( buffer.Compress(buffer) )
+        {
+           // buffer is now compressed
+           if ( buffer.Uncompress(buffer) )
+           {
+              // buffer is uncompressed again.
+           }
+        }
+
+  Returns:
+    True if successful.  False if failed.
+  */
+  bool Uncompress( ON_Buffer& uncompressed_buffer ) const;
+
+private:
+
+  ON__UINT64 m_buffer_size; // total number of bytes in the buffer
+  ON__UINT64 m_current_position;
+
+  struct ON_BUFFER_SEGMENT* m_first_segment;
+  struct ON_BUFFER_SEGMENT* m_last_segment;
+  struct ON_BUFFER_SEGMENT* m_current_segment;
+  bool SetCurrentSegment(bool);
+  void Copy( const ON_Buffer& );
+
+  ON_Buffer_ErrorHandler m_error_handler;
+
+  ON__UINT32 m_last_error;
+  unsigned char m_reserved[12];
+};
 
 /////////////////////////////////////////////////////////////////////
 //
@@ -354,6 +981,21 @@ public:
 			unsigned int*      
 			); 
 
+	bool ReadBigInt( // Read an array of 64 bit integers
+			size_t,	      // number of ints to read
+			ON__INT64*      
+			); 
+	bool ReadBigInt( // Read an array of 64 bit integers
+			size_t,	      // number of ints to read
+			ON__UINT64*      
+			); 
+	bool ReadBigInt( // Read a single 64 bit integer
+			ON__INT64*      
+			); 
+	bool ReadBigInt( // Read a single 64 bit unsigned integer
+			ON__UINT64*      
+			); 
+
 	bool ReadLong( // Read an array of 32 bit integers
 			size_t,	      // number of ints to read
 			long*      
@@ -489,6 +1131,8 @@ public:
   bool ReadArray( ON_ClassArray<class ON_ObjRef>& );
   bool ReadArray( ON_SimpleArray<class ON_ObjRef_IRefID>& );
   bool ReadArray( ON_SimpleArray<class ON_ClippingPlaneInfo>& );
+  bool ReadArray( ON_ObjectArray<class ON_Layer>& );
+  bool ReadArray( ON_SimpleArray<class ON_Layer*>& );
 
   bool WriteBool( bool );
 
@@ -535,6 +1179,21 @@ public:
 			); 
 	bool WriteInt( // Write a single 32 bit unsigned integer
 			unsigned int
+			); 
+
+	bool WriteBigInt( // Write an array of 64 bit integers
+			size_t,	      // number of ints to write
+			const ON__INT64*      
+			); 
+	bool WriteBigInt( // Write an array of 64 bit integers
+			size_t,	      // number of ints to write
+			const ON__UINT64*      
+			); 
+	bool WriteBigInt( // Write a single 64 bit integer
+			ON__INT64    
+			); 
+	bool WriteBigInt( // Write a single 64 bit unsigned integer
+			ON__UINT64
 			); 
 
 	bool WriteLong( // Write an array of 32 bit integers
@@ -672,6 +1331,8 @@ public:
   bool WriteArray( const ON_ClassArray<class ON_ObjRef>& );
   bool WriteArray( const ON_SimpleArray<class ON_ObjRef_IRefID>& );
   bool WriteArray( const ON_SimpleArray<class ON_ClippingPlaneInfo>& );
+  bool WriteArray( int count, const class ON_Layer* );
+  bool WriteArray( int count, const class ON_Layer*const* );
 
   /////////////////////////////////////////////////////
   //
@@ -734,19 +1395,43 @@ public:
   bool EnableSaveUserData( ON_BOOL32 = true ); // returns previous state
   bool SaveUserData() const;
   
+  /*
+  Returns:
+    50 (The Rhino 5.0 opennurbs file version.)
+    This is the value of version to pass to ON_BinaryArchive
+    functions like Write3dmStartSection() when you want to use the 
+    the current opennurbs version number and you do not want to have
+    to update your code when this version number changes.    
+  */
+  static int CurrentArchiveVersion();
+
   ///////////////////////////////////////////////////////////////////
   // Step 1: REQUIRED - Write/Read Start Section
   //
+  /*
+  Parameters:
+    version - [in]
+       0, 2, 3, 4, 50, ...
+       
+       If version is 0, then the value of ON_BinaryArchive::CurrentVersion()
+       is used.
+
+       It is suggested that you use either 0 or the value of 
+       ON_BinaryArchive::CurrentArchiveVersion() for this parameter 
+       when you want your code to write the most up to date
+       file version.       
+  */
   bool Write3dmStartSection( 
-        int,        // version = 1, 2, 3, 4, or 5
+        int version,
         const char* // NULL or ASCII string with application name, etc.
                     // This information is primarily used when debugging files
                     // that contain problems.  McNeel and Associates stores
                     // application name, application version, compile date, 
                     // OS in use when file was written.
         );
+
   bool Read3dmStartSection( 
-        int*, // returns version (1 - 5)
+        int*, // returns version (1,2,3,4,5,50,...)
         ON_String& 
         );
 
@@ -1967,7 +2652,20 @@ class ON_CLASS ON_BinaryFile : public ON_BinaryArchive
 {
 public:
   ON_BinaryFile( ON::archive_mode );
-  ON_BinaryFile( ON::archive_mode, FILE* ); // pointer from fopen(...,"rb") or fopoen(...,"wb")
+
+  /*
+  Description:
+    Create an ON_BinaryArchive that reads/writes from an ordinary file.
+  Parameters:
+    mode - [in]
+    fp - [in]
+      If a file is being read, fp is the pointer returned 
+      from ON_FileStream::Open(...,L"rb").
+      If a file is being written, fp is the pointer returned 
+      from ON_FileStream::Open(...,L"wb").
+  */
+  ON_BinaryFile( ON::archive_mode, FILE* fp );
+
   virtual ~ON_BinaryFile();
 
   // ON_BinaryArchive overrides
@@ -2017,6 +2715,70 @@ private:
   ON_BinaryFile( const ON_BinaryFile& ); // no implementation
   ON_BinaryFile& operator=( const ON_BinaryFile& ); // no implementation
 };
+
+class ON_CLASS ON_BinaryArchiveBuffer : public ON_BinaryArchive
+{
+public:
+  /*
+  Description:
+    Create an ON_BinaryArchive that reads/writes from an ON_Buffer.
+  Parameters:
+    mode - [in]
+    buffer - [in]
+  Remarks:
+    If a non-null buffer is specifed, then do not call SetBuffer()
+  */
+  ON_BinaryArchiveBuffer( ON::archive_mode, ON_Buffer* buffer );
+
+  virtual ~ON_BinaryArchiveBuffer();
+
+  /*
+  Description:
+    If the ON_BinaryArchiveBuffer class is created with the constructor
+    that has a single "mode" parameter, then use SetBuffer()
+    to specify the buffer to read/write from before using
+    the ON_BinaryArchiveBuffer.
+  Parameters:
+    buffer - [in]
+  Returns:
+    True if the buffer is set.  Once the buffer is set it
+    cannot be changed.
+  */
+  bool SetBuffer( ON_Buffer* buffer );
+
+  /*
+  Returns:
+    Buffer being read/written. 
+  */
+  ON_Buffer* Buffer() const;
+
+  // virtual ON_BinaryArchive overrides
+  size_t CurrentPosition() const; 
+  bool SeekFromCurrentPosition(int);
+  bool SeekFromStart(size_t);
+  bool AtEnd() const;
+
+  bool SeekFromEnd( ON__INT64 ); 
+
+protected:
+  size_t Read( size_t, void* );
+  size_t Write( size_t, const void* );
+  bool Flush();
+
+private:
+  // Buffer being read/written.
+  ON_Buffer* m_buffer;
+
+private:
+  // prohibit use - you should specify a buffer.
+  ON_BinaryArchiveBuffer( ON::archive_mode );
+private:
+  // prohibit default construction, copy construction, and operator=
+  ON_BinaryArchiveBuffer( ); // no implementation
+  ON_BinaryArchiveBuffer( const ON_BinaryArchiveBuffer& ); // no implementation
+  ON_BinaryArchiveBuffer& operator=( const ON_BinaryArchiveBuffer& ); // no implementation
+};
+
 
 class ON_CLASS ON_Read3dmBufferArchive : public ON_BinaryArchive
 {
@@ -2104,7 +2866,9 @@ public:
       If max_sizeof_buffer > 0 and the amount of information saved 
       requires a buffer larger than this size, then writing fails. 
       If max_sizeof_buffer <= 0, then no buffer size limits are enforced.
-    archive_3dm_version  - [in] (1,2,3,4 or 5)
+    archive_3dm_version  - [in] (0, ,2,3,4 or 50)
+      Pass 0 or ON_BinaryArchive::CurrentArchiveVersion() to write the
+      version of opennurbs archives used by lastest version of Rhino.
     archive_opennurbs_version - [in] YYYYMMDDn
   */
   ON_Write3dmBufferArchive( 
@@ -2185,9 +2949,11 @@ Description:
   Create a simple archive that contains a single geometric object.
 Parameters:
   archive - [in] destination archive.
-  version - [in] (2 to 5) format version.archive version number.
+  version - [in] (0, 2, 3, 4, or 50) format version.archive version number.
       Version 2 format can be read by Rhino 2 and Rhino 3.  Version
       3 format can be read by Rhino 3.
+      Pass 0 or ON_BinaryArchive::CurrentArchiveVersion() to write
+      the latest version of archives supported by Rhino.
   object - [in] object to be saved in the archive's object table.
       This is typically some type of ON_Curve, ON_Surface, ON_Mesh,
       or ON_Brep.

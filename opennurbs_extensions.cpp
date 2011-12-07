@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -12,7 +13,6 @@
 //
 ////////////////////////////////////////////////////////////////
 */
-
 #include "opennurbs.h"
 
 
@@ -1665,19 +1665,19 @@ int ON__CIndexMaps::CreateHelper()
 
   // Sort the maps
   if ( m_bRemapLayerIndex )
-    m_layer_map.HeapSort( ON__CIndexPair::CompareOldAndNewIndex );
+    m_layer_map.QuickSort( ON__CIndexPair::CompareOldAndNewIndex );
   if ( m_bRemapGroupIndex )
-    m_group_map.HeapSort( ON__CIndexPair::CompareOldAndNewIndex );
+    m_group_map.QuickSort( ON__CIndexPair::CompareOldAndNewIndex );
   if ( m_bRemapMaterialIndex )
-    m_material_map.HeapSort( ON__CIndexPair::CompareOldAndNewIndex );
+    m_material_map.QuickSort( ON__CIndexPair::CompareOldAndNewIndex );
   if ( m_bRemapLinetypeIndex )
-    m_linetype_map.HeapSort( ON__CIndexPair::CompareOldAndNewIndex );
+    m_linetype_map.QuickSort( ON__CIndexPair::CompareOldAndNewIndex );
   if ( m_bRemapFontIndex )
-    m_font_map.HeapSort( ON__CIndexPair::CompareOldAndNewIndex );
+    m_font_map.QuickSort( ON__CIndexPair::CompareOldAndNewIndex );
   if ( m_bRemapDimstyleIndex )
-    m_dimstyle_map.HeapSort( ON__CIndexPair::CompareOldAndNewIndex );
+    m_dimstyle_map.QuickSort( ON__CIndexPair::CompareOldAndNewIndex );
   if ( m_bRemapHatchPatternIndex )
-    m_hatch_pattern_map.HeapSort( ON__CIndexPair::CompareOldAndNewIndex );
+    m_hatch_pattern_map.QuickSort( ON__CIndexPair::CompareOldAndNewIndex );
 
   return change_count;
 }
@@ -4502,7 +4502,7 @@ static int AuditIdsHelper(
     if ( count > 1 )
     {
       // Make sure objects have unique ids
-      id_list.HeapSort( ON_UuidIndex::CompareIdAndIndex );
+      id_list.QuickSort( ON_UuidIndex::CompareIdAndIndex );
       ON_UuidIndex id0 = id_list[0];
       for ( i = 1; i < count; i++ )
       {
@@ -5267,6 +5267,173 @@ int ONX_Model::Audit(
   return warning_count;
 }
 
+static const ON_UnknownUserData* RDKObjectUserDataHelper(const ON_UserData* objectud)
+{
+  // CRhRdkUserData object id: AFA82772-1525-43dd-A63C-C84AC5806911
+  // CRhRdkUserData::m_userdata_uuid = B63ED079-CF67-416c-800D-22023AE1BE21
+
+  // CRhRdkUserData object id
+  // {AFA82772-1525-43dd-A63C-C84AC5806911}
+  static const ON_UUID CRhRdkUserData_object_id = 
+  { 0xAFA82772, 0x1525, 0x43dd, { 0xA6, 0x3C, 0xC8, 0x4A, 0xC5, 0x80, 0x69, 0x11 } };
+
+  // CRhRdkUserData::m_userdata_uuid
+  // {B63ED079-CF67-416c-800D-22023AE1BE21}
+  static const ON_UUID CRhRdkUserData_userdata_uuid = 
+  { 0xB63ED079, 0xCF67, 0x416c, { 0x80, 0x0D, 0x22, 0x02, 0x3A, 0xE1, 0xBE, 0x21 } };
+  
+  const ON_UnknownUserData* unknown_ud = ON_UnknownUserData::Cast(objectud);
+  
+  bool rc = ( 0 != unknown_ud 
+              && unknown_ud->m_sizeof_buffer > 0
+              && 0 != unknown_ud->m_buffer
+              && 0 == ON_UuidCompare(CRhRdkUserData_object_id,unknown_ud->m_unknownclass_uuid)
+              && 0 == ON_UuidCompare(CRhRdkUserData_userdata_uuid,unknown_ud->m_userdata_uuid)
+            );
+  return rc ? unknown_ud : 0;
+}
+
+bool ONX_Model::IsRDKObjectInformation(const ON_UserData& objectud)
+{
+  return 0 != RDKObjectUserDataHelper(&objectud);
+}
+
+bool ONX_Model::GetRDKObjectInformation(const ON_Object& object,ON_wString& rdk_xml_object_data)
+{
+  rdk_xml_object_data.SetLength(0);
+  const ON_UnknownUserData* unknown_ud = 0;
+  const ON_UserData* ud = ON_UserData::Cast(&object);
+  if ( 0 != ud )
+  {
+    unknown_ud = RDKObjectUserDataHelper(ud);
+  }
+  else
+  {
+    for ( ud = object.FirstUserData(); 0 != ud && 0 == unknown_ud; ud = ud->Next() )
+    {
+      unknown_ud = RDKObjectUserDataHelper(ud);
+    }
+  }
+
+  if ( 0 == unknown_ud )
+    return false;
+
+  ON_Read3dmBufferArchive a(unknown_ud->m_sizeof_buffer,unknown_ud->m_buffer,false,unknown_ud->m_3dm_version,unknown_ud->m_3dm_opennurbs_version);
+  int version = 0;
+  if (!a.ReadInt(&version) )
+    return false;
+  
+  if ( 1 == version )
+  {
+    if ( !a.ReadString(rdk_xml_object_data) )
+      return false;
+  }
+  else if ( 2 == version )
+  {
+    // UTF8 string
+    ON_SimpleArray< char > s;
+    int slen = 0;
+    if ( !a.ReadInt(&slen) )
+      return false;
+    if ( slen <= 0 )
+      return false;
+    if ( slen + 4 > unknown_ud->m_sizeof_buffer )
+      return false;
+    s.Reserve(slen+1);
+    s.SetCount(slen+1);
+    s[slen] = 0;
+    if ( !a.ReadChar(slen,s.Array() ) ) 
+      return false;
+    const char* sArray = s.Array();
+    if ( 0 != sArray && 0 != sArray[0] )
+    {
+      unsigned int error_status = 0;
+      int wLen = ON_ConvertUTF8ToWideChar(sArray,-1,0,0,&error_status,0,0,0);
+      if ( wLen > 0 && 0 == error_status )
+      {
+        rdk_xml_object_data.SetLength(wLen+2);
+        wLen = ON_ConvertUTF8ToWideChar(sArray,-1,rdk_xml_object_data.Array(),wLen+1,&error_status,0,0,0);
+        if ( wLen > 0 && 0 == error_status )
+          rdk_xml_object_data.SetLength(wLen);
+        else
+          rdk_xml_object_data.SetLength(0);
+      }
+      if ( 0 != error_status )
+      {
+        ON_ERROR("RDK xml object information is not a valid UTF-8 string.");
+      }
+    }
+  }
+
+  return rdk_xml_object_data.Length() > 0;
+}
+
+bool ONX_Model::IsRDKDocumentInformation(const ONX_Model_UserData& docud)
+{
+  // {16592D58-4A2F-401D-BF5E-3B87741C1B1B}
+  static const ON_UUID rdk_plugin_id = 
+  { 0x16592D58, 0x4A2F, 0x401D, { 0xBF, 0x5E, 0x3B, 0x87, 0x74, 0x1C, 0x1B, 0x1B } };
+
+  return ( 0 == ON_UuidCompare(rdk_plugin_id,docud.m_uuid) && docud.m_goo.m_value >= 4 && 0 != docud.m_goo.m_goo );
+}
+
+
+bool ONX_Model::GetRDKDocumentInformation(const ONX_Model_UserData& docud,ON_wString& rdk_xml_document_data)
+{
+  if ( !ONX_Model::IsRDKDocumentInformation(docud) )
+    return false;
+
+  ON_Read3dmBufferArchive a(docud.m_goo.m_value,docud.m_goo.m_goo,false,docud.m_usertable_3dm_version,docud.m_usertable_opennurbs_version);
+
+  int version = 0;
+  if (!a.ReadInt(&version) )
+    return false;
+  
+  if ( 1 == version )
+  {
+    // UTF-16 string
+    if ( !a.ReadString(rdk_xml_document_data) )
+      return false;
+  }
+  else if ( 3 == version )
+  {
+    // UTF-8 string
+    int slen = 0;
+    if ( !a.ReadInt(&slen) )
+      return 0;
+    if ( slen <= 0 )
+      return 0;
+    if ( slen + 4 > docud.m_goo.m_value )
+      return 0;
+    ON_String s;
+    s.SetLength(slen);
+    if ( !a.ReadChar(slen,s.Array()) )
+      return 0;
+    const char* sArray = s.Array();
+    if ( 0 != sArray && 0 != sArray[0] )
+    {
+      unsigned int error_status = 0;
+      int wLen = ON_ConvertUTF8ToWideChar(sArray,-1,0,0,&error_status,0,0,0);
+      if ( wLen > 0 && 0 == error_status )
+      {
+        rdk_xml_document_data.SetLength(wLen+2);
+        wLen = ON_ConvertUTF8ToWideChar(sArray,-1,rdk_xml_document_data.Array(),wLen+1,&error_status,0,0,0);
+        if ( wLen > 0 && 0 == error_status )
+          rdk_xml_document_data.SetLength(wLen);
+        else
+        {
+          rdk_xml_document_data.SetLength(0);
+        }
+      }
+      if ( 0 != error_status )
+      {
+        ON_ERROR("RDK xml document settings is not a valid UTF-8 string.");
+      }
+    }
+  }
+
+  return rdk_xml_document_data.Length() > 0;
+}
 
 #if defined(ON_COMPILER_MSC)
 #pragma warning( pop )

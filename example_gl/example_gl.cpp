@@ -1,14 +1,18 @@
-/* $Header: /src4/opennurbs/example_gl/example_gl.cpp 5     8/30/06 2:55p Dalelear $ */
 /* $NoKeywords: $ */
+/*
 //
-// Copyright (c) 1993-1998 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Assoicates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
 // MERCHANTABILITY ARE HEREBY DISCLAIMED.
 //				
+// For complete openNURBS copyright information see <http://www.opennurbs.org>.
+//
 ////////////////////////////////////////////////////////////////
+*/
 
 // uncomment the "ON_DLL_IMPORTS" define to use opennurbs as a Windows DLL
 //#define ON_DLL_IMPORTS
@@ -19,7 +23,7 @@
 
 #if defined(ON_COMPILER_MSC)
 
-if ( _MSC_VER != 1400 )
+#if ( _MSC_VER != 1400 )
 // Tested compilers:
 //   Microsoft Visual Studio 2005
 //   Support for other compilers is not available.

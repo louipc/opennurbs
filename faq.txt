@@ -74,24 +74,21 @@ Can I use my brand X C++ compiler?
 
 Answer:
 
-The openNURBS toolkit has been thoroughly tested with
-
-  Microsoft Visual Studio 2005 (VC 8.0) (Windows XP and x64)
+The openNURBS toolkit has been tested with
 
   Microsoft Visual Studio 2010 (VC 10.0) (Windows 7)
 
   gcc version 4.2.1 (Apple Build 5664)
   
-  Apple XCode (MaxBook Pro + OSX)
+  Apple XCode 3.2.6 (MaxBook Pro + OSX)
 
 The openNURBS C++ source code is clean and fairly simple.  You
 should be able to use any good C++ compiler that has 32-bit
 integers and 32-bit or 64-bit pointers.
 
-OpenNURBS uses UNICODE to store text information in
-3DM files.  At the time of this release, support for
-UNICODE / ASCII conversion on UNIX platforms is spotty
-at best.
+OpenNURBS uses UTF-16 to store text information in
+3DM files and provides tools for converting UTF-16
+strings to UTF-8 and UTF-32 strings.
 
 Excellent compilers and make utilities are available from
 The Free Software Foundation <http://www.fsf.org>.  You have
@@ -105,20 +102,14 @@ compiler.
 ====================================================================
 
 Microsoft Visual C++ 6.0 Users:
-  If you get a compile bug error c2676 binary != not defined 
-  for stuct _GUID, then you are not using the November 2001
-  Platform SDK or the platform SDK is not first in your includes
-  list.
+  You are on your own.  Support for this compiler is no longer
+  provided.
 
 ====================================================================
 
 Microsoft Visual Studio 2003 users:
-  You will have to modify the opennurbs source code to get
-  it to compile with VS 2003. It tedius, but not hard, to 
-  get opennurbs to compile with VS 2003.  If you need to use
-  a Microsoft Windows compiler, we strongly suggest you 
-  avoid VS 2003 and use VS 2005.  We will NOT provide support
-  for using Microsoft Visual Studio 2003.
+  You are on your own.  Support for this compiler is no longer
+  provided.
 
 ====================================================================
 

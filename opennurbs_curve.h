@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -109,9 +110,6 @@ public:
 
   // virtual ON_Object::SizeOf override
   unsigned int SizeOf() const;
-
-  // virtual ON_Geometry override
-  bool EvaluatePoint( const class ON_ObjRef& objref, ON_3dPoint& P ) const;
 
   /*
   Description:
@@ -855,208 +853,6 @@ public:
          int* hint = 0
          ) const = 0;
 
-  //////////
-  // Find parameter of the point on a curve that is closest to test_point.
-  // If the maximum_distance parameter is > 0, then only points whose distance
-  // to the given point is <= maximum_distance will be returned.  Using a 
-  // positive value of maximum_distance can substantially speed up the search.
-  // If the sub_domain parameter is not NULL, then the search is restricted
-  // to the specified portion of the curve.
-  //
-  // true if returned if the search is successful.  false is returned if
-  // the search fails.
-  virtual
-  bool GetClosestPoint( 
-          const ON_3dPoint&, // test_point
-          double* t,       // parameter of local closest point returned here
-          double maximum_distance = 0.0,  // maximum_distance
-          const ON_Interval* sub_domain = NULL // sub_domain
-          ) const;
-
-  //////////
-  // Find parameter of the point on a curve that is locally closest to 
-  // the test_point.  The search for a local close point starts at 
-  // seed_parameter. If the sub_domain parameter is not NULL, then
-  // the search is restricted to the specified portion of the curve.
-  //
-  // true if returned if the search is successful.  false is returned if
-  // the search fails.
-  virtual
-  ON_BOOL32 GetLocalClosestPoint( 
-            const ON_3dPoint& test_point,
-            double seed_parameter,
-            double* t,
-            const ON_Interval* sub_domain = 0
-            ) const;
-
-  /*
-  Description:
-    Find curve's self intersection points.
-  Parameters:
-    x - [out] 
-       Intersection events are appended to this array.
-    intersection_tolerance - [in]
-    curve_domain - [in] optional restriction
-  Returns:
-    Number of intersection events appended to x.
-  */
-  virtual
-  int IntersectSelf( 
-          ON_SimpleArray<ON_X_EVENT>& x,
-          double intersection_tolerance = 0.0,
-          const ON_Interval* curve_domain = 0
-          ) const;
-
-  /*
-  Description:
-    Intersect this curve with curveB.
-  Parameters:
-    curveB - [in]
-    x - [out] Intersection events are appended to this array.
-    intersection_tolerance - [in]  If the distance from a point
-      on this curve to curveB is <= intersection tolerance,
-      then the point will be part of an intersection event.
-      If the input intersection_tolerance <= 0.0, then 0.001 is used.
-    overlap_tolerance - [in] If t1 and t2 are parameters of this 
-      curve's intersection events and the distance from curve(t) to 
-      curveB is <= overlap_tolerance for every t1 <= t <= t2,
-      then the event will be returened as an overlap event.
-      If the input overlap_tolerance <= 0.0, then 
-      intersection_tolerance*2.0 is used.
-    curveA_domain - [in] optional restriction on this curve's domain
-    curveB_domain - [in] optional restriction on curveB domain
-  Returns:
-    Number of intersection events appended to x.
-  */
-  int IntersectCurve( 
-          const ON_Curve* curveB,
-          ON_SimpleArray<ON_X_EVENT>& x,
-          double intersection_tolerance = 0.0,
-          double overlap_tolerance = 0.0,
-          const ON_Interval* curveA_domain = 0,
-          const ON_Interval* curveB_domain = 0
-          ) const;
-
-  /*
-  Description:
-    Intersect this curve with surfaceB.
-
-  Parameters:
-    surfaceB - [in]
-
-    x - [out] 
-      Intersection events are appended to this array.
-    intersection_tolerance - [in]  
-      If the distance from a point on this curve to the surface 
-      is <= intersection tolerance, then the point will be part 
-      of an intersection event, or there is an intersection event
-      the point leads to. If the input intersection_tolerance <= 0.0,
-      then 0.001 is used.
-
-    overlap_tolerance - [in] 
-      If the input overlap_tolerance <= 0.0, then 
-      2.0*intersection_tolerance is used.  Otherwise, overlap
-      tolerance must be >= intersection_tolerance.
-      In all cases, the intersection calculation is performed 
-      with an overlap_tolerance that is >= intersection_tolerance.
-      If t1 and t2 are curve parameters of intersection events 
-      and the distance from curve(t) to the surface 
-      is <= overlap_tolerance for every t1 <= t <= t2, then the 
-      event will be returned as an overlap event.
-       
-    curveA_domain - [in] 
-      optional restriction on this curve's domain
-
-    surfaceB_udomain - [in]
-      optional restriction on surfaceB u domain
-
-    surfaceB_vdomain - [in]
-      optional restriction on surfaceB v domain
-
-  Returns:
-    Number of intersection events appended to x.
-  */
-  int IntersectSurface( 
-          const ON_Surface* surfaceB,
-          ON_SimpleArray<ON_X_EVENT>& x,
-          double intersection_tolerance = 0.0,
-          double overlap_tolerance = 0.0,
-          const ON_Interval* curveA_domain = 0,
-          const ON_Interval* surfaceB_udomain = 0,
-          const ON_Interval* surfaceB_vdomain = 0
-          ) const;
-
-
-  /*
-  Description:
-    Intersect this curve with an infinite plane.
-
-  Parameters:
-    plane_equation - [in]
-
-    x - [out] 
-      Intersection events are appended to this array.
-    intersection_tolerance - [in]  
-      If the distance from a point on this curve to the surface 
-      is <= intersection tolerance, then the point will be part 
-      of an intersection event, or there is an intersection event
-      the point leads to. If the input intersection_tolerance <= 0.0,
-      then 0.001 is used.
-
-    overlap_tolerance - [in] 
-      If the input overlap_tolerance <= 0.0, then 
-      2.0*intersection_tolerance is used.  Otherwise, overlap
-      tolerance must be >= intersection_tolerance.
-      In all cases, the intersection calculation is performed 
-      with an overlap_tolerance that is >= intersection_tolerance.
-      If t1 and t2 are curve parameters of intersection events 
-      and the distance from curve(t) to the surface 
-      is <= overlap_tolerance for every t1 <= t <= t2, then the 
-      event will be returned as an overlap event.
-       
-    curve_domain - [in] 
-      optional restriction on this curve's domain
-
-  Returns:
-    Number of intersection events appended to x.
-  */
-  int IntersectPlane( 
-          ON_PlaneEquation plane_equation,
-          ON_SimpleArray<ON_X_EVENT>& x,
-          double intersection_tolerance = 0.0,
-          double overlap_tolerance = 0.0,
-          const ON_Interval* curve_domain = 0
-          ) const;
-
-
-
-  /*
-  Description:
-    Get the length of the curve.
-  Parameters:
-    length - [out] length returned here.
-    fractional_tolerance - [in] desired fractional precision.
-        fabs(("exact" length from start to t) - arc_length)/arc_length <= fractional_tolerance
-    sub_domain - [in] If not NULL, the calculation is performed on
-        the specified sub-domain of the curve (must be non-decreasing)
-  Returns:
-    true if returned if the length calculation is successful.
-    false is returned if the length is not calculated.
-  Remarks:
-    The arc length will be computed so that
-    (returned length - real length)/(real length) <= fractional_tolerance
-    More simply, if you want N significant figures in the answer, set the
-    fractional_tolerance to 1.0e-N.  For "nice" curves, 1.0e-8 works
-    fine.  For very high degree NURBS and NURBS with bad parameterizations,
-    use larger values of fractional_tolerance.
-  */
-  virtual
-  ON_BOOL32 GetLength(
-          double* length,
-          double fractional_tolerance = 1.0e-8,
-          const ON_Interval* sub_domain = NULL
-          ) const;
-
   /*
   Parameters:
     min_length -[in]
@@ -1081,100 +877,6 @@ public:
     double min_length,
     double tolerance
     ) const;
-
-
-  /*
-  Description:
-    Used to quickly find short curves.
-  Parameters:
-    tolerance - [in] (>=0)
-    sub_domain - [in] If not NULL, the test is performed
-      on the interval that is the intersection of 
-      sub_domain with Domain().
-  Returns:
-    True if the length of the curve is <= tolerance.
-  Remarks:
-    Faster than calling Length() and testing the
-    result.
-  */
-  bool IsShort(
-    double tolerance,
-    const ON_Interval* sub_domain = NULL
-    ) const;
-
-  /*
-  Description:
-    Looks for segments that are shorter than tolerance
-    that can be removed. If bRemoveShortSegments is true,
-    then the short segments are removed. Does not change the 
-    domain, but it will change the relative parameterization.
-  Parameters:
-    tolerance - [in]
-    bRemoveShortSegments - [in] If true, then short segments
-                                are removed.
-  Returns:
-    True if removable short segments can were found.
-    False if no removable short segments can were found.
-  */
-  bool RemoveShortSegments(
-    double tolerance,
-    bool bRemoveShortSegments = true
-    );
-
-  /*
-  Description:
-    Get the parameter of the point on the curve that is a 
-    prescribed arc length from the start of the curve.
-  Parameters:
-    s - [in] normalized arc length parameter.  E.g., 0 = start
-         of curve, 1/2 = midpoint of curve, 1 = end of curve.
-    t - [out] parameter such that the length of the curve
-       from its start to t is arc_length.
-    fractional_tolerance - [in] desired fractional precision.
-        fabs(("exact" length from start to t) - arc_length)/arc_length <= fractional_tolerance
-    sub_domain - [in] If not NULL, the calculation is performed on
-        the specified sub-domain of the curve.
-  Returns:
-    true if successful
-  */
-  virtual
-  ON_BOOL32 GetNormalizedArcLengthPoint(
-          double s,
-          double* t,
-          double fractional_tolerance = 1.0e-8,
-          const ON_Interval* sub_domain = NULL
-          ) const;
-
-  /*
-  Description:
-    Get the parameter of the point on the curve that is a 
-    prescribed arc length from the start of the curve.
-  Parameters:
-    count - [in] number of parameters in s.
-    s - [in] array of normalized arc length parameters. E.g., 0 = start
-         of curve, 1/2 = midpoint of curve, 1 = end of curve.
-    t - [out] array of curve parameters such that the length of the 
-       curve from its start to t[i] is s[i]*curve_length.
-    absolute_tolerance - [in] if absolute_tolerance > 0, then the difference
-        between (s[i+1]-s[i])*curve_length and the length of the curve
-        segment from t[i] to t[i+1] will be <= absolute_tolerance.
-    fractional_tolerance - [in] desired fractional precision for each segment.
-        fabs("true" length - actual length)/(actual length) <= fractional_tolerance
-    sub_domain - [in] If not NULL, the calculation is performed on
-        the specified sub-domain of the curve.  A 0.0 s value corresponds to
-        sub_domain->Min() and a 1.0 s value corresponds to sub_domain->Max().
-  Returns:
-    true if successful
-  */
-  virtual
-  ON_BOOL32 GetNormalizedArcLengthPoints(
-          int count,
-          const double* s,
-          double* t,
-          double absolute_tolerance = 0.0,
-          double fractional_tolerance = 1.0e-8,
-          const ON_Interval* sub_domain = NULL
-          ) const;
 
   // Description:
   //   Removes portions of the curve outside the specified interval.
@@ -1364,60 +1066,47 @@ public:
         double* nurbs_t
         ) const;
 
-
-  // Description:
-  //   Destroys the runtime curve tree used to speed closest
-  //   point and intersection calcuations.
-  // Remarks:
-  //   If the geometry of the curve is modified in any way,
-  //   then call DestroyCurveTree();  The curve tree is 
-  //   created as needed.
-  void DestroyCurveTree();
-
-  // Description:
-  //   Get the runtime curve tree used to speed closest point
-  //   and intersection calcuations.
-  // Returns:
-  //   Pointer to the curve tree.
-  const ON_CurveTree* CurveTree() const;
-
-  virtual
-  ON_CurveTree* CreateCurveTree() const;
-
   /*
-	Description:
-		Lookup a parameter in the m_t array, optionally using a built in snap tolerance to 
-		snap a parameter value to an element of m_t.
-		This function is used by some types derived from ON_Curve to snap parameter values
-	Parameters:
-		t			- [in]	parameter
-		index -[out]	index into m_t such that
-					  			if function returns false then
-								   
-									 @table  
-									 value                  condition
-						  			-1									 t<m_t[0] or m_t is empty				
-										0<=i<=m_t.Count()-2		m_t[i] < t < m_t[i+1]			
-										m_t.Count()-1					t>m_t[ m_t.Count()-1]			 
-
-									if the function returns true then t is equal to, or is closest to and 
-									within  tolerance of m_t[index]. 
-									
-		bEnableSnap-[in] enable snapping 
-		m_t				-[in]	Array of parameter values to snap to
-		RelTol		-[in] tolerance used in snapping
-	
-	Returns:		
-		true if the t is exactly equal to (bEnableSnap==false), or within tolerance of
-		(bEnableSnap==true) m_t[index]. 
+  Description:
+    Mesh a curve into line segments.
+  Parameters:
+    mp - [in] 
+      Parameters that determine how the curve will be
+      approximated by a polyline.
+    polyline - [in]
+      If not NULL, the polyline approximation will be appended
+      to this polyline.
+    bSkipFirstPoint - [in]
+      If true, the starting point of the approximation
+      will not be added to the returned polyline.  This
+      parameter is useful when getting a polyline approximation
+      of a sequence of contiguous curves.
+    domain - [in]
+      If not NULL, the polyline approximation will be restricted
+      to this domain.
+  Returns:
+    A pointer to the polyline approximation.
   */
+  class ON_PolylineCurve* MeshCurve( 
+    ON_MeshCurveParameters& mp,
+    ON_PolylineCurve* polyline,
+    bool bSkipFirstPoint,
+    const ON_Interval* domain
+    ) const;
+
+  // The non-const version of MeshCurve() exists because a version of the
+  // SDK was shipped with the "const" tag missing.  The non-const
+  // version does not modify this.
+  class ON_PolylineCurve* MeshCurve( 
+    ON_MeshCurveParameters& mp,
+    ON_PolylineCurve* polyline,
+    bool bSkipFirstPoint,
+    const ON_Interval* domain
+    );
+
 protected:
   bool ParameterSearch( double t, int& index, bool bEnableSnap, const ON_SimpleArray<double>& m_t, 
 															double RelTol=ON_SQRT_EPSILON) const;
-
-private:
-  // Runtime only - ignored by Read()/Write()
-  volatile ON_CurveTree* m_ctree;
 };
 
 #if defined(ON_DLL_TEMPLATE)

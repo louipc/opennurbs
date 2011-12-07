@@ -65,9 +65,6 @@
     <ClCompile Include="opennurbs_brep.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="opennurbs_brep_changesrf.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="opennurbs_brep_extrude.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -75,9 +72,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="opennurbs_brep_isvalid.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="opennurbs_brep_kinky.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="opennurbs_brep_region.cpp">
@@ -138,6 +132,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="opennurbs_font.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="opennurbs_fsp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="opennurbs_geometry.cpp">
@@ -314,9 +311,6 @@
     <ClCompile Include="opennurbs_wstring.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="opennurbs_x.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="opennurbs_xform.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -324,6 +318,18 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="opennurbs_zlib_memory.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="opennurbs_unicode.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="opennurbs_sort.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="opennurbs_embedded_file.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="opennurbs_compress.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -394,9 +400,6 @@
     <ClInclude Include="opennurbs_cone.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="opennurbs_crashtest.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="opennurbs_crc.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -437,6 +440,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="opennurbs_fpoint.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="opennurbs_fsp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="opennurbs_fsp_defs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="opennurbs_geometry.h">
@@ -613,13 +622,22 @@
     <ClInclude Include="opennurbs_workspace.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="opennurbs_x.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="opennurbs_xform.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="opennurbs_zlib.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="opennurbs_unicode.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="opennurbs_hsort_template.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="opennurbs_qsort_template.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="opennurbs_compress.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -26,10 +27,42 @@ ON_Font::~ON_Font()
 {
 }
 
+bool ON_Font::CreateFontFromFaceName( 
+  const wchar_t* facename,
+  bool bBold,
+  bool bItalic 
+  )
+{
+  PurgeUserData();
+  Defaults();
+
+  if ( 0 == facename || 0 == facename[0] )
+    facename = L"Arial";
+
+  bool rc = SetFontFaceName(facename);
+
+  HeightOfI();
+
+  m_font_name = facename;
+  if ( bBold )
+  {
+    SetBold(true);
+    m_font_name += "L Bold";
+  }
+  if ( bItalic )
+  {
+    SetItalic(true);
+    m_font_name += "L Italic";
+  }
+
+  return rc;
+}
+
+
 void ON_Font::Defaults()
 {
   m_font_name.Empty();
-  m_font_weight = 0;
+  m_font_weight = ON_Font::normal_weight;
   m_font_italic = false;
   m_font_underlined = false;
   m_linefeed_ratio = m_default_linefeed_ratio;
@@ -43,7 +76,6 @@ void ON_Font::Defaults()
   m_logfont.lfCharSet = default_charset;
 #endif
   SetFontFaceName(L"Arial");
-  SetFontWeight(normal_weight);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -286,20 +318,11 @@ bool ON_Font::SetFontFaceName( const wchar_t* s )
 
 #if defined(ON_OS_WINDOWS_GDI)
   memset( &m_logfont.lfFaceName, 0, sizeof(m_logfont.lfFaceName) );
-  if ( s )
-  {
-    for ( i = 0; i < LF_FACESIZE && s[i]; i++ )
-    {
-      m_logfont.lfFaceName[i] = s[i];
-    }
-  }
-
-  m_logfont.lfCharSet = ON_Font::IsSymbolFontFaceName( s)
-                      ? ((unsigned char)ON_Font::symbol_charset)
-                      : ((unsigned char)ON_Font::default_charset);
 #endif
 
   m_I_height = 0;
+
+  UpdateImplementationSettings();
 
   return( m_facename[0] ? true : false);
 }
@@ -357,17 +380,10 @@ void ON_Font::SetFontWeight( int w)
   if ( w != m_font_weight )
   {
     if ( w < 0 )
-    {
       w = 0;
-    }
-
     m_font_weight = w;
-
-#if defined(ON_OS_WINDOWS_GDI)
-    m_logfont.lfWeight = m_font_weight;
-#endif
-
     m_I_height = 0;
+    UpdateImplementationSettings();
   }
 }
 
@@ -387,13 +403,10 @@ void ON_Font::SetItalic( bool b)
   if ( m_font_italic != b )
   {
     m_font_italic = b?true:false;
-#if defined(ON_OS_WINDOWS_GDI)
-    m_logfont.lfItalic = m_font_italic;
-#endif
     m_I_height = 0;
+    UpdateImplementationSettings();
   }
 }
-
 
 bool ON_Font::IsBold() const
 {
@@ -418,13 +431,66 @@ void ON_Font::SetUnderlined( bool b)
   if ( m_font_underlined != b )
   {
     m_font_underlined = b?true:false;
-#if defined(ON_OS_WINDOWS_GDI)
-    m_logfont.lfUnderline = m_font_underlined;
-#endif
+    UpdateImplementationSettings();
   }
 }
 
+void ON_Font::UpdateImplementationSettings()
+{
+#if defined(ON_OS_WINDOWS_GDI) 
+  BYTE b;
+  LONG w;
+  size_t cap0, cap1, cap, i;
 
+  w = m_font_weight;
+  if ( w < 0 )
+    w = 0;
+  if ( w != m_logfont.lfWeight )
+  {
+    m_logfont.lfWeight = w;
+    m_I_height = 0;
+  }
+
+  b = m_font_italic ? 1 : 0;
+  if ( b != m_logfont.lfItalic )
+  {
+    m_logfont.lfItalic = b;
+    m_I_height = 0;
+  }
+
+  b = m_font_underlined ? 1 : 0;
+  if ( b != m_logfont.lfUnderline )
+  {
+    m_logfont.lfUnderline = b;
+    m_I_height = 0;
+  }
+
+  b = 0;
+  cap0 = sizeof(m_facename)/sizeof(m_facename[0]);
+  cap1 = sizeof(m_logfont.lfFaceName)/sizeof(m_logfont.lfFaceName[0]);
+  cap = cap0 < cap1 ? cap0 : cap1;
+  for ( i = 0; i < cap; i++ )
+  {
+    if ( m_logfont.lfFaceName[i] != m_facename[i] )
+    {
+      m_logfont.lfFaceName[i] = m_facename[i];
+      b = 1;
+    }
+  }
+  if ( b )
+  {
+    for ( i = cap; i < cap1; i++ )
+      m_logfont.lfFaceName[i] = 0;
+
+    m_logfont.lfCharSet = ON_Font::IsSymbolFontFaceName( m_logfont.lfFaceName )
+                      ? ((unsigned char)ON_Font::symbol_charset)
+                      : ((unsigned char)ON_Font::default_charset);
+
+    m_I_height = 0;
+  }
+  
+#endif
+}
 
 /*
 Returns:
@@ -524,6 +590,7 @@ bool ON_Font::SetLogFont( const LOGFONT& logfont )
   // synch persistent fields
   m_font_weight = m_logfont.lfWeight;
   m_font_italic = (m_logfont.lfItalic?true:false);
+  m_font_underlined = (m_logfont.lfUnderline?true:false);
   memset(&m_facename[0],0,sizeof(m_facename));
   int i;
   for ( i = 0; i < face_name_size && i < LF_FACESIZE; i++ )
@@ -531,6 +598,7 @@ bool ON_Font::SetLogFont( const LOGFONT& logfont )
     m_facename[i] = (wchar_t)m_logfont.lfFaceName[i]; 
   }
   m_facename[face_name_size-1] = 0;
+
 
   m_I_height = 0;
 

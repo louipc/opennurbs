@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -299,18 +300,6 @@ public:
   ON_BOOL32 SetEndPoint(
           ON_3dPoint end_point
           );
-
-  /*
-  Description:
-    For a manifold, non-boundary edge, decides whether or not the two surfaces on either side
-    meet smoothly.
-  Parameters:
-    angle_tolerance - [in] used to decide if surface normals on either side are parallel.
-  Returns:
-    true if edge is manifold, has exactly 2 trims, and surface normals on either
-    side agree to within angle_tolerance.
-  */
-  bool IsSmoothManifoldEdge(double angle_tolerance = ON_DEFAULT_ANGLE_TOLERANCE) const;
 
   /////////////////////////////////////////////////////////////////
   // Implementation
@@ -1199,35 +1188,6 @@ public:
   bool TransformTrim( const ON_Xform& xform );
 
   /*
-  Description:
-    Expert user tool that replaces the 3d surface geometry
-    use by the face.
-  Parameters;
-    si - [in] brep surface index of new surface
-  Returns:
-    True if successful.
-  Example:
-
-            ON_Surface* pSurface = ...;
-            int si = brep.AddSurface(pSurface);
-            face.ChangeSurface(si);
-
-  Remarks:
-    If the face had a surface and new surface has a different
-    shape, then you probably want to call something like
-    ON_Brep::RebuildEdges() to move the 3d edge curves so they
-    will lie on the new surface. This doesn't delete the old 
-    surface; call ON_Brep::CullUnusedSurfaces() or ON_Brep::Compact
-    to remove unused surfaces.
-  See Also:
-    ON_Brep::RebuildEdges
-    ON_Brep::CullUnusedSurfaces
-  */
-  bool ChangeSurface(
-    int si
-    );
-
-  /*
   Returns:
     brep.m_S[] surface index of the 3d surface geometry used by 
     this face or -1.
@@ -1275,7 +1235,6 @@ private:
   ON_Brep* m_brep;
   ON_BrepFace( const ON_BrepFace& );
 };
-
 
 #if defined(ON_DLL_TEMPLATE)
 // This stuff is here because of a limitation in the way Microsoft
@@ -1480,6 +1439,75 @@ public:
 
   /*
   Description:
+    Calculate area mass properties of the brep.
+  Parameters:
+    mp - [out] 
+    bArea - [in] true to calculate area
+    bFirstMoments - [in] true to calculate area first moments,
+                         area and area centroid.
+    bSecondMoments - [in] true to calculate area second moments.
+    bProductMoments - [in] true to calculate area product moments.
+  Returns:
+    True if successful.
+  */
+  bool AreaMassProperties(
+    ON_MassProperties& mp,
+    bool bArea = true,
+    bool bFirstMoments = true,
+    bool bSecondMoments = true,
+    bool bProductMoments = true,
+    double rel_tol = 1.0e-6,
+    double abs_tol = 1.0e-6
+    ) const;
+
+  /*
+  Description:
+    Calculate volume mass properties of the brep.
+  Parameters:
+    mp - [out] 
+    bVolume - [in] true to calculate volume
+    bFirstMoments - [in] true to calculate volume first moments,
+                         volume, and volume centroid.
+    bSecondMoments - [in] true to calculate volume second moments.
+    bProductMoments - [in] true to calculate volume product moments.
+    base_point - [in] 
+      If the brep is closed, then pass ON_UNSET_VALUE.
+
+      This parameter is for expert users who are computing a
+      volume whose boundary is defined by several non-closed
+      breps, surfaces, and meshes.
+
+      When computing the volume, volume centroid, or volume
+      first moments of a volume whose boundary is defined by 
+      several breps, surfaces, and meshes, pass the same 
+      base_point to each call to VolumeMassProperties.  
+
+      When computing the volume second moments or volume product
+      moments of a volume whose boundary is defined by several
+      breps, surfaces, and meshes, you MUST pass the entire 
+      volume's centroid as the base_point and the input mp 
+      parameter must contain the results of a previous call
+      to VolumeMassProperties(mp,true,true,false,false,base_point).
+      In particular, in this case, you need to make two sets of
+      calls; use first set to calculate the volume centroid and
+      the second set calculate the second moments and product 
+      moments.
+  Returns:
+    True if successful.
+  */
+  bool VolumeMassProperties(
+    ON_MassProperties& mp, 
+    bool bVolume = true,
+    bool bFirstMoments = true,
+    bool bSecondMoments = true,
+    bool bProductMoments = true,
+    ON_3dPoint base_point = ON_UNSET_POINT,
+    double rel_tol = 1.0e-6,
+    double abs_tol = 1.0e-6
+    ) const;
+
+  /*
+  Description:
     Create a brep from a surface.  The resulting surface has an outer
     boundary made from four trims.  The trims are ordered so that
     they run along the south, east, north, and then west side of the
@@ -1490,7 +1518,14 @@ public:
   Returns:
     @untitled table
     true     successful
-    false    brep cannot be created from this surface.
+      When true is returned, the pSurface pointer is added to the
+      brep's m_S[] array and it will be deleted by the brep's
+      destructor.
+    false
+      brep cannot be created from this surface.
+      When false is returned, then the caller is responsible
+      for deleting pSurface unless it was previously added
+      to the brep's m_S[] array.     
   Remarks:
     The surface class must be created with new so that the
     delete in ~ON_Brep will not cause a crash.
@@ -1622,121 +1657,6 @@ public:
   */
   bool IsValidTolerancesAndFlags( ON_TextLog* text_log = NULL ) const;
 
-  // Description:
-  //   Tests brep to see if it is valid for 
-  //   saving in V2 3DM archives.
-  // Returns:
-  //   true if brep is valid for V2 3DM archives.
-  // Remarks:
-  //   V2 breps could not have dangling curves.
-  bool IsValidForV2() const;
-  bool IsValidForV2( const ON_BrepTrim& ) const;
-  bool IsValidForV2( const ON_BrepEdge& ) const;
-
-  // Description:
-  //   Change brep so it is valid for saving
-  //   in V2 3DM archives.
-  bool MakeValidForV2();
-
-
-  /*
-  Description:
-    No support is available for this function.
-    Expert user function used by MakeValidForV2 to
-    convert trim curves from one surface to its
-    NURBS form.  After calling this function, you
-    need to change the face's surface to nurbs_surface.
-  Parameters:
-    face - [in] face whose underlying surface has
-                a parameterization that is different
-                from its NURBS form.
-    nurbs_surface - [in] NURBS form of the face's
-                underlying surface
-  Remarks:
-    Don't call this function unless you know exactly
-    what you are doing.  No support is available.
-  */
-  void RebuildTrimsForV2(
-          ON_BrepFace& face, 
-          const ON_NurbsSurface& nurbs_surface
-          );
-
-  /*
-  Description:
-    Split any faces with creases into G1 pieces.
-  Parameters:
-    kink_tol_radians - [in] kink tolerance
-    bCompactIfNeeded - [in]
-      If true and splitting is performed, ON_Brep::Compact()
-      will be called to clean up the unsued parts.
-  Returns:
-    True if successful.
-  Remarks:
-    If you need to detect when splitting occured, comare the
-    before and after values of m_F.Count().
-  */
-  bool SplitKinkyFaces( 
-          double kink_tol_radians = ON_DEFAULT_ANGLE_TOLERANCE,
-          bool bCompactIfNeeded = true
-          );
-
-  /*
-  Description:
-    Split the face into G1 pieces.
-  Parameters:
-    face_index - [in] Index of the face to test and split.
-    kink_tol_radians - [in] kink tolerance
-  Returns:
-    True if successful.
-  Remarks:
-    This function leaves deleted stuff in the brep.  
-    Call ON_Brep::Compact() to remove deleted stuff.
-  */
-  virtual
-  bool SplitKinkyFace( 
-    int face_index, 
-    double kink_tol_radians = ON_DEFAULT_ANGLE_TOLERANCE // ON_PI/180.0
-    );
-
-  /*
-  Description:
-    Split the edge into G1 pieces.
-  Parameters:
-    edge_index - [in] Index of the edge to test and split.
-    kink_tol_radians - [in] kink tolerance
-  Returns:
-    True if successful.
-  Remarks:
-    This function leaves deleted stuff in the brep.  
-    Call ON_Brep::Compact() to remove deleted stuff.
-  */
-  virtual
-  bool SplitKinkyEdge( 
-    int edge_index, 
-    double kink_tol_radians = ON_DEFAULT_ANGLE_TOLERANCE //ON_PI/180.0
-    );
-
-  /*
-  Description:
-    Split an edge at the specified parameters.
-  Parameters:
-    edge_index - [in] Index of the edge to split.
-    edge_t_count - [in]
-      number of edge parameters
-    edge_t - [in]
-      edge parameters
-  Returns:
-    Number of splits applied to the edge.
-  Remarks:
-    This function leaves deleted stuff in the brep.  
-    Call ON_Brep::Compact() to remove deleted stuff.
-  */
-  int SplitEdgeAtParameters(
-    int edge_index,
-    int edge_t_count,
-    const double* edge_t
-    );
-
   // virtual ON_Objet::Dump() override
   void Dump( ON_TextLog& ) const; // for debugging
 
@@ -1770,19 +1690,10 @@ public:
   // virtual ON_Geometry::IsDeformable() override
   bool IsDeformable() const;
 
-  // virtual ON_Geometry::MakeDeformable() override
-  bool MakeDeformable();
-
   // virtual ON_Geometry::SwapCoordinates() override
   ON_BOOL32 SwapCoordinates(
         int, int        // indices of coords to swap
         );
-
-  // virtual ON_Geometry override
-  bool Morph( const ON_SpaceMorph& morph );
-
-  // virtual ON_Geometry override
-  bool IsMorphable() const;
 
   // virtual ON_Geometry::HasBrepForm() override
   ON_BOOL32 HasBrepForm() const; // returns true
@@ -1930,6 +1841,8 @@ public:
                    the (south,east,north,west) sides.
   Returns:
     Pointer to the new face or NULL if input is not valid.
+    If null is returned, then the caller must delete pSurace
+    unless it was previously added to the brep's m_S[] array.
   Remarks:
     Adding a new face may grow the dynamic m_F array.  When
     this happens pointers and references to memory in the
@@ -2845,79 +2758,6 @@ public:
 
   /*
   Description:
-    Rebuild the edges used by a face so they lie
-    on the surface.
-  Parameters:
-    face - [in] face whose surface should be changed
-    tolerance - [in] tolerance for fitting 3d edge curves
-    bRebuildSharedEdges - [in] if false and and edge is
-      used by this face and a neighbor, then the edge will
-      be skipped.
-    bRebuildVertices - [in] if true, vertex locations are
-      updated to lie on the surface.
-  See Also:
-    ON_Brep::RebuildEdges
-  */
-  bool RebuildEdges( ON_BrepFace& face, 
-                     double tolerance,
-                     ON_BOOL32 bRebuildSharedEdges,
-                     ON_BOOL32 bRebuildVertices
-                     );
-
-  /*
-  Description:
-    Join coincident edges.
-  Parameters:
-    edge - [in] this edge will survive the joining process
-      and the vertices at its ends will survive the joining process.
-    other_edge - [in] this edge and the vertices at its ends will
-      be removed.
-    join_tolerance - [in] The distances between the ends
-      of edge and other_edge must be at most join_tolerance
-      in order for the edges to be joined.  The caller is
-      responsible for insuring that the 3d location of 
-      other_edge is within join_tolerance of edge.
-    bCheckFaceOrientaion - [in]
-      If true and edge and other_edge are boundary edges,
-      then the orientation of the face using other_edge
-      is adjusted to match the orientation of the face using
-      edge.
-  Returns:
-    true if join is successful
-  Example:
-
-    // extrude an edge of a brep to make a new face
-    // NOTE WELL:
-    //   THIS IS A SIMPLE EXAMPLE THAT IS NOT VERY EFFICIENT
-    //   Use ON_BrepExtrudeEdge if you really want to extrude an edge.
-    ON_Brep brep = ...;
-    // edge = some valid edge in brep
-    const ON_BrepEdge& edge = brep.m_E[...];
-
-    // extrude edge to make a surface
-    ON_3dVector v = ...;
-    ON_SumSurface* new_surface = new ON_SumSurface();
-    new_surface->Create( edge, v );
-
-    // 
-    ON_Brep new_brep;
-    new_brep.AddFace( Create( new_surface );
-    brep.
-
-  See Also:
-    ON_Brep:CullUnusedEdges
-    ON_Brep:CullUnusedVertices
-    ON_Brep:CullUnused3dCurves
-  */
-  bool JoinEdges( 
-    ON_BrepEdge& edge, 
-    ON_BrepEdge& other_edge,
-    double join_tolerance,
-    ON_BOOL32 bCheckFaceOrientaion = true
-    );
-
-  /*
-  Description:
     Expert user function.
   See Also:
     ON_Brep::JoinEdges
@@ -2957,121 +2797,6 @@ public:
     int edge_iindex1, 
     double angle_tolerance_radians = ON_PI/180.0
     );
-
-  /*
-  Description:
-    Given a trim and parameter on the corresponding 3d edge,
-    get the corresponding parameter on the 2d trim curve.
-  Parameters:
-    trim_index - [in] index of trim in m_T array
-    edge_t - [in] parameter on 3d edge
-    trim_t - [out] parameter on 2d trim curve
-    bOkToBuildTrimPline - [in] 
-       if true and m_T[trim_index].m_pline[] does not
-       have its edge parameters set, then they are filled
-       in.  This is slow the first time, but greatly
-       increases the speed of GetTrimParameter
-       and GetEdgeParameter on subsequent calls.
-  Returns:
-    @untitled table
-    true        successful
-    false       failure - trim_t not set
-  See Also:
-    TL_Brep::GetEdgeParameter
-  */
-  virtual
-  bool GetTrimParameter(
-          int trim_index,
-          double edge_t,
-          double* trim_t,
-          bool bOkToBuildTrimPline=true
-          ) const;
-
-  /*
-  Description:
-    Given a trim and parameter on the 2d trim curve,
-    get the corresponding parameter on the 3d edge curve.
-  Parameters:
-    trim_index - [in] index of trim in m_T array
-    trim_t - [in] parameter on 2d trim curve
-    edge_t - [out] parameter on 3d edge
-  Returns:
-    @untitled table
-    true        successful
-    false       failure - edge_t not set
-  See Also:
-    TL_Brep::GetTrimParameter
-  */
-  virtual
-  bool GetEdgeParameter(
-          int trim_index,
-          double trim_t,
-          double* edge_t
-          ) const;
-
-  bool GetEdgeParameter(
-          int trim_index,
-          double trim_t,
-          double* edge_t,
-          bool bOkToBuildTrimPline
-          ) const;
-  /*
-  Description:
-    Expert user function.
-    Splits an edge into two edges.  The input edge
-    becomes the left portion and a new edge is created
-    for the right portion.
-  Parameters:
-    edge_index - [in] index of edge in brep.m_E[]
-    edge_t - [in] 3d edge splitting parameter
-    trim_t - [in] array of trim splitting parameters.
-             trim_t[eti] is the parameter for splitting the
-             trim brep.m_T[edge.m_ti[eti]].
-    vertex_index - [in] if not -1, then this vertex will be
-             used for the new vertex.  Otherwise a new
-             vertex is created.
-    bSetTrimBoxesAndFlags - [in] if true, trim boxes and flags
-             are set.  If false, the user is responsible for
-             doing this.  Set to true if you are unsure
-             what to use.  If you pass false, then need to
-             call SetTrimBoundingBoxes(..,bLazy=true)
-             so that the trim iso flags and bounding info
-             is correctly updated.  If you pass true, then
-             the trim flags and bounding boxes get set
-             inside of SplitEdge.
-  Returns:
-    True if successful.
-  */
-  bool SplitEdge(
-        int edge_index,
-        double edge_t,
-        const ON_SimpleArray<double>& trim_t,
-        int vertex_index = -1,
-        bool bSetTrimBoxesAndFlags = true
-        );
-
-  /*
-  Description:
-    Splits closed surfaces so they are not closed.
-  Parameters:
-    min_degree - [in]
-      If the degree of the surface < min_degree,
-      the surface is not split.  In some cases,
-      min_degree = 2 is useful to preserve
-      piecewise linear surfaces.
-  Returns:
-    True if successful.
-  */
-  bool SplitClosedFaces( int min_degree=0 );
-
-  /*
-  Description:
-    Splits surfaces with two singularities, like spheres,
-    so the results have at most one singularity.
-  Returns:
-    True if successful.
-  */
-  bool SplitBipolarFaces();
 
   // These remove a topology piece from a b-rep but do not
   // rearrange the arrays that hold the brep objects.  The
@@ -3178,8 +2903,8 @@ public:
   // See Also:
   //   ON_Brep::DeleteFace, ON_Brep::ExtractFace
   ON_Brep* DuplicateFace(
-    int, // face_index
-    ON_BOOL32 // bDuplicateMeshes
+    int face_index,
+    ON_BOOL32 bDuplicateMeshes
     ) const;
 
   // Description:
@@ -3197,9 +2922,9 @@ public:
   // See Also:
   //   ON_Brep::DuplicateFace
   ON_Brep* DuplicateFaces(
-    int, // face_count
-    const int*, // face_index
-    ON_BOOL32 // bDuplicateMeshes
+    int face_count,
+    const int* face_index,
+    ON_BOOL32 bDuplicateMeshes
     ) const;
 
   // Description:
@@ -3211,7 +2936,7 @@ public:
   // See Also:
   //   ON_Brep::DeleteFace, ON_Brep::DuplicateFace
   ON_Brep* ExtractFace(
-    int // face_index
+    int face_index
     );
 
 
@@ -3785,8 +3510,6 @@ public:
 
 protected:	
   friend class ON_BrepFace;
-  friend class ON_BrepRegion;
-  friend class ON_BrepFaceSide;
   ON_BoundingBox m_bbox;
 
   // Never directly set m_is_solid, use calls to IsSolid() and/or 
@@ -4448,41 +4171,5 @@ ON_Brep* ON_MergeBreps(
           const ON_Brep& brep1,
           double tolerance
           );
-
-
-/*
-Description:
-  Does extensive tests of an edge and all of its trims to
-  insure the edge and trims define the same 3d curve to
-  a tolerance.
-Parameters:
-  brep - [in]
-  edge_index - [in]
-  text_log - [in]
-  bad_tp - [out]
-    If not null and false is returned, then bad_tp->t and 
-    bad_tp->e will identify trim and edge paramters near the
-    area where the two have parameterization problems.
-  bad_eti - [out]
-    If not null and false is returned, then *bad_eti will
-    be the edge.m_ti[] index of the trim whose correspondence
-    with the edge has paramterization problems.
-  deviation - [out]
-    If not null, then deviation[] should have length edge.m_ti.Count().
-    If true is returned, then the value of deviation[i] will be the 
-    maximum detected 3d deviation between the trim with index 
-    edge.m_ti[i] and the edge.
-Returns:
-  True if the edge and trims have is valid parameterizations.
-*/
-ON_DECL
-bool ON_ValidateEdgeTrims(
-        const ON_Brep& brep,
-        int edge_index,
-        ON_TextLog* text_log,
-        ON_BrepTrimPoint* bad_tp,
-        int* bad_eti,
-        double* deviation
-        );
 
 #endif

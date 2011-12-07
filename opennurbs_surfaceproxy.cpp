@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -66,7 +67,6 @@ void ON_SurfaceProxy::SetProxySurface( const ON_Surface* proxy_surface )
   // "real" surface before calling SetProxySurface().
   m_surface = 0;
 
-  DestroySurfaceTree();
   if ( proxy_surface == this )
     proxy_surface = 0;
   m_surface = proxy_surface;
@@ -162,32 +162,6 @@ ON_SurfaceProxy::Domain( int dir ) const
   if ( m_surface ) 
     d = m_surface->Domain(dir);
   return d;
-}
-
-ON_BOOL32 ON_SurfaceProxy::GetSurfaceSize( 
-    double* width, 
-    double* height 
-    ) const
-{
-  ON_BOOL32 rc = false;
-  if ( m_surface )
-  {
-    if ( m_bTransposed )
-    {
-      double* ptr = width;
-      width = height;
-      height = ptr;
-    }
-    rc = m_surface->GetSurfaceSize(width,height);
-  }
-  else
-  {
-    if ( width )
-      *width = 0.0;
-    if ( height )
-      *height = 0.0;
-  }
-  return rc;
 }
 
 int
@@ -406,7 +380,6 @@ ON_SurfaceProxy::Reverse(
 ON_BOOL32
 ON_SurfaceProxy::Transpose()
 {
-  DestroySurfaceTree();
   m_bTransposed = (m_bTransposed) ? false : true;
   return true;
 }
@@ -481,130 +454,6 @@ ON_Curve* ON_SurfaceProxy::IsoCurve(
 
   return isocurve;
 }
-
-ON_Curve* ON_SurfaceProxy::Pushup( const ON_Curve& curve_2d,
-                  double tolerance,
-                  const ON_Interval* curve_2d_subdomain
-                  ) const
-{
-  ON_Curve* pushupcurve = 0;
-  if ( 0 != m_surface )
-  {
-    if ( m_bTransposed )
-    {
-      ON_Curve* transposedcurve = curve_2d.DuplicateCurve();
-      if ( 0 != transposedcurve )
-      {
-        transposedcurve->SwapCoordinates(0,1);
-        pushupcurve = m_surface->Pushup( *transposedcurve, tolerance, curve_2d_subdomain );
-        delete transposedcurve;
-        transposedcurve = 0;
-      }
-    }
-    else
-    {
-      pushupcurve = m_surface->Pushup( curve_2d, tolerance, curve_2d_subdomain );
-    }
-  }
-  return pushupcurve;
-}
-
-ON_Curve* ON_SurfaceProxy::Pullback( const ON_Curve& curve_3d,
-                  double tolerance,
-                  const ON_Interval* curve_3d_subdomain,
-                  ON_3dPoint start_uv,
-                  ON_3dPoint end_uv
-                  ) const
-{
-  ON_Curve* pullbackcurve = 0;
-  if ( 0 != m_surface )
-  {
-    pullbackcurve = m_surface->Pullback( curve_3d, tolerance, curve_3d_subdomain, start_uv, end_uv );
-    if ( m_bTransposed && 0 != pullbackcurve )
-    {
-      pullbackcurve->SwapCoordinates(0,1);
-    }
-  }
-  return pullbackcurve;
-}
-
-
-
-
-bool ON_SurfaceProxy::GetClosestPoint( const ON_3dPoint& test_point,
-        double* s, double* t,
-        double maximum_distance,
-        const ON_Interval* sdomain,
-        const ON_Interval* tdomain
-        ) const
-{
-  bool rc = false;
-  if ( m_surface ) 
-  {
-    if ( m_bTransposed ) 
-    {
-      rc = m_surface->GetClosestPoint( test_point, t, s, maximum_distance, 
-                                       tdomain, sdomain );
-    }
-    else 
-    {
-      rc = m_surface->GetClosestPoint( test_point, s, t, maximum_distance, 
-                                       sdomain, tdomain );
-    }
-  }
-  return rc;
-}
-
-
-//////////
-// Find parameters of the point on a surface that is locally closest to 
-// the test_point.  The search for a local close point starts at 
-// seed parameters. If a sub_domain parameter is not NULL, then
-// the search is restricted to the specified portion of the surface.
-//
-// true if returned if the search is successful.  false is returned if
-// the search fails.
-ON_BOOL32 ON_SurfaceProxy::GetLocalClosestPoint( const ON_3dPoint& test_point,
-        double s0,double t0,     // seed_parameters
-        double* s, double* t,   // parameters of local closest point returned here
-        const ON_Interval* sdomain, // first parameter sub_domain
-        const ON_Interval* tdomain  // second parameter sub_domain
-        ) const
-{
-  ON_BOOL32 rc = false;
-  if ( m_surface ) {
-    if ( m_bTransposed ) {
-      rc = m_surface->GetLocalClosestPoint( test_point, t0, s0, t, s, 
-                                       tdomain, sdomain );
-    }
-    else {
-      rc = m_surface->GetLocalClosestPoint( test_point, s0, t0, s, t, 
-                                       sdomain, tdomain );
-    }
-  }
-  return rc;
-}
-
-ON_Surface* ON_SurfaceProxy::Offset(
-      double offset_distance, 
-      double tolerance, 
-      double* max_deviation
-      ) const
-{
-  ON_Surface* offset_srf = NULL;
-  if ( m_surface )
-  {
-    if ( m_bTransposed )
-      offset_distance = -offset_distance;
-    offset_srf = m_surface->Offset( offset_distance, tolerance, max_deviation );
-    if ( offset_srf && m_bTransposed )
-    {
-      offset_srf->Transpose();
-    }
-  }
-  return offset_srf;
-}
-
 
 int 
 ON_SurfaceProxy::GetNurbForm( // returns 0: unable to create NURBS representation

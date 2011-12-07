@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -72,10 +73,13 @@ public:
   // query ///////////////////////////////////////////////////////////////
   
 	int Count() const;      // number of elements in array
+  unsigned int UnsignedCount() const;
 	
 	int Capacity() const;  // capacity of array
 
   unsigned int SizeOfArray() const; // amount of memory in the m_a[] array
+
+  unsigned int SizeOfElement() const; // amount of memory in an m_a[] array element
 
   ON__UINT32 DataCRC(ON__UINT32 current_remainder) const;
 
@@ -167,27 +171,33 @@ public:
   //////////
   // BinarySearch( p, compare ) does a fast search of a sorted array
   // and returns the smallest index "i" of the element that satisifies
-  // 0==compare(p,&array[i]).  If the search is successful, 
+  // 0==compare(p,&array[i]).  
+  //
+  // BinarySearch( p, compare, count ) does a fast search of the first
+  // count element sorted array and returns the smallest index "i" of 
+  // the element that satisifies 0==compare(p,&array[i]).  The version
+  // that takes a "count" is useful when elements are being appended
+  // during a calculation and the appended elements are not sorted.
+  //
+  // If the search is successful, 
   // BinarySearch() returns the index of the element (>=0).
-  // If the search is not successful, BinarySearch() returns -1.  Use
-  // HeapSort( compare ) or QuickSort( compare ) to sort the array.
+  // If the search is not successful, BinarySearch() returns -1.  
+  // Use QuickSort( compare ) or, in rare cases and after meaningful
+  // performance testing using optimzed release builds, 
+  // HeapSort( compare ) to sort the array.
 	// See Also: ON_CompareIncreasing<T> and ON_CompareDeccreasing<T>
   int BinarySearch( const T*, int (*)(const T*,const T*) ) const;
+  int BinarySearch( const T*, int (*)(const T*,const T*), int ) const;
 
   //////////
   // Sorts the array using the heap sort algorithm.
+  // QuickSort() is generally the better choice.
   bool HeapSort( int (*)(const T*,const T*) );
 
   //////////
   // Sorts the array using the quick sort algorithm.
 	// See Also: ON_CompareIncreasing<T> and ON_CompareDeccreasing<T>
   bool QuickSort( int (*)(const T*,const T*) );
-
-  //////////
-  // Sort() computes fills in the index[] array so that
-  // array[index[i]] <= array[index[i+1]].  The array is not
-  // modified
-  bool Sort( ON::sort_algorithm, int* /* index[] */ , int (*)(const T*,const T*) ) const; 
 
   /*
   Description:
@@ -196,7 +206,36 @@ public:
     The array is not modified.  
 
   Parameters:
-    sa - [in] ON::heap_sort or  ON::quick_sort
+    sort_algorithm - [in]  
+      ON::quick_sort (best in general) or ON::heap_sort
+      Use ON::heap_sort only if you have done extensive testing with
+      optimized release builds and are confident heap sort is 
+      significantly faster.
+    index - [out] an array of length Count() that is returned with
+        some permutation of (0,1,...,Count()-1). 
+    compare - [in] compare function compare(a,b,p) should return
+        <0 if a<b, 0, if a==b, and >0 if a>b.
+  Returns:
+    true if successful
+  */
+  bool Sort( 
+    ON::sort_algorithm sort_algorithm, 
+    int* /* index[] */ ,
+    int (*)(const T*,const T*) 
+    ) const; 
+
+  /*
+  Description:
+    Sort() fills in the index[] array so that 
+    array[index[i]] <= array[index[i+1]].  
+    The array is not modified.  
+
+  Parameters:
+    sort_algorithm - [in]  
+      ON::quick_sort (best in general) or ON::heap_sort
+      Use ON::heap_sort only if you have done extensive testing with
+      optimized release builds and are confident heap sort is 
+      significantly faster.
     index - [out] an array of length Count() that is returned with
         some permutation of (0,1,...,Count()-1). 
     compare - [in] compare function compare(a,b,p) should return
@@ -207,7 +246,7 @@ public:
     true if successful
   */
   bool Sort( 
-    ON::sort_algorithm, // sa
+    ON::sort_algorithm sort_algorithm,
     int*, // index[] 
     int (*)(const T*,const T*,void*), // int compare(const T*,const T*,void* p)
     void* // p
@@ -591,30 +630,6 @@ public:
         const ON_3dVector& delta
         );
 
-  /*
-  Description:
-    Get the index of the point in the array that is closest
-    to P.
-  Parameters:
-    P - [in]
-    closest_point_index - [out]
-    maximum_distance - [in] optional distance constraint.
-        If maximum_distance > 0, then only points Q with
-        |P-Q| <= maximum_distance are returned.
-  Returns:
-    True if a point is found; in which case *closest_point_index
-    is the index of the point.  False if no point is found
-    or the input is not valid.
-  See Also:
-    ON_GetClosestPointInPointList
-    ON_PointCloud::GetClosestPoint
-  */
-  bool GetClosestPoint( 
-          ON_3dPoint P,
-          int* closest_point_index,
-          double maximum_distance = 0.0
-          ) const;
-
 };
 
 
@@ -805,10 +820,13 @@ public:
   // query ///////////////////////////////////////////////////////////////
   
 	int Count() const;      // number of elements in array
-	
+	unsigned int UnsignedCount() const;
+
 	int Capacity() const;  // capacity of array
 
   unsigned int SizeOfArray() const; // amount of memory in the m_a[] array
+
+  unsigned int SizeOfElement() const; // amount of memory in an m_a[] array element
 
   // The operator[] does to not check for valid indices.
   // The caller is responsibile for insuring that 0 <= i < Capacity()
@@ -882,16 +900,28 @@ public:
   //////////
   // BinarySearch( p, compare ) does a fast search of a sorted array
   // and returns the smallest index "i" of the element that satisifies
-  // 0==compare(p,&array[i]).  If the search is successful, 
+  // 0==compare(p,&array[i]).
+  //
+  // BinarySearch( p, compare, count ) does a fast search of the first
+  // count element sorted array and returns the smallest index "i" of 
+  // the element that satisifies 0==compare(p,&array[i]).  The version
+  // that takes a "count" is useful when elements are being appended
+  // during a calculation and the appended elements are not sorted.
+  //
+  // If the search is successful, 
   // BinarySearch() returns the index of the element (>=0).
-  // If the search is not successful, BinarySearch() returns -1.  Use
-  // HeapSort( compare ) or QuickSort( compare ) to sort the array.
+  // If the search is not successful, BinarySearch() returns -1.
+  // Use QuickSort( compare ) or, in rare cases and after meaningful
+  // performance testing using optimzed release builds, 
+  // HeapSort( compare ) to sort the array.
 	// See Also: ON_CompareIncreasing<T> and ON_CompareDeccreasing<T>
   int BinarySearch( const T*, int (*)(const T*,const T*) ) const;
+  int BinarySearch( const T*, int (*)(const T*,const T*), int ) const;
 
   //////////
   // Sorts the array using the heap sort algorithm.
 	// See Also: ON_CompareIncreasing<T> and ON_CompareDeccreasing<T>
+  // QuickSort() is generally the better choice.
   virtual
   bool HeapSort( int (*)(const T*,const T*) );
 
@@ -900,11 +930,31 @@ public:
   virtual
   bool QuickSort( int (*)(const T*,const T*) );
 
-  //////////
-  // Sort() computes fills in the index[] array so that
-  // array[index[i]] <= array[index[i+1]].  The array is not
-  // modified
-  bool Sort( ON::sort_algorithm, int* /* index[] */ , int (*)(const T*,const T*) ) const; 
+  /*
+  Description:
+    Sort() fills in the index[] array so that 
+    array[index[i]] <= array[index[i+1]].  
+    The array is not modified.  
+
+  Parameters:
+    sort_algorithm - [in]  
+      ON::quick_sort (best in general) or ON::heap_sort
+      Use ON::heap_sort only if you have done extensive testing with
+      optimized release builds and are confident heap sort is 
+      significantly faster.
+    index - [out] an array of length Count() that is returned with
+        some permutation of (0,1,...,Count()-1). 
+    compare - [in] compare function compare(a,b) should return
+        <0 if a<b, 0, if a==b, and >0 if a>b.
+
+  Returns:
+    true if successful
+  */
+  bool Sort( 
+    ON::sort_algorithm sort_algorithm, 
+    int* /* index[] */ ,
+    int (*)(const T*,const T*)
+    ) const; 
 
   /*
   Description:
@@ -913,7 +963,11 @@ public:
     The array is not modified.  
 
   Parameters:
-    sa - [in] ON::heap_sort or  ON::quick_sort
+    sort_algorithm - [in]  
+      ON::quick_sort (best in general) or ON::heap_sort
+      Use ON::heap_sort only if you have done extensive testing with
+      optimized release builds and are confident heap sort is 
+      significantly faster.
     index - [out] an array of length Count() that is returned with
         some permutation of (0,1,...,Count()-1). 
     compare - [in] compare function compare(a,b,p) should return
@@ -924,7 +978,7 @@ public:
     true if successful
   */
   bool Sort( 
-    ON::sort_algorithm, // sa
+    ON::sort_algorithm sort_algorithm,
     int*, // index[] 
     int (*)(const T*,const T*,void*), // int compare(const T*,const T*,void* p)
     void* // p
@@ -1058,6 +1112,7 @@ public:
   // virtual ON_ClassArray<T> override that 
   // calls MemoryRelocate on each element after
   // the heap sort.
+  // QuickSort() is generally the better choice.
   bool HeapSort( int (*)(const T*,const T*) );
 
   // virtual ON_ClassArray<T> override that 

@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -35,7 +36,12 @@ static int w2c_size( int w_count, const wchar_t* w )
   // include NULL terminator.
   int rc = 0;
   if ( w ) {
-	  rc = on_WideCharToMultiByte(w, w_count, NULL, 0);
+    unsigned int error_status = 0;
+    rc = ON_ConvertWideCharToUTF8(false,w,w_count,0,0,&error_status,0,0,0);
+    if ( error_status )
+    {
+      ON_ERROR("Wide char string is not valid.");
+    }
     if ( rc < 0 )
       rc = 0;
   }
@@ -48,17 +54,29 @@ static int w2c( int w_count,
                 char* c // array of at least c_count+1 characters
                 )
 {
+  // convert UTF-16 string to UTF-8 string
   int rc = 0;
   if ( c ) 
     c[0] = 0;
   // returns length of converted c[]
-  if ( c_count > 0 && c ) {
+  if ( c_count > 0 && c )
+  {
     c[0] = 0;
-    if ( w ) {
-	    rc = on_WideCharToMultiByte(w, w_count, c, c_count);
+    if ( w ) 
+    {
+      unsigned int error_status = 0;
+      unsigned int error_mask = 0xFFFFFFFF;
+      ON__UINT32 error_code_point = 0xFFFD;
+      const wchar_t* p1 = 0;
+      rc = ON_ConvertWideCharToUTF8(false,w,w_count,c, c_count, &error_status,error_mask,error_code_point,&p1);
+      if ( error_status )
+      {
+        ON_ERROR("Error converting UTF-16 encoded wchar_t string to UTF-8 encoded char string.");
+      }
       if ( rc > 0 && rc <= c_count )
         c[rc] = 0;
-      else {
+      else 
+      {
         c[c_count] = 0;
         rc = 0;
       }
@@ -69,30 +87,43 @@ static int w2c( int w_count,
 
 static wchar_t c2w( char c )
 {
-  wchar_t w[2] = {0,0};
-  c2w(1,&c,1,w);
-  return w[0];
+  // NOTE: 
+  //   Single character conversion of char values 0x80 to 0xFF 
+  //   get mapped to unicode code points U+0080 U+00FF
+  //   In particular, this is NOT UTF-8 conversion. 
+  wchar_t w = ((unsigned char)c);
+  return w;
 }
 
 static int c2w( int c_count, 
                 const char* c, 
                 int w_count, 
-                wchar_t* w // array of at least c_count+1 wide characters
+                wchar_t* w // array of at least w_count+1 wide characters
                 )
 {
+  // convert UTF-8 string to UTF-16 string
   int rc = 0;
   if ( w ) 
     w[0] = 0;
   // returns length of converted c[]
   if ( w_count > 0 && w && c_count > 0 && c && c[0] ) {
     w[0] = 0;
-    if ( c ) {
-	    rc = on_MultiByteToWideChar(c, c_count, w, w_count);
+    if ( c ) 
+    {
+      unsigned int error_status = 0;
+      unsigned int error_mask = 0xFFFFFFFF;
+      ON__UINT32 error_code_point = 0xFFFD;
+      const char* p1 = 0;
+      rc = ON_ConvertUTF8ToWideChar(c,c_count,w,w_count,&error_status,error_mask,error_code_point,&p1);
       if ( rc > 0 && rc <= w_count )
         w[rc] = 0;
       else {
         w[w_count] = 0;
         rc = 0;
+      }
+      if ( 0 != error_status )
+      {
+        ON_ERROR("Error converting UTF-8 encoded char string to UTF-16 encoded wchar_t string.");
       }
     }
   }
@@ -102,7 +133,7 @@ static int c2w( int c_count,
 
 void ON_String::CopyToArray( int w_count, const wchar_t* w )
 {
-  // convert UNICODE string to ASCII string
+  // convert UTF-16 string to UTF-8 string
   int c_count = w2c_size( w_count, w );
   char* c = (char*)onmalloc(c_count+1);
   memset( c, 0, c_count+1 );
@@ -1593,20 +1624,14 @@ int ON_wString::Find( wchar_t c ) const
 
 int ON_wString::ReverseFind( char c ) const
 {
-  char s[2];
-  wchar_t w[3];
-  s[0] = c;
-  s[1] = 0;
-  w[0] = 0;
-  w[1] = 0;
-  w[2] = 0;
-  c2w(1,s,2,w);
-  return ReverseFind( w[0] );
+  wchar_t w = c2w(c);
+  return ReverseFind( w );
 }
 
 int ON_wString::ReverseFind( unsigned char c ) const
 {
-  return ReverseFind( (char)c );
+  wchar_t w = c2w((char)c);
+  return ReverseFind( w );
 }
 
 int ON_wString::ReverseFind( wchar_t c ) const

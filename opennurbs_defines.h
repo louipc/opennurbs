@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -167,6 +168,12 @@
 #endif
 #define ON_SQRT_EPSILON 1.490116119385000000e-8
 
+#if defined(FLT_EPSILON)
+#define ON_FLOAT_EPSILON FLT_EPSILON
+#else
+#define ON_FLOAT_EPSILON 1.192092896e-07
+#endif
+#define ON_SQRT_FLOAT_EPSILON 3.452669830725202719e-4
 
 /*
 // In cases where lazy evaluation of a double value is
@@ -1258,6 +1265,25 @@ public:
 
   /*
   Returns:
+    True if m_type = extrusion_wall_edge and m_index >= 0.
+  */
+  bool IsExtrusionWallEdgeComponentIndex() const;
+
+  /*
+  Returns:
+    True if m_type = extrusion_wall_surface and m_index >= 0.
+  */
+  bool IsExtrusionWallSurfaceComponentIndex() const;
+
+  /*
+  Returns:
+    True if m_type = extrusion_wall_surface or extrusion_wall_edge
+    and m_index >= 0.
+  */
+  bool IsExtrusionWallComponentIndex() const;
+
+  /*
+  Returns:
     True if m_type = extrusion_bottom_profile, extrusion_top_profile,
     extrusion_wall_edge, extrusion_wall_surface, extrusion_cap_surface
     or extrusion_path and m_index is reasonable.
@@ -1458,12 +1484,7 @@ char* on_strrev(char*);
 
 /*
 Description:
-  Calls Windows ::WideCharToMultiByte() or does a hack 
-  UNICODE to ASCII conversion for other OSs
-See Also:
-  ON_SetStringConversionWindowsCodePage
-  ON_GetStringConversionWindowsCodePage
-  ON_String::operator=(const wchar_t*)  
+  Calls ON_ConvertWideCharToUTF8()
 */
 ON_DECL
 int on_WideCharToMultiByte(
@@ -1475,12 +1496,7 @@ int on_WideCharToMultiByte(
 
 /*
 Description:
-  Calls Windows ::WideCharToMultiByte() or does a hack 
-  ASCII to UNICODE conversion for other OSs
-See Also:
-  ON_SetStringConversionWindowsCodePage
-  ON_GetStringConversionWindowsCodePage
-  ON_wString::operator=(const char*)
+  Calls ON_ConvertUTF8ToWideChar()
 */
 ON_DECL
 int on_MultiByteToWideChar(
@@ -1493,4 +1509,3 @@ int on_MultiByteToWideChar(
 ON_END_EXTERNC
 
 #endif
-

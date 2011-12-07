@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -42,9 +43,11 @@ public:
   Descripton:
     Set check sum values for a buffer
   Parameters:
-    size - [in]    number of bytes in buffer
+    size - [in] 
+      number of bytes in buffer
     buffer - [in]  
-    time - [in] value to save in m_time
+    time - [in]
+      last modified time in seconds since Jan 1, 1970, UCT
   Returns:
     True if checksum is set.
   */
@@ -125,9 +128,11 @@ public:
   bool Write(class ON_BinaryArchive&) const;
   bool Read(class ON_BinaryArchive&);
 
+  void Dump(class ON_TextLog&) const;
+
 public:
-  size_t     m_size;
-  time_t     m_time;   // UCT seconds since Jan 1, 1970
+  size_t     m_size;   // bytes in the file.
+  time_t     m_time;   // last modified time in seconds since Jan 1, 1970, UCT
   ON__UINT32 m_crc[8]; // crc's
 };
 
@@ -162,10 +167,10 @@ public:
 	ON_String( const unsigned char*, int /*length*/ );        // from substring
 	ON_String( unsigned char, int = 1 /* repeat count */ ); 
   
-	ON_String( const wchar_t* );
-	ON_String( const wchar_t*, int /*length*/ ); // from substring
-
-	ON_String( const ON_wString& );
+  // construct a UTF-8 string string from a UTF-16 string.
+	ON_String( const wchar_t* src );  // src = UTF-16 string
+	ON_String( const wchar_t* src, int length ); // from a UTF-16 substring
+  ON_String( const ON_wString& src ); // src = UTF-16 string
 
 #if defined(ON_OS_WINDOWS)
   // Windows support
@@ -216,8 +221,8 @@ public:
 	ON_String& operator=(const char*);
 	ON_String& operator=(unsigned char);
 	ON_String& operator=(const unsigned char*);
-	ON_String& operator=(const wchar_t*);
-	ON_String& operator=(const ON_wString&);
+	ON_String& operator=(const wchar_t* src); // src = UTF-16 string, result is a UTF-8 string
+	ON_String& operator=(const ON_wString& src);  // src = UTF-16 string, result is a UTF-8 string
 
   // operator+()
   ON_String operator+(const ON_String&) const;
@@ -398,14 +403,14 @@ public:
 	ON_wString();
 	ON_wString( const ON_wString& );
 
-	ON_wString( const ON_String& );
+	ON_wString( const ON_String& src ); // src = UTF-8 string
 
-	ON_wString( const char* );
-	ON_wString( const char*, int /*length*/ );        // from substring
+	ON_wString( const char* src ); // src = nul; terminated UTF-8 string
+	ON_wString( const char* src, int /*length*/ );  // from UTF-8 substring
 	ON_wString( char, int = 1 /* repeat count */ );   
 
-	ON_wString( const unsigned char* );
-	ON_wString( const unsigned char*, int /*length*/ );        // from substring
+	ON_wString( const unsigned char* src); // src = nul; terminated UTF-8 string
+	ON_wString( const unsigned char*src, int /*length*/ );        // from UTF-8 substring
 	ON_wString( unsigned char, int = 1 /* repeat count */ ); 
   
 	ON_wString( const wchar_t* );
@@ -457,35 +462,35 @@ public:
 
 	// overloaded assignment
 	const ON_wString& operator=(const ON_wString&);
-	const ON_wString& operator=(const ON_String&);
+	const ON_wString& operator=(const ON_String& src); // src = UTF-8 string
 	const ON_wString& operator=(char);
-	const ON_wString& operator=(const char*);
+	const ON_wString& operator=(const char* src); // src = UTF-8 string
 	const ON_wString& operator=(unsigned char);
-	const ON_wString& operator=(const unsigned char*);
+	const ON_wString& operator=(const unsigned char* src); // src = UTF-8 string
   const ON_wString& operator=(wchar_t);
   const ON_wString& operator=(const wchar_t*);
 
 	// string concatenation
-  void Append( const char*, int ); // append specified number of characters
-  void Append( const unsigned char*, int ); // append specified number of characters
-  void Append( const wchar_t*, int ); // append specified number of characters
+  void Append( const char* sUTF8, int ); // append specified number of elements from a UTF-8 string
+  void Append( const unsigned char* sUTF8, int ); // append specified number of elements from a UTF-8 string
+  void Append( const wchar_t*, int ); // append specified number of elements
 	const ON_wString& operator+=(const ON_wString&);
-	const ON_wString& operator+=(const ON_String&);
+	const ON_wString& operator+=(const ON_String& sUTF8); // append UTF-8 string
 	const ON_wString& operator+=(char);
 	const ON_wString& operator+=(unsigned char);
 	const ON_wString& operator+=(wchar_t);
-	const ON_wString& operator+=(const char*);
-	const ON_wString& operator+=(const unsigned char*);
+	const ON_wString& operator+=(const char* sUTF8); // append UTF-8 string
+	const ON_wString& operator+=(const unsigned char* sUTF8); // append UTF-8 string
 	const ON_wString& operator+=(const wchar_t*);
 
   // operator+()
   ON_wString operator+(const ON_wString&) const;
-  ON_wString operator+(const ON_String&) const;
+  ON_wString operator+(const ON_String& sUTF8) const; // concatinate with a UTF-8 string
   ON_wString operator+(char) const;
   ON_wString operator+(unsigned char) const;
   ON_wString operator+(wchar_t) const;
-  ON_wString operator+(const char*) const;
-  ON_wString operator+(const unsigned char*) const;
+  ON_wString operator+(const char* sUTF8) const; // concatinate with a UTF-8 string
+  ON_wString operator+(const unsigned char* sUTF8) const; // concatinate with a UTF-8 string
   ON_wString operator+(const wchar_t*) const;
 
 	// string comparison 
@@ -506,12 +511,12 @@ public:
   // If this < string, returns < 0.
   // If this == string, returns 0.
   // If this < string, returns > 0.
-	int Compare( const char* ) const;
-	int Compare( const unsigned char* ) const;
+	int Compare( const char* sUTF8 ) const; // compare to UTF-8 string
+	int Compare( const unsigned char* sUTF8 ) const; // compare to UTF-8 string
 	int Compare( const wchar_t* ) const;
 
-	int CompareNoCase( const char* ) const;
-	int CompareNoCase( const unsigned char* ) const;
+	int CompareNoCase( const char* sUTF8) const; // compare to UTF-8 string
+	int CompareNoCase( const unsigned char* sUTF8) const; // compare to UTF-8 string
 	int CompareNoCase( const wchar_t* ) const;
 
   // Description:

@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -2237,6 +2238,96 @@ bool ON_GetPointGridBoundingBox(
   }
   return rc;
 }
+
+bool ON_BeyondSinglePrecision( const ON_BoundingBox& bbox, ON_Xform* xform )
+{
+  bool rc = false;
+
+  if ( bbox.IsValid() )
+  {
+    // 31 March 2011:
+    //   The values of too_far = 1.0e6 and too_big = 1.0e6
+    //   were wild guesses.  If you changes these values,
+    //   you must append a comment containing your name,
+    //   the date, the values your are using, a bug number
+    //   of a bug report containing a file that demonstrates
+    //   why you changed the number.  You must retest all 
+    //   previous bugs before committing your changes.
+    //
+    //   DATE: 31 March 2011
+    //   NAME: Dale Lear, Steve Baer
+    //   COMMENT: First guess at values for too_far and too
+    //   VALUES:  too_far = 262144.0 from tests with simple mesh sphere
+    //            too_big = 1048576.0
+    //   BUG: http://dev.mcneel.com/bugtrack/?q=83437
+    const double too_far = 262144.0;  // should be a power of 2
+    const double too_big = 1048576.0; // MUST be a power of 2
+    bool bTooFar = (    bbox.m_min.x >=  too_far 
+                     || bbox.m_min.y >=  too_far 
+                     || bbox.m_min.x >=  too_far 
+                     || bbox.m_max.x <= -too_far
+                     || bbox.m_max.y <= -too_far
+                     || bbox.m_max.x <= -too_far
+                   );
+    bool bTooBig = (   bbox.m_min.x <= -too_big 
+                     || bbox.m_min.y <= -too_big 
+                     || bbox.m_min.x <= -too_big 
+                     || bbox.m_max.x >=  too_big
+                     || bbox.m_max.y >=  too_big
+                     || bbox.m_max.x >=  too_big
+                     );
+    if ( bTooFar || bTooBig )
+    {
+      rc = true;
+      if ( 0 != xform )
+      {
+        ON_3dVector C = bbox.Center();
+        // Any modification of coordinates contributes to 
+        // less precision in calculations.  These tests 
+        // remove small components of translations that 
+        // do not help matters and may add more fuzz to 
+        // calculations.
+        if ( fabs(C.x) <= 100.0 )
+          C.x = 0.0;
+        if ( fabs(C.y) <= 100.0 )
+          C.y = 0.0;
+        if ( fabs(C.z) <= 100.0 )
+          C.z = 0.0;
+        double r = 0.5*bbox.m_max.DistanceTo(bbox.m_min);
+        // T = translate center of bbox to origin
+        ON_Xform T;
+        T.Translation(-C);
+
+        // S = scale to shrink things that are too big 
+        //     to have a maximum coordinate of 1024.
+        //     The scale is a power of 2 to preserve as much 
+        //     precision as possible.
+        double s = 1.0;
+        if ( r > too_big/16.0 )
+        {
+          // also apply a power of 2 scale to shrink large 
+          // object so its coordinates are <= 1024.0
+          s = too_big;
+          while ( r > s*1024.0 )
+            s *= 2.0;
+          s = 1.0/s;
+        }
+        ON_Xform S(s);
+
+        // xform positions bbox in a region of space
+        // where single precision coordinates should
+        // work for most calculations.
+        *xform = S*T;
+      }
+    }
+  }
+
+  if (!rc && 0 != xform )
+    xform->Identity();
+
+  return rc;
+}
+
 
 double ON_BoundingBoxTolerance(
         int dim,

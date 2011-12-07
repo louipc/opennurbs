@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -61,20 +62,6 @@ BOOL APIENTRY DllMain( HANDLE hModule,
   }
 
   return true;
-}
-
-
-///////////////////////////////////////////////////////////////////////////////
-//
-// For testing crash handling in opennurbs.dll
-//
-
-#define ON_CRASH_TEST_STATICS
-#include "opennurbs_crashtest.h"
-#undef ON_CRASH_TEST_STATICS
-int ON_CrashTest( int crash_type, ON_TextLog& textlog )
-{
-  return CrashTestHelper( crash_type, textlog );
 }
 
 #endif

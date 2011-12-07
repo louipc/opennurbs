@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -55,7 +56,6 @@ ON_RevSurface::~ON_RevSurface()
 
 void ON_RevSurface::Destroy()
 {
-  DestroySurfaceTree();
   if ( m_curve)
   {
     delete m_curve;
@@ -133,7 +133,6 @@ ON_BOOL32 ON_RevSurface::SetAngleRadians(
     }
     m_angle.Set( start_angle_radians, end_angle_radians );
     rc = true;
-    DestroySurfaceTree();
   }
   return rc;
 }
@@ -896,7 +895,6 @@ bool ON_RevSurface::Extend(
 
   if ( rc )
   {
-    DestroySurfaceTree();
     // update bounding box
     ON_BoundingBox bbox0 = m_bbox;
     m_bbox.Destroy();
@@ -1030,67 +1028,6 @@ ON_BOOL32 ON_RevSurface::Split(
   return rc;
 }
 
-
-bool ON_RevSurface::GetClosestPoint( 
-        const ON_3dPoint& test_point,
-        double* angle_t, double* curve_t,  // parameters of local closest point returned here
-        double maximum_distance,
-        const ON_Interval* angle_sub_domain, // can be NULL
-        const ON_Interval* curve_sub_domain  // can be NULL
-        ) const
-{
-  bool rc = false;
-
-  if ( m_curve )
-  {
-    // TODO - Add a FAST planar test and if curve is not planar,
-    //        call ON_Surface::GetClosestPoint().
-
-    if ( m_bTransposed )
-    {
-      double* ptr = angle_t;
-      angle_t = curve_t;
-      curve_t = ptr;
-      const ON_Interval* p = angle_sub_domain;
-      angle_sub_domain = curve_sub_domain;
-      curve_sub_domain = p;
-    }
-
-    // this assumes revolute is coplanar with axis and midpoint of curve is
-    // not on the axis
-
-    ON_Interval angle_domain;
-    if ( angle_sub_domain )
-    {
-      if ( m_t != m_angle )
-      {
-        angle_domain[0] = m_angle.ParameterAt( m_t.NormalizedParameterAt(angle_sub_domain->Min()) );
-        angle_domain[1] = m_angle.ParameterAt( m_t.NormalizedParameterAt(angle_sub_domain->Max()) );
-      }
-      else
-      {
-        angle_domain[0] = angle_sub_domain->Min();
-        angle_domain[1] = angle_sub_domain->Max();
-      }
-      angle_domain.Intersection(m_angle);
-    }
-    else
-      angle_domain = m_angle;
-
-    if ( angle_domain[0] == ON_UNSET_VALUE || angle_domain[1] == ON_UNSET_VALUE )
-      return false;
-
-    ON_3dPoint curve_test_point;
-    double angle, sin_angle, cos_angle;
-    angle = ON_ClosestPointAngle( m_axis, *m_curve, angle_domain, test_point, curve_test_point, &sin_angle, &cos_angle );
-    if ( m_t != m_angle )
-      *angle_t = m_t.ParameterAt( m_angle.NormalizedParameterAt(angle) );
-    else
-      *angle_t = angle;
-    rc = m_curve->GetClosestPoint( curve_test_point, curve_t, maximum_distance, curve_sub_domain )?true:false;
-  }
-  return rc;
-}
 
 ON_BOOL32 ON_RevSurface::Transpose()
 {
@@ -1356,66 +1293,6 @@ ON_Interval ON_RevSurface::Domain( int dir ) const
   return d;
 }
 
-ON_BOOL32 ON_RevSurface::GetSurfaceSize( 
-    double* width, 
-    double* height 
-    ) const
-{
-  ON_BOOL32 rc = false;
-  if ( m_bTransposed )
-  {
-    double* ptr = width;
-    width = height;
-    height = ptr;
-  }
-  if ( m_curve )
-  {
-    rc = true;
-
-    ON_Interval cdom = m_curve->Domain();
-    int i, hint = 0;
-    int imax = 64;
-    double d = 1.0/((double)imax);
-    ON_3dPoint pt0 = ON_UNSET_POINT;
-    ON_3dPoint pt;
-    double length_estimate = 0.0;
-
-    if ( width != NULL || height != NULL )
-    {
-      double radius_estimate = 0.0;
-      double r;
-      for ( i = 0; i <= imax; i++ )
-      {
-        if ( m_curve->EvPoint( cdom.ParameterAt(i*d), pt, 0, &hint ) )
-        {
-          r = m_axis.DistanceTo(pt);
-          if ( r > radius_estimate )
-            radius_estimate = r;
-          if ( pt0 != ON_UNSET_POINT )
-            length_estimate += pt0.DistanceTo(pt);
-          pt0 = pt;
-        }
-      }
-      if ( width != NULL )
-        *width = m_angle.Length()*radius_estimate;
-    }
-
-    if ( height != NULL )
-    {
-      if ( !m_curve->GetLength( height, 1.0e-4 ) )
-        *height = length_estimate;
-    }
-  }
-  else
-  {
-    if ( width )
-      *width = 0.0;
-    if ( height )
-      *height = 0.0;
-  }
-  return rc;
-}
-
 int ON_RevSurface::SpanCount( int dir ) const
 {
   int span_count = 0;
@@ -1507,27 +1384,34 @@ ON_BOOL32 ON_RevSurface::GetBBox(    // returns true if successful
       for ( i = 0; i < 8; i++ )
       {
         P = corners[i];
-        if ( m_axis.ClosestPointTo(P,&t) )
+        abox.Set(P,false);
+        while( m_axis.ClosestPointTo(P,&t) ) // not a loop - used for flow control
         {
+          abox.Set(arc.plane.origin,true);
+          // If we cannot construct a valid arc, then P and the point on the axis
+          // are added to the bounding box.  One case where this happens is when
+          // P is on the axis of revolution.  See bug 84354.
+
           arc.plane.origin = m_axis.PointAt(t);
           arc.plane.xaxis = P-arc.plane.origin;
           arc.radius = arc.plane.xaxis.Length();
           if ( !arc.plane.xaxis.Unitize() )
-            continue;
+            break;
           if ( fabs(arc.plane.xaxis*arc.plane.zaxis) > 0.0001 )
-            continue;
+            break; 
           arc.plane.yaxis = ON_CrossProduct(arc.plane.zaxis,arc.plane.xaxis);
           if ( !arc.plane.yaxis.Unitize() )
-            continue;
+            break;
           arc.plane.UpdateEquation();
           arc.plane.Rotate( m_angle[0], arc.plane.zaxis );
-          if ( arc.IsValid() )
-          {
-            abox = arc.BoundingBox();
-            bbox.Union(abox);
-          }
+          if ( !arc.IsValid() )
+            break;
+          abox = arc.BoundingBox();
+          break;
         }
+        bbox.Union(abox);
       }
+
       if ( bbox.IsValid() )
       {
         ON_RevSurface* ptr = const_cast<ON_RevSurface*>(this);
@@ -2514,120 +2398,5 @@ double ON_ClosestPointAngle(
   if ( 0 != cosine_angle )
     *cosine_angle = cos(angle);
   return angle;
-}
-
-static double LocalClsPtAngle(const ON_Line& axis, 
-                              const ON_Curve& curve, 
-                              double angle_seed,
-                              const ON_Interval angle_domain,
-                              const ON_3dPoint& test_point,
-                              ON_3dPoint& curve_test_point)
-
-{
-
-  // this assumes revolute is coplanar with axis and midpoint of curve is
-  // not on the axis.
-
-  if (angle_seed < angle_domain[0]) 
-    angle_seed = angle_domain[0];
-  else if (angle_seed > angle_domain[1]) 
-    angle_seed = angle_domain[1];
-
-  ON_Interval whole_circle(angle_domain[0], angle_domain[0]+2.0*ON_PI);
-
-  // 3 Jan 2011 Dale Lear
-  //   If ON_ClosestPointAngleHelper(), then use the seed value.
-  //   This Chuck's fix for bug 42808.
-  double angle = ON_ClosestPointAngleHelper(axis, curve, whole_circle, test_point, curve_test_point);
-  if ( !ON_IsValid(angle) )
-    angle = angle_seed;
-
-  if (angle >= whole_circle.Mid()){
-    if (angle_seed <= angle - ON_PI) 
-      angle = angle_domain[0];
-  }
-  else if (angle_seed > angle + ON_PI) 
-    //angle = 2.0*ON_PI;
-    angle = angle_domain[1];
-
-  if (angle > angle_domain[1]) angle = angle_domain[1];
-
-  return angle;
-
-}
-
-
-ON_BOOL32 ON_RevSurface::GetLocalClosestPoint( const ON_3dPoint& test_point,
-        double angle_seed, double curve_seed,
-        double* angle_t, double* curve_t,
-        const ON_Interval* angle_sub_domain, // can be NULL
-        const ON_Interval* curve_sub_domain  // can be NULL
-        ) const
-{
-  bool rc = false;
-
-  if ( m_bTransposed )
-  {
-    double x = angle_seed;
-    angle_seed = curve_seed;
-    curve_seed = x;
-    double* ptr = angle_t;
-    angle_t = curve_t;
-    curve_t = ptr;
-
-    // GBA 28-March-2008 if transposed we need to swap domain restrictions also
-    const ON_Interval* pint = angle_sub_domain;
-    angle_sub_domain = curve_sub_domain;
-    curve_sub_domain = pint;
-  }
-
-  if ( m_curve )
-  {
-    // this assumes revolute is coplanar with axis and midpoint of curve is
-    // not on the axis
-    ON_Interval angle_domain; // in radians
-    if ( angle_sub_domain )
-    {
-      if ( m_t != m_angle )
-      {
-        angle_domain[0] = m_angle.ParameterAt( m_t.NormalizedParameterAt(angle_sub_domain->Min()) );
-        angle_domain[1] = m_angle.ParameterAt( m_t.NormalizedParameterAt(angle_sub_domain->Max()) );
-      }
-      else
-      {
-        angle_domain[0] = angle_sub_domain->Min();
-        angle_domain[1] = angle_sub_domain->Max();
-      }
-      angle_domain.Intersection(m_angle);
-    }
-    else
-      angle_domain = m_angle;
-
-    ON_3dPoint curve_test_point;
-    double angle;
-    double aseed = (m_t != m_angle) ? m_angle.ParameterAt(m_t.NormalizedParameterAt(angle_seed)) : angle_seed;
-    angle = LocalClsPtAngle( m_axis, *m_curve, aseed, angle_domain, test_point, curve_test_point);
-    *angle_t = (m_t != m_angle) ? m_t.ParameterAt( m_angle.NormalizedParameterAt(angle) ) : angle;
-    rc = m_curve->GetLocalClosestPoint( curve_test_point, curve_seed, curve_t, curve_sub_domain )?true:false;
-    
-    if (rc)
-    {
-      //if at curve end and singularity, use angle_seed.
-      double sing_tol = 0.001*m_curve->Domain().Length();
-      if (sing_tol > ON_ZERO_TOLERANCE) sing_tol = ON_ZERO_TOLERANCE;
-      if ((IsSingular(0) && *curve_t - Domain(1)[0] < sing_tol) ||
-        (IsSingular(2) && Domain(1)[1] - *curve_t < sing_tol))
-      {
-
-        if (aseed < angle_domain[0]) 
-          *angle_t = m_t.ParameterAt(m_angle.NormalizedParameterAt(angle_domain[0]));
-        else if (aseed > angle_domain[1])  
-          *angle_t = m_t.ParameterAt(m_angle.NormalizedParameterAt(angle_domain[1]));
-        else 
-          *angle_t = angle_seed;
-      }
-    }
-  }
-  return rc;
 }
 

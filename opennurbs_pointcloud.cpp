@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -354,31 +355,6 @@ bool ON_GetClosestPointInPointList(
   return rc;
 }
 
-bool ON_3dPointArray::GetClosestPoint( 
-          ON_3dPoint P,
-          int* closest_point_index,
-          double maximum_distance
-          ) const
-{
-  int i;
-
-  bool rc = ON_GetClosestPointInPointList( m_count, m_a , P, &i );
-
-  if (rc)
-  {
-    if ( maximum_distance > 0.0 && P.DistanceTo(m_a[i]) > maximum_distance )
-    {
-      rc = false;
-    }
-    else if ( closest_point_index )
-    {
-      *closest_point_index = i;
-    }
-  }
-
-  return rc;
-}
-
 bool ON_PointCloud::HasPointColors() const
 {
   const int point_count = m_P.Count();
@@ -389,21 +365,6 @@ bool ON_PointCloud::HasPointNormals() const
 {
   const int point_count = m_P.Count();
   return (point_count > 0 && point_count == m_N.Count());
-}
-
-bool ON_PointCloud::GetClosestPoint(
-                ON_3dPoint P,
-                int* closest_point_index,
-                double maximum_distance 
-                ) const
-{
-  if ( maximum_distance > 0.0 && m_bbox.IsValid() )
-  {
-    // check bounding box
-    if ( m_bbox.MinimumDistanceTo(P) > maximum_distance )
-      return false;
-  }
-  return m_P.GetClosestPoint( P, closest_point_index, maximum_distance );
 }
 
 int ON_PointCloud::HiddenPointCount() const

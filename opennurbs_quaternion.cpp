@@ -1,10 +1,9 @@
-#include "opennurbs.h"
-
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2009 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -14,6 +13,8 @@
 //
 ////////////////////////////////////////////////////////////////
 */
+
+#include "opennurbs.h"
 
 ON_Quaternion ON_CrossProduct( const ON_Quaternion& p, const ON_Quaternion& q)
 {

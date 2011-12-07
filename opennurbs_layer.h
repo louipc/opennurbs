@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -169,6 +170,20 @@ public:
   bool HasPerViewportSettings(
     const ON_UUID& viewport_id
     ) const;
+
+  /*
+  Description:
+    Copies all per viewport settings
+  Parameters:
+    source - [in]
+      viewport id to copy all per viewport settings from
+    destination - [in]
+      viewport od to copy all per viewport settings to
+  Returns:
+    True if the settings could be copied, False if no per-viewport
+    settings exist for the source viewport id
+  */
+  bool CopyPerViewportSettings(ON_UUID source, ON_UUID destination);
 
   /*
   Description:
@@ -427,6 +442,18 @@ public:
   */
   void DeletePerViewportPlotWeight( const ON_UUID& viewport_id );
 
+  /*
+  Description:
+    Use UpdateViewportIds() to change viewport ids in situations
+    like merging when a viewport id conflict requires the viewport
+    ids in a file to be changed.
+  Returns:
+    Number of viewport ids that were updated.
+  */
+  int UpdateViewportIds( 
+    const ON_UuidPairList& viewport_id_map 
+    );
+
 public:
 
   int m_layer_index;       // index of this layer
@@ -486,6 +513,83 @@ public:
                     // a tree control then the list of child layers is
                     // shown in the control.
 
+
+  //////////////////////////////////////////////////////////////
+  //
+  // Tools for saving layer settings.
+  //
+  enum LAYER_SETTINGS
+  {
+    no_layer_settings = 0,
+    userdata_settings = 1,
+    color_settings = 2,
+    plot_color_settings = 4,
+    plot_weight_settings = 8,
+    visible_settings = 16,
+    locked_settings = 32,
+    all_layer_settings = 0xFFFFFFFF
+  };
+
+  /*
+  Returns:
+    Bits in the returned value indicate if there are differences
+    between layer0 and layer1.  For example, if the layers have 
+    difference color, then the returned value would have the
+    "color" bit set.
+  */
+  static unsigned int Differences( const ON_Layer& layer0, const ON_Layer& layer1 );
+
+  /*
+  Description:
+    Use settings_values and settings to set the specified values 
+    on this layer.
+  Parameters:
+    settings_values - [in]
+    settings - [in]
+      LAYER_SETTINGS bits specify which values of this
+      should be set from settings_values.
+  */
+  void Set( unsigned int settings, const ON_Layer& settings_values  );
+
+  /*
+  Description:
+    Saves current values of the specified settings so
+    they can be retrieved by GetSettings().
+  Parameters:
+    settings - [in]
+      LAYER_SETTINGS bits specify which values to save.
+      if 0 == settings, then all saved settings are deleted.
+    bUpdate - [in]
+      If true, then previously saved settings for properties
+      not identified by the settings paramter are left intact.
+      If false, all previously saved settings are removed.
+  */
+  void SaveSettings( unsigned int settings, bool bUpdate );
+
+  /*
+  Returns:
+    0 if the layer does not have saved settings.
+    Nonzero value with LAYER_SETTINGS bits specifying which settings
+    are saved.  The saved that can be retrieved by calling 
+    GetSavedSettings().    
+  */
+  unsigned int SavedSettings() const;
+
+  /*
+  Description:
+    Gets values of the saved settings.
+  Parameters:
+    layer - [in/out]
+      values of saved settings are set and all other values are
+      left unchanged.
+    settings - [out]
+      LAYER_SETTINGS bits specify which layer values were set
+      by this call.
+  Returns:
+    True if there were saved settings.
+  */
+  bool GetSavedSettings( ON_Layer& layer, unsigned int& settings ) const;
+  
 private:
   // The m__runtime_flags are used to speed queries that require
   // checking user data.  This field is not saved in persistent 

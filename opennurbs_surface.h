@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -25,22 +26,6 @@
 class ON_Curve;
 class ON_NurbsSurface;
 class ON_SurfaceTree;
-
-/* $Header: /src3/opennurbs/opennurbs_surface.h 3     9/17/01 4:21p Dalelear $ */
-/* $NoKeywords: $ */
-/*
-//
-// Copyright (c) 1993-2001 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
-//
-// THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
-// ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
-// MERCHANTABILITY ARE HEREBY DISCLAIMED.
-//				
-// For complete openNURBS copyright information see <http://www.opennurbs.org>.
-//
-////////////////////////////////////////////////////////////////
-*/
 
 ////////////////////////////////////////////////////////////////
 //
@@ -157,6 +142,22 @@ public:
   ////////////////////////////////////////////////////////////////////
   // surface interface
 
+  /*
+  Description:
+    Computes a polygon mesh approximation of the surface.    
+  Parameters:
+    mp - [in] meshing parameters
+    mesh - [in] if not NULL, the surface mesh will be put
+                into this mesh.
+  Returns:
+    A polygon mesh of the surface.
+  Remarks:
+    This virtual function works in the openNURBS that is
+    part of the Rhino SDK.  The source code for this 
+    functionallity is not provided in the free openNURBS
+    toolkit.
+  */
+
   ON_BOOL32 GetDomain( 
          int dir,              // 0 gets first parameter, 1 gets second parameter
          double* t0,
@@ -179,35 +180,6 @@ public:
   ON_Interval Domain(
     int dir // 0 gets first parameter's domain, 1 gets second parameter's domain
     ) const = 0;
-
-  /*
-  Description:
-    Get an estimate of the size of the rectangle that would
-    be created if the 3d surface where flattened into a rectangle.
-  Parameters:
-    width - [out]  (corresponds to the first surface parameter)
-    height - [out] (corresponds to the first surface parameter)
-  Example:
-
-          // Reparameterize a surface to minimize distortion 
-          // in the map from parameter space to 3d.
-          ON_Surface* surf = ...;
-          double width, height;
-          if ( surf->GetSurfaceSize( &width, &height ) )
-          {
-            srf->SetDomain( 0, ON_Interval( 0.0, width ) );
-            srf->SetDomain( 1, ON_Interval( 0.0, height ) );
-          }
-
-  Returns:
-    true if successful.
-  */
-  virtual
-  ON_BOOL32 GetSurfaceSize( 
-      double* width, 
-      double* height 
-      ) const;
-
 
   virtual 
   int SpanCount(
@@ -673,52 +645,6 @@ public:
 
   /*
   Description:
-    Compute a 3d curve that is the composite of a 2d curve
-    and the surface map.
-  Parameters:
-    curve_2d - [in] a 2d curve whose image is in the surface's domain.
-    tolerance - [in] the maximum acceptable distance from the returned
-       3d curve to the image of curve_2d on the surface.
-    curve_2d_subdomain - [in] optional subdomain for curve_2d
-  Returns:
-    3d curve.
-  See Also:
-    ON_Surface::IsoCurve
-    ON_Surface::Pullback
-  */
-  virtual
-  ON_Curve* Pushup( const ON_Curve& curve_2d,
-                    double tolerance,
-                    const ON_Interval* curve_2d_subdomain = NULL
-                    ) const;
-
-  /*
-  Description:
-    Pull a 3d curve back to the surface's parameter space.
-  Parameters:
-    curve_3d - [in] a 3d curve
-    tolerance - [in] the maximum acceptable 3d distance between
-       from surface(curve_2d(t)) to the locus of points on the
-       surface that are closest to curve_3d.
-    curve_3d_subdomain - [in] optional subdomain for curve_3d
-    start_uv - [in] optional starting point (if known)
-    end_uv - [in] optional ending point (if known)
-  Returns:
-    2d curve.
-  See Also:
-    ON_Surface::IsoCurve
-    ON_Surface::Pushup
-  */
-  virtual
-  ON_Curve* Pullback( const ON_Curve& curve_3d,
-                    double tolerance,
-                    const ON_Interval* curve_3d_subdomain = NULL,
-                    ON_3dPoint start_uv = ON_UNSET_POINT,
-                    ON_3dPoint end_uv = ON_UNSET_POINT
-                    ) const;
-
-  /*
-  Description:
     Removes the portions of the surface outside of the specified interval.
 
   Parameters:
@@ -796,80 +722,6 @@ public:
          ON_Surface*& west_or_south_side,
          ON_Surface*& east_or_north_side
          ) const;
-
-  /*
-  Description:
-    Get the parameters of the point on the surface that is closest to P.
-  Parameters:
-    P - [in] 
-            test point
-    s - [out]
-    t - [out] 
-            (*s,*t) = parameters of the surface point that 
-            is closest to P.
-    maximum_distance = 0.0 - [in] 
-            optional upper bound on the distance from P to 
-            the surface.  If you are only interested in 
-            finding a point Q on the surface when 
-            P.DistanceTo(Q) < maximum_distance, then set
-            maximum_distance to that value.
-    sdomain = 0 - [in] optional domain restriction
-    tdomain = 0 - [in] optional domain restriction
-  Returns:
-    True if successful.  If false, the values of *s and *t
-    are undefined.
-  See Also:
-    ON_Surface::GetLocalClosestPoint.
-  */
-  virtual
-  bool GetClosestPoint( 
-          const ON_3dPoint& P,
-          double* s,
-          double* t,
-          double maximum_distance = 0.0,
-          const ON_Interval* sdomain = 0,
-          const ON_Interval* tdomain = 0
-          ) const;
-
-  //////////
-  // Find parameters of the point on a surface that is locally closest to 
-  // the test_point.  The search for a local close point starts at 
-  // seed parameters. If a sub_domain parameter is not NULL, then
-  // the search is restricted to the specified portion of the surface.
-  //
-  // true if returned if the search is successful.  false is returned if
-  // the search fails.
-  virtual
-  ON_BOOL32 GetLocalClosestPoint( const ON_3dPoint&, // test_point
-          double,double,     // seed_parameters
-          double*,double*,   // parameters of local closest point returned here
-          const ON_Interval* = NULL, // first parameter sub_domain
-          const ON_Interval* = NULL  // second parameter sub_domain
-          ) const;
-
-
-  /*
-  Description:
-    Offset surface.
-  Parameters:
-    offset_distance - [in] offset distance
-    tolerance - [in] Some surfaces do not have an exact offset that
-      can be represented using the same class of surface definition.
-      In that case, the tolerance specifies the desired accuracy.
-    max_deviation - [out] If this parameter is not NULL, the maximum
-      deviation from the returned offset to the true offset is returned
-      here.  This deviation is zero except for cases where an exact
-      offset cannot be computed using the same class of surface definition.
-  Returns:
-    Offset surface.
-  */
-  virtual
-  ON_Surface* Offset(
-        double offset_distance, 
-        double tolerance, 
-        double* max_deviation = NULL
-        ) const;
-
 
   /*
   Description:
@@ -974,185 +826,6 @@ public:
         double surface_s, double surface_t,
         double* nurbs_s,  double* nurbs_t
         ) const;
-
-
-  // If the geometry surface is modified in any way, then
-  // call DestroySurfaceTree().
-  void DestroySurfaceTree();
-
-  const ON_SurfaceTree* SurfaceTree() const;
-
-  virtual
-  ON_SurfaceTree* CreateSurfaceTree() const;
-
-  /*
-  Description:
-    Intersect this surface with surfaceB.
-
-  Parameters:
-    surfaceB - [in]
-
-    x - [out]
-      Intersection events are appended to this array.
-
-    intersection_tolerance - [in]
-      If the input intersection_tolerance <= 0.0, then 0.001 is used.
-
-    overlap_tolerance - [in]
-      If positive, then overlap_tolerance must be 
-      >= intersection_tolerance and is used to test for 
-      overlapping regions. If the input 
-      overlap_tolerance <= 0.0, then 2*intersection_tolerance 
-      is used.
-
-    fitting_tolerance - [in] 
-      If fitting_tolerance is > 0 and >= intersection_tolerance,
-      then the intersection curves are fit to this tolerance.
-      If input fitting_tolerance <= 0.0 or < intersection_tolerance,
-      then intersection_tolerance is used.
-
-    surfaceA_udomain - [in]
-      optional restriction on surfaceA u domain
-    surfaceA_vdomain - [in] 
-      optional restriction on surfaceA v domain
-
-    surfaceB_udomain - [in]
-      optional restriction on surfaceB u domain
-    surfaceB_vdomain - [in] 
-      optional restriction on surfaceB v domain
-  Returns:
-    Number of intersection events appended to x.
-  */
-  int IntersectSurface( 
-          const ON_Surface* surfaceB,
-          ON_ClassArray<ON_SSX_EVENT>& x,
-          double intersection_tolerance = 0.0,
-          double overlap_tolerance = 0.0,
-          double fitting_tolerance = 0.0,
-          const ON_Interval* surfaceA_udomain = 0,
-          const ON_Interval* surfaceA_vdomain = 0,
-          const ON_Interval* surfaceB_udomain = 0,
-          const ON_Interval* surfaceB_vdomain = 0
-          ) const;
-
-  /*
-  Description:
-    Intersect this surface with an infinite plane.
-
-  Parameters:
-    plane_equation - [in]
-
-    x - [out]
-      Intersection events are appended to this array.
-
-    intersection_tolerance - [in]
-      If the input intersection_tolerance <= 0.0, then 0.001 is used.
-
-    overlap_tolerance - [in]
-      If positive, then overlap_tolerance must be 
-      >= intersection_tolerance and is used to test for 
-      overlapping regions. If the input 
-      overlap_tolerance <= 0.0, then 2*intersection_tolerance 
-      is used.
-
-    fitting_tolerance - [in] 
-      If fitting_tolerance is > 0 and >= intersection_tolerance,
-      then the intersection curves are fit to this tolerance.
-      If input fitting_tolerance <= 0.0 or < intersection_tolerance,
-      then intersection_tolerance is used.
-
-    surface_udomain - [in]
-      optional restriction on surfaceA u domain
-    surface_vdomain - [in] 
-      optional restriction on surfaceA v domain
-
-  Returns:
-    Number of intersection events appended to x.
-  */
-  int IntersectPlane( 
-          ON_PlaneEquation plane_equation,
-          ON_ClassArray<ON_SSX_EVENT>& x,
-          double intersection_tolerance = 0.0,
-          double overlap_tolerance = 0.0,
-          double fitting_tolerance = 0.0,
-          const ON_Interval* surface_udomain = 0,
-          const ON_Interval* surface_vdomain = 0
-          ) const;
-
-private:
-  // Runtime only - ignored by Read()/Write()
-  volatile ON_SurfaceTree* m_stree;
-
-public:
-  /*
-  Description:
-     Helper for ON_Surface::Pushup() to determine if an iso-curve can be
-     used.
-  Parameters:
-    curve_2d - [in]
-    tolerance  - [in]
-    curve_2d_subdomain  - [in] 
-      Pass null if entire curve_2d is being used.
-    c - [out]
-      Pass null if you don't need this value returned.
-    c3_dom - [out] 
-      Pass null if you don't want this returned.
-      c3_dom will be decreasing if curve_2d is going opposite
-      the surface's parameterization.  If -1 is returned, then
-      the input value of c2_dom is not changed.
-  Returns:
-    0 or 1: 
-        The 3d curve returned by IsoCurve( dir, c ) will be a pushup
-        tolerance.  The starting parameter of the 3d curve is c3_dom[0]
-        and the ending parameter of the 3d curve is at c3_dom[1].  
-        Note that c3_dom will be decreasing when curve_2d is oriented
-        opposite to the direction of the surface's paramterization.
-    -1:
-        if a pushup cannot be used.
-  */
-  int GetIsoPushupDirection( 
-          const ON_Curve& curve_2d,
-          double tolerance,
-          const ON_Interval* curve_2d_subdomain,
-          double* c,
-          ON_Interval* c3_dom
-          ) const;
-
-protected:
-  // Helper for ON_Surface::Pullback overrides that does a segment-by-segment
-  // pullback.
-  friend ON_Curve* TL_Surface_PushupHelper(const ON_Surface&,const ON_Curve&,double,const ON_Interval*);
-  friend ON_Curve* TL_Surface_PullbackHelper(const ON_Surface&,const ON_Curve&,double,const ON_Interval*,ON_3dPoint,ON_3dPoint);
-
-  ON_Curve* PullbackPolyCurve( 
-                  const ON_PolyCurve& polycurve_3d,
-                  double tolerance,
-                  const ON_Interval* curve_3d_subdomain,
-                  ON_3dPoint start_uv,
-                  ON_3dPoint end_uv
-                  ) const;
-
-  // Helper for ON_Surface::Pushup overrides that does a segment-by-segment
-  // pushup.
-  ON_Curve* PushupPolyCurve( const ON_PolyCurve& polycurve_2d,
-                    double tolerance,
-                    const ON_Interval* curve_2d_subdomain
-                    ) const;
-
-  // Helper for ON_Surface::Pullback overrides that handles "real" curve issues.
-  ON_Curve* PullbackCurveProxy( 
-                  const ON_CurveProxy& curveproxy_3d,
-                  double tolerance,
-                  const ON_Interval* curve_3d_subdomain,
-                  ON_3dPoint start_uv,
-                  ON_3dPoint end_uv
-                  ) const;
-
-  // Helper for ON_Surface::Pushup overrides that handles "real" curve issues.
-  ON_Curve* PushupCurveProxy( const ON_CurveProxy& curveproxy_2d,
-                    double tolerance,
-                    const ON_Interval* curve_2d_subdomain
-                    ) const;
 };
 
 

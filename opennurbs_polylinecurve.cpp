@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -106,7 +107,6 @@ ON_BOOL32
 ON_PolylineCurve::Transform( const ON_Xform& xform )
 {
   TransformUserData(xform);
-	DestroyCurveTree();
   return m_pline.Transform( xform );
 }
 
@@ -115,7 +115,6 @@ ON_PolylineCurve::Transform( const ON_Xform& xform )
 ON_BOOL32
 ON_PolylineCurve::SwapCoordinates( int i, int j )
 {
-	DestroyCurveTree();
   return m_pline.SwapCoordinates(i,j);
 }
 
@@ -229,7 +228,6 @@ ON_BOOL32 ON_PolylineCurve::SetDomain( double t0, double t1 )
 			rc=true;
     }
   }
-	DestroyCurveTree();
   return rc;  
 }
 
@@ -239,7 +237,6 @@ bool ON_PolylineCurve::ChangeDimension( int desired_dimension )
 
   if ( rc && m_dim != desired_dimension )
   {
-  	DestroyCurveTree();
     int i, count = m_pline.Count();
     if ( 2 == desired_dimension )
     {
@@ -720,7 +717,6 @@ ON_PolylineCurve::Reverse()
     }
     rc = true;
   }
-	DestroyCurveTree();
   return rc;
 }
 
@@ -748,7 +744,6 @@ ON_BOOL32 ON_PolylineCurve::SetStartPoint(
     m_pline[0] = start_point;
     rc = true;
   }
-	DestroyCurveTree();
   return rc;
 }
 
@@ -776,7 +771,6 @@ ON_BOOL32 ON_PolylineCurve::SetEndPoint(
     m_pline[count-1] = end_point;
     rc = true;
   }
-	DestroyCurveTree();
   return rc;
 }
 
@@ -852,161 +846,6 @@ ON_PolylineCurve::PointCount() const
   return m_pline.PointCount();
 }
 
-bool ON_PolylineCurve::GetClosestPoint( const ON_3dPoint& test_point,
-        double* t,       // parameter of local closest point returned here
-        double maximum_distance,
-        const ON_Interval* sub_domain
-        ) const
-{
-  double s, d;
-  int segment_index0 = 0;
-  int segment_index1 = m_pline.SegmentCount();
-  if ( sub_domain ) {
-    segment_index0 = ON_NurbsSpanIndex(2,m_pline.PointCount(),m_t,sub_domain->Min(),1,0);
-    segment_index1 = ON_NurbsSpanIndex(2,m_pline.PointCount(),m_t,sub_domain->Max(),-1,0)+1;
-  }
-  bool rc = m_pline.ClosestPointTo( test_point, &s, segment_index0, segment_index1 );
-  if ( rc ) {
-    int i = (int)floor(s);
-    if ( i < 0 )
-      i = 0;
-    else if ( i >= m_pline.PointCount()-1 )
-      i = m_pline.PointCount()-2;
-    ON_Interval in(m_t[i],m_t[i+1]);
-    s = in.ParameterAt(s-i);
-    if ( sub_domain ) {
-      if ( s < sub_domain->Min() )
-        s = sub_domain->Min();
-      else if ( s > sub_domain->Max() )
-        s = sub_domain->Max();
-    }
-    if ( maximum_distance > 0.0 ) {
-      d = test_point.DistanceTo(PointAt(s));
-      if ( d > maximum_distance )
-        rc = false;
-    }
-    if (rc && t)
-      *t = s;
-  }
-  return rc;
-}
-
-ON_BOOL32 ON_PolylineCurve::GetLocalClosestPoint( const ON_3dPoint& test_point,
-        double seed_parameter,
-        double* t,
-        const ON_Interval* sub_domain
-        ) const
-{
-  ON_BOOL32 rc;
-  if ( m_pline.Count() <= 2 )
-  {
-    // no need for complicated test in common and simple case of a line.
-    rc = GetClosestPoint(test_point,t,0.0,sub_domain);
-    if ( rc 
-         && t 
-         && test_point.DistanceTo(PointAt(seed_parameter)) <= test_point.DistanceTo(PointAt(*t))
-         )
-    {
-      *t = seed_parameter;
-    }
-  }
-  else
-  {
-    // Use the local closest point finder for nurbs curves
-
-    // NOTE: 18 May 2010 Dale Lear
-    //   When an ON_NurbsCurve is class is simply on then stack, C++
-    //   does not use the vtable to call GetLocalClosestPoint() and
-    //   this code fails to work right in Rhino.  Using the in-place
-    //   new causes the compiler to generate the vtable call we desire.
-    
-    //  ON_NurbsCurve nurbs_curve; // do no use class on the stack
-    char buffer[sizeof(ON_NurbsCurve)];
-    ON_NurbsCurve* nurbs_curve = new(&buffer[0]) ON_NurbsCurve();
-
-    nurbs_curve->m_dim = m_dim;
-    nurbs_curve->m_is_rat = 0;
-    nurbs_curve->m_order = 2;
-    nurbs_curve->m_cv_count = m_pline.Count();
-    nurbs_curve->m_cv_stride = 3;
-    nurbs_curve->m_cv_capacity = 0;
-    nurbs_curve->m_knot_capacity = 0;
-
-    // share the point and parameter memory
-    nurbs_curve->m_cv = const_cast<double*>(&m_pline[0].x);
-    nurbs_curve->m_knot = const_cast<double*>(&m_t[0]);
-
-    rc = nurbs_curve->GetLocalClosestPoint(test_point,seed_parameter,t,sub_domain);
-
-    // Prevent ~ON_NurbsCurve from deleting of this polyline's 
-    // points and knots. Setting the nurbs_curve->m_*_capacity = 0
-    // should be enough, but this is fast and bulletproof.
-    nurbs_curve->m_cv = 0;
-    nurbs_curve->m_knot = 0;
-    nurbs_curve->~ON_NurbsCurve();
-  }
-
-  return rc;
-}
-
-ON_BOOL32 ON_PolylineCurve::GetLength(
-        double* length,               // length returned here
-        double fractional_tolerance,  // default = 1.0e-8
-        const ON_Interval* sub_domain // default = NULL
-        ) const
-{
-	if (length==NULL)
-		return false;
-
-  if ( sub_domain ) {
-    *length = 0.0;
-		if(sub_domain->IsDecreasing())
-			return false;
-
-    int i, count = m_t.Count();
-		if( count<1) 
-			return true;
-
-		ON_Interval scratch_domain= ON_Interval(*m_t.Last(), m_t[0]);
-		if(scratch_domain.Intersection(*sub_domain))
-			sub_domain = &scratch_domain;
-		else
-			return false;		
-
-    double s0 = sub_domain->Min();
-    double s1 = sub_domain->Max();
-    ON_3dPoint p0, p1;
-    if ( s0 < m_t[0] )
-      s0 = m_t[0];
-    if ( s1 > m_t[count-1] )
-      s1 = m_t[count-1];
-    p1 = m_pline[0];
-    for ( i = 1; i < count; i++ ) {
-      if ( s0 < m_t[i] ) {
-        p1 = PointAt(s0);
-        break;
-      }
-    }
-    for (/*empty*/; i < count; i++ ) {
-      p0 = p1;
-      if ( s1 < m_t[i] ) {
-        p1 = PointAt(s1);
-        *length += p0.DistanceTo(p1);
-        break;
-      }
-      else {
-        p1 = m_pline[i];
-        *length += p0.DistanceTo(m_pline[i]);
-      }
-    }
-  }
-  else {
-    *length = m_pline.Length();
-  }
-  return true;
-}
-
-
 bool ON_PolylineCurve::Append( const ON_PolylineCurve& c )
 {
 
@@ -1031,84 +870,6 @@ bool ON_PolylineCurve::Append( const ON_PolylineCurve& c )
 
   return true;
 }
-
-ON_BOOL32 ON_PolylineCurve::GetNormalizedArcLengthPoint(
-        double s,
-        double* t,
-        double fractional_tolerance,
-        const ON_Interval* sub_domain
-        ) const
-{
-  ON_BOOL32 rc = true;
-  ON_Interval domain = (sub_domain) ? *sub_domain : Domain();
-  if ( s == 0.0 )
-    *t = domain.Min();
-  else if ( s == 1.0 )
-    *t = domain.Max();
-  else if ( 0.0 < s && s < 1.0 )
-  {
-    int segment_count = m_pline.SegmentCount();
-    double length;
-    rc = GetLength(&length,fractional_tolerance,sub_domain);
-    if ( rc ) {
-      rc = false;
-      double seg_length, s_length = s*length;
-      int i = ON_SearchMonotoneArray( m_t, m_t.Count(), domain[0] );
-      if ( i < 0 )
-        i = 0;
-      else if (i >= m_t.Count())
-        i = m_t.Count()-1;
-      for( /*empty*/; i < segment_count; i++ )
-      {
-        if ( m_t[i] > domain[1] )
-          break;
-        seg_length = m_pline[i].DistanceTo(m_pline[i+1]);
-        if ( seg_length < s_length )
-          s_length -= seg_length;
-        else if ( s_length >= seg_length )
-        {
-          *t = m_t[i+1];
-          rc = (*t <= domain[1]);
-          break;
-        }
-        else {
-          ON_Interval seg_domain(m_t[i],m_t[i+1]);
-          *t = seg_domain.ParameterAt( s_length/seg_length );
-          rc = (*t <= domain[1]);
-          break;
-        }
-      }
-    }
-  }
-  else
-    rc = false;
-  return rc;
-}
-
-ON_BOOL32 ON_PolylineCurve::GetNormalizedArcLengthPoints(
-        int count,
-        const double* s,
-        double* t,
-        double absolute_tolerance,
-        double fractional_tolerance,
-        const ON_Interval* sub_domain
-        ) const
-{
-  // TODO: move actual calculations into this function and 
-  // have GetNormalizedArcLengthPoint() call here.
-  ON_BOOL32 rc = true;
-  if ( count > 0 || s != NULL && t != NULL )
-  {
-    int i;
-    for ( i = 0; i < count && rc ; i++ )
-    {
-      rc = GetNormalizedArcLengthPoint( s[i], &t[i], fractional_tolerance, sub_domain );
-    }
-  }
-  return rc;
-}
-
-
 
 // returns true if t is sufficiently close to m_t[index]
 bool ON_PolylineCurve::ParameterSearch(double t, int& index, bool bEnableSnap) const{
@@ -1173,9 +934,6 @@ ON_BOOL32 ON_PolylineCurve::Trim( const ON_Interval& domain )
     // is if something is seriously wrong with the m_t[] values.
     return false;
   }
-
-  // we will begin modifying the polyline
-  DestroyCurveTree();
 
   if ( actual_trim_domain == original_polyline_domain )
   {
@@ -1332,9 +1090,6 @@ bool ON_PolylineCurve::Extend(
     m_pline[last] = Q1;
   }
 
-  if (changed){
-    DestroyCurveTree();
-  }
   return changed;
 }
 

@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -23,12 +24,6 @@
 
 #if !defined(OPENNURBS_SYSTEM_INC_)
 #define OPENNURBS_SYSTEM_INC_
-
-#if defined(TL_PURIFY_BUILD) || defined(RHINO_PURIFY_BUILD)
-#if !defined(ON_PURIFY_BUILD)
-#define ON_PURIFY_BUILD
-#endif
-#endif
 
 /* compiler choice */
 #if defined(_MSC_VER)
@@ -256,10 +251,13 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <wctype.h>
+#include <dirent.h>
 #if defined(ON_COMPILER_XCODE)
 #include <uuid/uuid.h>
 #endif
 #endif
+
+#include <errno.h>
 
 #if defined (cplusplus) || defined(_cplusplus) || defined(__cplusplus)
 // C++ system includes
@@ -323,23 +321,14 @@ typedef unsigned short wchar_t;
 // 64 bit (8 byte) pointers
 #define ON_SIZEOF_POINTER 8
 #define ON_64BIT_POINTER
+// ON_MAX_SIZET = maximum value of a size_t type
+#define ON_MAX_SIZE_T 0xFFFFFFFFFFFFFFFF
 #else
 // 32 bit (4 byte) pointers
 #define ON_SIZEOF_POINTER 4
 #define ON_32BIT_POINTER
-#endif
-
-#if defined(ON_PURIFY_BUILD)
-// ON_PURIFY_BUILD is defined in the DebugPurify
-// build configuration.  
-#pragma message(" --- OpenNURBS Purify build.")
-#if defined(ON_32BIT_POINTER) && defined(ON_COMPILING_OPENNURBS)
-// The header file ..\PurifyAPI\pure.h contains delclarations
-// of the Purify API functions.
-// The file ..\PurifyAPI\pure_api.c contains the definitions.
-// The versions we have only work in WIN32.
-#include "../PurifyAPI/pure.h"
-#endif
+// ON_MAX_SIZET = maximum value of a size_t type
+#define ON_MAX_SIZE_T 0xFFFFFFFF
 #endif
 
 // 8 bit integer
@@ -444,7 +433,16 @@ typedef unsigned int ON__UINT_PTR;
 
 #endif
 
+#if defined(ON_COMPILER_XCODE)
+/* using Apple's OSX XCode compiler */
 
+#if (defined(__ppc__) || defined(__ppc64__))
+#define ON_BIG_ENDIAN
+#elif (defined (__i386__) || defined( __x86_64__ ))
+#define ON_LITTLE_ENDIAN
+#endif
+
+#endif
 
 
 #if defined(ON_LITTLE_ENDIAN) && defined(ON_BIG_ENDIAN)

@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -468,6 +469,8 @@ public:
     const ON_Brep* brep,
     ON_3dPoint* T
     ) const;
+
+  static void SetAdvancedBrepMappingToolFunctions(TEXMAP_INTERSECT_LINE_SURFACE, TEXMAP_BREP_FACE_CLOSEST_POINT);
 
   /*
   Description:

@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -410,30 +411,6 @@ double ON_NurbsCage::GrevilleAbcissa(
   return (dir >= 0 && dir <= 2)
          ? ON_GrevilleAbcissa( m_order[dir], m_knot[dir] + gindex )
          : ON_UNSET_VALUE;
-}
-
-bool ON_NurbsCage::IsMorphable() const
-{
-  return true;
-}
-
-bool ON_NurbsCage::Morph(const ON_SpaceMorph& morph)
-{
-  ON_4dPoint P, Q;
-  int i,j,k;
-  for ( i = 0; i < m_cv_count[0]; i++ )
-  {
-    for ( j = 0; j < m_cv_count[1]; j++ )
-    {
-      for ( k = 0; k < m_cv_count[2]; k++ )
-      {
-        GetCV(i,j,k,P);
-        Q = morph.MorphPoint(P);
-        SetCV(i,j,k,Q);//morph.MorphPoint(P));
-      }           
-    }
-  }
-  return true;
 }
 
 bool ON_NurbsCage::MakeDeformable()
@@ -2388,31 +2365,16 @@ ON_3dPoint ON_MorphControl::MorphPoint( ON_3dPoint point ) const
   ON_3dPoint Q(point);
   if ( w > 0.0 )
   {
-    double s,t;
     ON_3dPoint rst;
 
     switch(m_varient)
     {
     case 1:
-      if ( m_nurbs_curve0.GetClosestPoint(Q,&t,clspt_max_dist) )
-      {
-        MorphPointVarient1Helper(t,w,distloc,Q,0);
-      }
-      else
-      {
-        w = 0.0;
-      }
+      w = 0.0;
       break;
 
     case 2:
-      if ( m_nurbs_surface0.GetClosestPoint(Q,&s,&t,clspt_max_dist) )
-      {
-        MorphPointVarient2Helper(s,t,w,distloc,Q,0);
-      }
-      else
-      {
-        w = 0.0;
-      }
+      w = 0.0;
       break;
 
     case 3:
@@ -2663,50 +2625,6 @@ ON_BOOL32 ON_MorphControl::Transform(
 
   case 3:
     rc = m_nurbs_cage.Transform(xform);
-    break;
-  }
-
-  return rc;
-}
-
-bool ON_MorphControl::Morph( const ON_SpaceMorph& morph )
-{
-  bool rc = false;
-
-  switch(m_varient)
-  {
-  case 1:
-    rc = m_nurbs_curve.Morph(morph);
-    break;
-
-  case 2:
-    rc = m_nurbs_surface.Morph(morph);
-    break;
-
-  case 3:
-    rc = m_nurbs_cage.Morph(morph);
-    break;
-  }
-
-  return rc;
-}
-
-bool ON_MorphControl::IsMorphable() const
-{
-  bool rc = false;
-
-  switch(m_varient)
-  {
-  case 1:
-    rc = m_nurbs_curve.IsMorphable();
-    break;
-
-  case 2:
-    rc = m_nurbs_surface.IsMorphable();
-    break;
-
-  case 3:
-    rc = m_nurbs_cage.IsMorphable();
     break;
   }
 

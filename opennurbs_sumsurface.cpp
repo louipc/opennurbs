@@ -1,8 +1,9 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2007 Robert McNeel & Associates. All rights reserved.
-// Rhinoceros is a registered trademark of Robert McNeel & Assoicates.
+// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
+// McNeel & Associates.
 //
 // THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED WARRANTY.
 // ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR PURPOSE AND OF
@@ -451,47 +452,6 @@ ON_Interval ON_SumSurface::Domain( int dir ) const
   return domain;
 }
 
-ON_BOOL32 ON_SumSurface::GetSurfaceSize( 
-    double* width, 
-    double* height 
-    ) const
-{
-  ON_BOOL32 rc = true;
-  double* ptr[2];
-  ptr[0] = width;
-  ptr[1] = height;
-  int j;
-  for ( j = 0; j < 2; j++ )
-  {
-    if ( ptr[j] == NULL )
-      continue;
-    *ptr[j] = 0.0;
-    if ( m_curve[j] == NULL )
-      rc = false;
-    if ( !m_curve[j]->GetLength( ptr[j], 1.0e-4 ) )
-    {
-      int i, imax = 64, hint = 0;
-      double length_estimate = 0.0, d = 1.0/((double)imax);
-      ON_Interval cdom = m_curve[j]->Domain();
-      ON_3dPoint pt0 = ON_UNSET_POINT;
-      ON_3dPoint pt;
-      for ( i = 0; i <= imax; i++ )
-      {
-        if ( m_curve[j]->EvPoint( cdom.ParameterAt(i*d), pt, 0, &hint ) )
-        {
-          if ( pt0 != ON_UNSET_POINT )
-            length_estimate += pt0.DistanceTo(pt);
-          pt0 = pt;
-        }
-      }
-      *ptr[j] = length_estimate;
-    }
-  }
-
-  return rc;
-}
-
-
 int ON_SumSurface::SpanCount( int dir ) const
 {
   int span_count = 0;
@@ -699,7 +659,6 @@ ON_BOOL32 ON_SumSurface::Reverse( int dir )
     rc = m_curve[0]->Reverse();
   else if ( dir == 1 && m_curve[1] )
     rc = m_curve[1]->Reverse();
-	DestroySurfaceTree();
   return rc;
 }
 
@@ -709,7 +668,6 @@ ON_BOOL32 ON_SumSurface::Transpose()
   ON_Curve* c = m_curve[0];
   m_curve[0] = m_curve[1];
   m_curve[1] = c;
-	DestroySurfaceTree();
   return true;
 }
 
@@ -1003,7 +961,6 @@ ON_BOOL32 ON_SumSurface::Trim(int dir,
        && trim_domain[1] == current_domain[1] )
     return true;
   m_bbox.Destroy();
-  DestroySurfaceTree();
   return m_curve[dir]->Trim(trim_domain);
 }
 
@@ -1018,7 +975,6 @@ bool ON_SumSurface::Extend(
   if (!m_curve[dir]) return false;
   bool rc = m_curve[dir]->Extend(domain);
   if (rc){
-    DestroySurfaceTree();
     m_bbox.Destroy();
   }
   return rc;
@@ -1044,7 +1000,6 @@ ON_BOOL32 ON_SumSurface::Split(int dir,
     left_srf = ON_SumSurface::Cast( west_or_south_side );
     if ( !left_srf )
       return false;
-    left_srf->DestroySurfaceTree();
     left_srf->m_bbox.Destroy();
   }
 
@@ -1053,7 +1008,6 @@ ON_BOOL32 ON_SumSurface::Split(int dir,
     right_srf = ON_SumSurface::Cast( east_or_north_side );
     if ( !right_srf )
       return false;
-    right_srf->DestroySurfaceTree();
     right_srf->m_bbox.Destroy();
   }
 
