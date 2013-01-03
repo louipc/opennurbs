@@ -1,7 +1,7 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// Copyright (c) 1993-2012 Robert McNeel & Associates. All rights reserved.
 // OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
 // McNeel & Associates.
 //
@@ -244,21 +244,24 @@ bool ON_WindowsBitmap::Create(
 
   bool rc = false;
 
-  if ( m_bmi && palette_color_count > 0) 
+  if ( m_bmi /*&& palette_color_count > 0*/) 
   {
     m_bmi->bmiHeader = bh;
     m_bits = (unsigned char*)&m_bmi->bmiColors[palette_color_count];
 
     // default palette is gray scale
-    const int rgb_delta = 256/palette_color_count;
-    int i, rgb;
-    for ( i = 0, rgb = 0; i < palette_color_count; i++, rgb += rgb_delta ) 
+    if ( palette_color_count > 0 )
     {
-      if ( rgb >= 256 ) rgb = 255;
-      m_bmi->bmiColors[i].rgbBlue  = (unsigned char)rgb;
-      m_bmi->bmiColors[i].rgbGreen = (unsigned char)rgb;
-      m_bmi->bmiColors[i].rgbRed   = (unsigned char)rgb;
-      m_bmi->bmiColors[i].rgbReserved = 0;
+      const int rgb_delta = 256/palette_color_count;
+      int i, rgb;
+      for ( i = 0, rgb = 0; i < palette_color_count; i++, rgb += rgb_delta ) 
+      {
+        if ( rgb >= 256 ) rgb = 255;
+        m_bmi->bmiColors[i].rgbBlue  = (unsigned char)rgb;
+        m_bmi->bmiColors[i].rgbGreen = (unsigned char)rgb;
+        m_bmi->bmiColors[i].rgbRed   = (unsigned char)rgb;
+        m_bmi->bmiColors[i].rgbReserved = 0;
+      }
     }
     rc = true;
   }

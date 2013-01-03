@@ -50,7 +50,7 @@ void CExampleWriteUserData::Dump( ON_TextLog& text_log ) const
   const wchar_t* s = m_str;
   if ( 0 == s ) 
     s = L"";
-  text_log.Print("m_str: %S\n",s);
+  text_log.Print("m_str: %ls\n",s);
   text_log.Print("m_sn: %d\n",m_sn);
   text_log.PopIndent();
 }

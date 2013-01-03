@@ -146,6 +146,9 @@
   <ItemGroup>
     <ClCompile Include="example_roundtrip.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\examples_linking_pragmas.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

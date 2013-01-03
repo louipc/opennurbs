@@ -1,7 +1,7 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// Copyright (c) 1993-2012 Robert McNeel & Associates. All rights reserved.
 // OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
 // McNeel & Associates.
 //
@@ -76,8 +76,6 @@ unsigned char* onmbsdup( const unsigned char* src )
   return p;
 }
 
-#if defined(_WCHAR_T_DEFINED)
-
 wchar_t* onwcsdup( const wchar_t* src )
 {
   wchar_t* p;
@@ -95,4 +93,4 @@ wchar_t* onwcsdup( const wchar_t* src )
   }
   return p;
 }
-#endif
+

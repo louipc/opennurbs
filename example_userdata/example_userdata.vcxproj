@@ -144,6 +144,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\examples_linking_pragmas.h" />
     <ClInclude Include="example_ud.h" />
   </ItemGroup>
   <ItemGroup>

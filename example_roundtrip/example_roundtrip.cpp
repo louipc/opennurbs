@@ -107,9 +107,7 @@ int main( int argc, const char *argv[] )
     }
     */
 
-    // create a text dump of the model
-    int version = 4; // File can be read by Rhino 4 and Rhino 5
-    //int version = 5; // File can be read by Rhino 5
+    int version = 0; // write current Rhino file
 
     ON_String outfile = sFileName;
     int len = outfile.Length() - 4;

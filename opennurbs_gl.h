@@ -39,7 +39,7 @@
 #elif defined(ON_COMPILER_XCODE)
 
 // Tested compilers:
-//   Apple XCode 2.4.1
+//   Apple Xcode 2.4.1
 //   Support for other Apple compilers is not available.
 #include <GLUT/glut.h>   // Open GL auxillary functions
 

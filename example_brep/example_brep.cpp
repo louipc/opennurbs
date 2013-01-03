@@ -633,8 +633,7 @@ int main()
     = "OpenNURBS example showing how to create and write a simple b-rep";
 
 
-  int version = 4; // File can be read by Rhino 4 and Rhino 5
-  //int version = 5; // File can be read by Rhino 5
+  int version = 0; // version will be ON_BinaryArchive::CurrentArchiveVersion()
   model.Polish();
   const char* filename = "my_brep.3dm";
   bool rc = model.Write( filename, 

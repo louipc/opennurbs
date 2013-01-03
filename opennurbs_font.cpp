@@ -1,7 +1,7 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// Copyright (c) 1993-2012 Robert McNeel & Associates. All rights reserved.
 // OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
 // McNeel & Associates.
 //
@@ -97,8 +97,8 @@ void ON_Font::Dump( ON_TextLog& dump ) const
   if ( !name )
     name = L"";
   dump.Print("font index = %d\n",m_font_index);
-  dump.Print("font name = \"%S\"\n",name);
-  dump.Print("font face name = \"%S\"\n",m_facename);
+  dump.Print("font name = \"%ls\"\n",name);
+  dump.Print("font face name = \"%ls\"\n",m_facename);
   dump.Print("font weight = \"%d\"\n",m_font_weight);
   dump.Print("font is italic = \"%d\"\n",m_font_italic);
   dump.Print("font is underlined = \"%d\"\n",m_font_underlined);

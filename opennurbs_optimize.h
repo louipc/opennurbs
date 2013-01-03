@@ -1,7 +1,7 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// Copyright (c) 1993-2012 Robert McNeel & Associates. All rights reserved.
 // OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
 // McNeel & Associates.
 //
@@ -46,7 +46,7 @@ public:
   ) = 0;
 
 
-  ON_BOOL32 FindZero( double* );  // Searches domain between m_to and m_t1
+  ON_BOOL32 FindZero( double* );  // Searches domain between m_t0 and m_t1
                              // domain for a root.  Returns true if
                              // a root is found.
 

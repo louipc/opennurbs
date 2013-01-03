@@ -1,7 +1,7 @@
 /* $NoKeywords: $ */
 /*
 //
-// Copyright (c) 1993-2011 Robert McNeel & Associates. All rights reserved.
+// Copyright (c) 1993-2012 Robert McNeel & Associates. All rights reserved.
 // OpenNURBS, Rhinoceros, and Rhino3D are registered trademarks of Robert
 // McNeel & Associates.
 //
@@ -24,6 +24,11 @@
 
 #if !defined(OPENNURBS_SYSTEM_INC_)
 #define OPENNURBS_SYSTEM_INC_
+
+// The public release of opennurbs as a source code C++
+// library is built with OPENNURBS_PUBLIC_RELEASE
+// defined.
+#define OPENNURBS_PUBLIC_RELEASE
 
 /* compiler choice */
 #if defined(_MSC_VER)
@@ -104,7 +109,7 @@
 
 
 #if defined(_GNU_SOURCE) && defined(__APPLE__)
-/* using Apple's OSX XCode compiler */
+/* using Apple's OSX Xcode compiler */
 #if !defined(ON_COMPILER_XCODE)
 #define ON_COMPILER_XCODE
 #endif
@@ -274,7 +279,7 @@
 #define ON_MSC_CDECL
 #endif
 
-#if !defined(ON_OS_WINDOWS)
+#if !defined(ON_OS_WINDOWS) && !defined(_GNU_SOURCE) && !defined(ON_COMPILER_XCODE)
 
 /* define wchar_t, true, false, NULL */
 
@@ -294,12 +299,15 @@
 // If you are using VC7/.NET and are having trouble linking 
 // to functions that have whcar_t types in arguments, then
 // read the documentation about the wchar_t type and
-// the /Zc:wchar_t compiler option.  Since 
+// the /Zc:wchar_t compiler option.
 
-/* 16-bit wide character ("UNICODE") */
+// When opennurbs is built on a platform that has no
+// wchar_t type, this typedef defines wchar_t to be
+// an unsigned 16-bit integer and opennurbs will
+// use UTF-16 encoding for wchar_t strings.
 
 #if !defined(_WCHAR_T)
-typedef unsigned short wchar_t;
+typedef ON__UINT16 wchar_t;
 #endif
 
 #define _WCHAR_T_DEFINED
@@ -434,7 +442,7 @@ typedef unsigned int ON__UINT_PTR;
 #endif
 
 #if defined(ON_COMPILER_XCODE)
-/* using Apple's OSX XCode compiler */
+/* using Apple's OSX Xcode compiler */
 
 #if (defined(__ppc__) || defined(__ppc64__))
 #define ON_BIG_ENDIAN

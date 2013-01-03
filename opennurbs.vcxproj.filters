@@ -78,9 +78,6 @@
     <ClInclude Include="opennurbs_rand.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="opennurbs_quaternion.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="opennurbs_polylinecurve.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -148,9 +145,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="opennurbs_material.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="opennurbs_massprop.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="opennurbs_mapchan.h">
@@ -391,9 +385,6 @@
     <ClCompile Include="opennurbs_rand.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="opennurbs_quaternion.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="opennurbs_precompiledheader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -473,9 +464,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="opennurbs_material.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="opennurbs_massprop.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="opennurbs_lookup.cpp">
@@ -608,9 +596,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="opennurbs_beam.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="opennurbs_basic.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="opennurbs_base64.cpp">

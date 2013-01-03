@@ -18,26 +18,29 @@ RANLIB = ranlib
 ###############################################################
 # Gnu tools
 #
-# (Tested with gcc 4.1.2 on SUSE Linux)
+# (Tested with gcc 4.2.1 on OSX 10.8.1)
 #
 # In order to get full wide character (UNICODE) support, you
 # need to define _GNU_SOURCE
 
+# Choose one of the following definitions for GCC_OPTIMIZER_FLAGS
+
+# unoptimized debug build
+ON_GNU_OPTIMIZER_FLAGS = -g
+
+# optimized release build
+#ON_GNU_OPTIMIZER_FLAGS = -O
+
 # C compiler and flags
 CC = gcc
-CFLAGS = -g -Wall -D_GNU_SOURCE -DMY_ZCALLOC -DZ_PREFIX -I.
-#CFLAGS = -O -Wall -D_GNU_SOURCE -DMY_ZCALLOC -DZ_PREFIX -I.
+CFLAGS = $(ON_GNU_OPTIMIZER_FLAGS) -Wall -D_GNU_SOURCE -DMY_ZCALLOC -DZ_PREFIX -I.
 
 # C++ compiler and flags
 CCC = g++
-CCFLAGS = -g -Wall -D_GNU_SOURCE -I.
-#CCFLAGS = -O -Wall -D_GNU_SOURCE -I.
+CCFLAGS = $(ON_GNU_OPTIMIZER_FLAGS) -Wall -D_GNU_SOURCE -I.
 
 LINK = $(CCC)
 LINKFLAGS =
-
-
-
 
 ###############################################################
 # Irix 6.5 compiler (uncomment the lines in this block)
@@ -100,6 +103,7 @@ ON_INC= opennurbs.h \
 		opennurbs_archive.h \
 		opennurbs_array.h \
 		opennurbs_array_defs.h \
+		opennurbs_base32.h \
 		opennurbs_base64.h \
 		opennurbs_beam.h \
 		opennurbs_bezier.h \
@@ -143,7 +147,6 @@ ON_INC= opennurbs.h \
 		opennurbs_linetype.h \
 		opennurbs_lookup.h \
 		opennurbs_mapchan.h \
-		opennurbs_massprop.h \
 		opennurbs_material.h \
 		opennurbs_math.h \
 		opennurbs_matrix.h \
@@ -191,6 +194,7 @@ ON_INC= opennurbs.h \
 		opennurbs_xform.h \
 		opennurbs_zlib.h
 
+
 ON_SRC= opennurbs_3dm_attributes.cpp \
 		opennurbs_3dm_properties.cpp \
 		opennurbs_3dm_settings.cpp \
@@ -200,8 +204,8 @@ ON_SRC= opennurbs_3dm_attributes.cpp \
 		opennurbs_arccurve.cpp \
 		opennurbs_archive.cpp \
 		opennurbs_array.cpp \
+		opennurbs_base32.cpp \
 		opennurbs_base64.cpp \
-		opennurbs_basic.cpp \
 		opennurbs_beam.cpp \
 		opennurbs_bezier.cpp \
 		opennurbs_beziervolume.cpp \
@@ -247,7 +251,6 @@ ON_SRC= opennurbs_3dm_attributes.cpp \
 		opennurbs_linecurve.cpp \
 		opennurbs_linetype.cpp \
 		opennurbs_lookup.cpp \
-		opennurbs_massprop.cpp \
 		opennurbs_material.cpp \
 		opennurbs_math.cpp \
 		opennurbs_matrix.cpp \
@@ -298,6 +301,7 @@ ON_SRC= opennurbs_3dm_attributes.cpp \
 		opennurbs_zlib.cpp \
 		opennurbs_zlib_memory.cpp
 
+
 ON_OBJ= opennurbs_3dm_attributes.o \
 		opennurbs_3dm_properties.o \
 		opennurbs_3dm_settings.o \
@@ -307,8 +311,8 @@ ON_OBJ= opennurbs_3dm_attributes.o \
 		opennurbs_arccurve.o \
 		opennurbs_archive.o \
 		opennurbs_array.o \
+		opennurbs_base32.o \
 		opennurbs_base64.o \
-		opennurbs_basic.o \
 		opennurbs_beam.o \
 		opennurbs_bezier.o \
 		opennurbs_beziervolume.o \
@@ -354,7 +358,6 @@ ON_OBJ= opennurbs_3dm_attributes.o \
 		opennurbs_linecurve.o \
 		opennurbs_linetype.o \
 		opennurbs_lookup.o \
-		opennurbs_massprop.o \
 		opennurbs_material.o \
 		opennurbs_math.o \
 		opennurbs_matrix.o \
@@ -405,6 +408,7 @@ ON_OBJ= opennurbs_3dm_attributes.o \
 		opennurbs_zlib.o \
 		opennurbs_zlib_memory.o
 
+
 ZLIB_INC= zlib/crc32.h \
 		zlib/deflate.h \
 		zlib/inffast.h \
@@ -444,18 +448,14 @@ ZLIB_OBJ= zlib/adler32.o \
 
 EXAMPLE_OBJ = example_read/example_read.o \
       example_write/example_write.o \
-      example_dump/example_dump.o \
       example_brep/example_brep.o \
-      example_fileit/example_fileit.o \
       example_userdata/example_ud.o \
       example_userdata/example_userdata.o \
       example_roundtrip/example_roundtrip.o
 
 EXAMPLES = example_read/example_read \
       example_write/example_write \
-      example_dump/example_dump \
       example_brep/example_brep \
-      example_fileit/example_fileit \
       example_roundtrip/example_roundtrip \
       example_userdata/example_userdata
 
@@ -490,12 +490,6 @@ example_write/example_write : example_write/example_write.o example_userdata/exa
 
 example_brep/example_brep : example_brep/example_brep.o $(OPENNURBS_LIB_FILE)
 	$(LINK) $(LINKFLAGS) example_brep/example_brep.o -L. -l$(OPENNURBS_LIB_NAME) -lm -o $@
-
-example_fileit/example_fileit : example_fileit/example_fileit.o $(OPENNURBS_LIB_FILE)
-	$(LINK) $(LINKFLAGS) example_fileit/example_fileit.o -L. -l$(OPENNURBS_LIB_NAME) -lm -o $@
-
-example_dump/example_dump : example_dump/example_dump.o
-	$(LINK) $(LINKFLAGS) example_dump/example_dump.o -L. -l$(OPENNURBS_LIB_NAME) -lm -o $@
 
 example_userdata/example_userdata : example_userdata/example_userdata.o $(OPENNURBS_LIB_FILE)
 	$(LINK) $(LINKFLAGS) example_userdata/example_userdata.o -L. -l$(OPENNURBS_LIB_NAME) -lm -o $@

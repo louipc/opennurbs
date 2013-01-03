@@ -3,7 +3,7 @@
 
 Legal Stuff:
 
-  Copyright (c) 1993-2011 Robert McNeel & Associates. All Rights Reserved.
+  Copyright (c) 1993-2012 Robert McNeel & Associates. All Rights Reserved.
   Rhinoceros is a registered trademark of Robert McNeel & Associates.
 
   THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED
@@ -70,25 +70,31 @@ Supported compilers:
 
 Question:
 
-Can I use my brand X C++ compiler?
+  Can I use my brand X C++ compiler?
 
 Answer:
 
-The openNURBS toolkit has been tested with
+The C++ openNURBS toolkit has been tested with
 
-  Microsoft Visual Studio 2010 (VC 10.0) (Windows 7)
+  Microsoft Visual Studio 2010 (VC 10.0 SP1) (Windows 7 Professional SP1)
+    To build opennurbs and the examples with Visual Studio 2010 SP1,
+	use the solution build_opennurbs_vs2010.sln.
 
-  gcc version 4.2.1 (Apple Build 5664)
+  gcc version 4.2.1 (Apple Build 5658)
+    To build opennurbs and the examples with gcc use the makefile.
   
-  Apple XCode 3.2.6 (MaxBook Pro + OSX)
+  Apple Xcode 4.5 (4G182) (OSX 10.8.2)
+    To build opennurbs and the examples with Xcode 4.5, use the
+	workspace build_opennurbs_xcode.workspace.
 
 The openNURBS C++ source code is clean and fairly simple.  You
 should be able to use any good C++ compiler that has 32-bit
-integers and 32-bit or 64-bit pointers.
+integers, 32-bit or 64-bit pointers, and wchar_t support.
 
 OpenNURBS uses UTF-16 to store text information in
 3DM files and provides tools for converting UTF-16
-strings to UTF-8 and UTF-32 strings.
+strings to UTF-8 and UTF-32 strings. The ON_wString
+has wchar_t characters.
 
 Excellent compilers and make utilities are available from
 The Free Software Foundation <http://www.fsf.org>.  You have
@@ -108,6 +114,12 @@ Microsoft Visual C++ 6.0 Users:
 ====================================================================
 
 Microsoft Visual Studio 2003 users:
+  You are on your own.  Support for this compiler is no longer
+  provided.
+
+====================================================================
+
+Microsoft Visual Studio 2005 users:
   You are on your own.  Support for this compiler is no longer
   provided.
 

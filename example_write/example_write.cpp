@@ -1198,9 +1198,7 @@ int main ()
   // version 5 is the OpenNURBS format (released September 2009) and is used by Rhino 5.x
 
   // version to write
-  int version = 4; // File can be read by Rhino 4 and Rhino 5
-  //int version = 5; // File can be read by Rhino 5
-
+  int version = 0; // version will be ON_BinaryArchive::CurrentArchiveVersion()
 
   // errors printed to stdout
   ON_TextLog error_log;

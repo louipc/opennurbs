@@ -14,6 +14,9 @@
     <ClInclude Include="example_ud.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\examples_linking_pragmas.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="example_ud.cpp">

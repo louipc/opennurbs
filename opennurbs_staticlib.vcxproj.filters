@@ -41,9 +41,6 @@
     <ClCompile Include="opennurbs_base64.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="opennurbs_basic.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="opennurbs_beam.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -171,9 +168,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="opennurbs_lookup.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="opennurbs_massprop.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="opennurbs_material.cpp">
@@ -491,9 +485,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="opennurbs_mapchan.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="opennurbs_massprop.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="opennurbs_material.h">
