@@ -159,6 +159,7 @@ ON_INC= opennurbs.h \
 		opennurbs_objref.h \
 		opennurbs_offsetsurface.h \
 		opennurbs_optimize.h \
+		opennurbs_photogrammetry.h \
 		opennurbs_plane.h \
 		opennurbs_planesurface.h \
 		opennurbs_pluginlist.h \
@@ -170,6 +171,7 @@ ON_INC= opennurbs.h \
 		opennurbs_polyedgecurve.h \
 		opennurbs_polyline.h \
 		opennurbs_polylinecurve.h \
+		opennurbs_quaternion.h \
 		opennurbs_qsort_template.h \
 		opennurbs_rand.h \
 		opennurbs_rendering.h \
@@ -268,6 +270,7 @@ ON_SRC= opennurbs_3dm_attributes.cpp \
 		opennurbs_objref.cpp \
 		opennurbs_offsetsurface.cpp \
 		opennurbs_optimize.cpp \
+		opennurbs_photogrammetry.cpp \
 		opennurbs_plane.cpp \
 		opennurbs_planesurface.cpp \
 		opennurbs_pluginlist.cpp \
@@ -279,6 +282,7 @@ ON_SRC= opennurbs_3dm_attributes.cpp \
 		opennurbs_polyedgecurve.cpp \
 		opennurbs_polyline.cpp \
 		opennurbs_polylinecurve.cpp \
+		opennurbs_quaternion.cpp \
 		opennurbs_rand.cpp \
 		opennurbs_revsurface.cpp \
 		opennurbs_rtree.cpp \
@@ -375,6 +379,7 @@ ON_OBJ= opennurbs_3dm_attributes.o \
 		opennurbs_objref.o \
 		opennurbs_offsetsurface.o \
 		opennurbs_optimize.o \
+		opennurbs_photogrammetry.o \
 		opennurbs_plane.o \
 		opennurbs_planesurface.o \
 		opennurbs_pluginlist.o \
@@ -386,6 +391,7 @@ ON_OBJ= opennurbs_3dm_attributes.o \
 		opennurbs_polyedgecurve.o \
 		opennurbs_polyline.o \
 		opennurbs_polylinecurve.o \
+		opennurbs_quaternion.o \
 		opennurbs_rand.o \
 		opennurbs_revsurface.o \
 		opennurbs_rtree.o \

@@ -344,6 +344,7 @@
     <ClCompile Include="opennurbs_objref.cpp" />
     <ClCompile Include="opennurbs_offsetsurface.cpp" />
     <ClCompile Include="opennurbs_optimize.cpp" />
+    <ClCompile Include="opennurbs_photogrammetry.cpp" />
     <ClCompile Include="opennurbs_plane.cpp" />
     <ClCompile Include="opennurbs_planesurface.cpp" />
     <ClCompile Include="opennurbs_pluginlist.cpp" />
@@ -365,6 +366,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="opennurbs_quaternion.cpp" />
     <ClCompile Include="opennurbs_rand.cpp" />
     <ClCompile Include="opennurbs_revsurface.cpp" />
     <ClCompile Include="opennurbs_rtree.cpp" />
@@ -455,6 +457,7 @@
     <ClInclude Include="opennurbs_objref.h" />
     <ClInclude Include="opennurbs_offsetsurface.h" />
     <ClInclude Include="opennurbs_optimize.h" />
+    <ClInclude Include="opennurbs_photogrammetry.h" />
     <ClInclude Include="opennurbs_plane.h" />
     <ClInclude Include="opennurbs_planesurface.h" />
     <ClInclude Include="opennurbs_pluginlist.h" />
@@ -467,6 +470,7 @@
     <ClInclude Include="opennurbs_polyline.h" />
     <ClInclude Include="opennurbs_polylinecurve.h" />
     <ClInclude Include="opennurbs_qsort_template.h" />
+    <ClInclude Include="opennurbs_quaternion.h" />
     <ClInclude Include="opennurbs_rand.h" />
     <ClInclude Include="opennurbs_rendering.h" />
     <ClInclude Include="opennurbs_revsurface.h" />

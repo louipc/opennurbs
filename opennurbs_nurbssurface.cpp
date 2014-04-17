@@ -2096,13 +2096,18 @@ double ON_NurbsSurface::GrevilleAbcissa(
   return ON_GrevilleAbcissa( m_order[dir], m_knot[dir] + gindex );
 }
 
-bool ON_NurbsSurface::GetGrevilleAbcissae( // see ON_GetGrevilleAbcissae() for details
-         int dir,          // dir
-         double* g         // g[cv1-cv0]
+bool ON_NurbsSurface::GetGrevilleAbcissae(
+         int dir,
+         double* g
          ) const
 {
   if (dir) 
     dir = 1;
+  // The "false" for the 4th parameter is on purpose and should not be
+  // replaced with this->IsPeriodic(dir).  The problem
+  // being that when the 4th parameter is true, it is not possible
+  // to determine which subset of the full list of Greville abcissae
+  // was returned.
   return ON_GetGrevilleAbcissae( m_order[dir], m_cv_count[dir], m_knot[dir], false, g );
 }
 

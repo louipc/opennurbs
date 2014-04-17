@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1D2D85EE178B36C400D67434 /* opennurbs_quaternion.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1D2D85EC178B36C400D67434 /* opennurbs_quaternion.cpp */; };
+		1D2D85EF178B36C400D67434 /* opennurbs_quaternion.h in Headers */ = {isa = PBXBuildFile; fileRef = 1D2D85ED178B36C400D67434 /* opennurbs_quaternion.h */; };
 		1D84E56C161B8B75001C8C5E /* opennurbs_memory_util.c in Sources */ = {isa = PBXBuildFile; fileRef = 1D84E56A161B8B75001C8C5E /* opennurbs_memory_util.c */; };
 		1D84E56D161B8B75001C8C5E /* opennurbs_memory.c in Sources */ = {isa = PBXBuildFile; fileRef = 1D84E56B161B8B75001C8C5E /* opennurbs_memory.c */; };
 		1D84E57B161B8BD4001C8C5E /* adler32.c in Sources */ = {isa = PBXBuildFile; fileRef = 1D84E570161B8BD4001C8C5E /* adler32.c */; };
@@ -238,6 +240,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		1D2D85EC178B36C400D67434 /* opennurbs_quaternion.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = opennurbs_quaternion.cpp; sourceTree = "<group>"; };
+		1D2D85ED178B36C400D67434 /* opennurbs_quaternion.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = opennurbs_quaternion.h; sourceTree = "<group>"; };
 		1D84E56A161B8B75001C8C5E /* opennurbs_memory_util.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = opennurbs_memory_util.c; sourceTree = "<group>"; };
 		1D84E56B161B8B75001C8C5E /* opennurbs_memory.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = opennurbs_memory.c; sourceTree = "<group>"; };
 		1D84E570161B8BD4001C8C5E /* adler32.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = adler32.c; path = zlib/adler32.c; sourceTree = "<group>"; };
@@ -614,6 +618,7 @@
 				1DB4EE55161B825A00672B4E /* opennurbs_polyline.cpp */,
 				1DB4EE56161B825A00672B4E /* opennurbs_polylinecurve.cpp */,
 				1DB4EE57161B825A00672B4E /* opennurbs_precompiledheader.cpp */,
+				1D2D85EC178B36C400D67434 /* opennurbs_quaternion.cpp */,
 				1DB4EE58161B825A00672B4E /* opennurbs_rand.cpp */,
 				1DB4EE59161B825A00672B4E /* opennurbs_revsurface.cpp */,
 				1DB4EE5A161B825A00672B4E /* opennurbs_rtree.cpp */,
@@ -724,6 +729,7 @@
 				1DB4ED8A161B81F000672B4E /* opennurbs_polyline.h */,
 				1DB4ED8B161B81F000672B4E /* opennurbs_polylinecurve.h */,
 				1DB4ED8C161B81F000672B4E /* opennurbs_qsort_template.h */,
+				1D2D85ED178B36C400D67434 /* opennurbs_quaternion.h */,
 				1DB4ED8D161B81F000672B4E /* opennurbs_rand.h */,
 				1DB4ED8E161B81F000672B4E /* opennurbs_rendering.h */,
 				1DB4ED8F161B81F000672B4E /* opennurbs_revsurface.h */,
@@ -865,6 +871,7 @@
 				1DDEA4AA161B8C7900A55CF6 /* zconf.h in Headers */,
 				1DDEA4AB161B8C7900A55CF6 /* zlib.h in Headers */,
 				1DDEA4AC161B8C7900A55CF6 /* zutil.h in Headers */,
+				1D2D85EF178B36C400D67434 /* opennurbs_quaternion.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1036,6 +1043,7 @@
 				1D84E583161B8BD4001C8C5E /* trees.c in Sources */,
 				1D84E584161B8BD4001C8C5E /* uncompr.c in Sources */,
 				1D84E585161B8BD4001C8C5E /* zutil.c in Sources */,
+				1D2D85EE178B36C400D67434 /* opennurbs_quaternion.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

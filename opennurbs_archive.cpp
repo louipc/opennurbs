@@ -9286,58 +9286,66 @@ bool ON_BinaryArchive::Read3dmV1AttributesOrMaterial(
         ReadByte(sizeof_xid,xid.Array());
         if ( !on_stricmp("RhHidePrevLayer",xid) )
         {
-          // v1 object is hidden - real layer name is in xdata
-          char* buffer = (char*)alloca((sizeof_data+1)*sizeof(buffer[0]));
-          buffer[0] = 0;
-          buffer[sizeof_data] = 0;
-          if ( ReadByte(sizeof_data,buffer) )
+          if ( sizeof_data > 0 )
           {
-            if ( -1 == xdata_layer_index )
+            // v1 object is hidden - real layer name is in xdata
+            char* buffer = (char*)onmalloc((sizeof_data+1)*sizeof(buffer[0]));
+            buffer[0] = 0;
+            buffer[sizeof_data] = 0;
+            if ( ReadByte(sizeof_data,buffer) )
             {
-              xdata_layer_index = Read3dmV1LayerIndex(buffer);
-              if ( xdata_layer_index >= 0 )
+              if ( -1 == xdata_layer_index )
               {
-                attributes->m_layer_index = xdata_layer_index;
-                attributes->SetVisible(false);
+                xdata_layer_index = Read3dmV1LayerIndex(buffer);
+                if ( xdata_layer_index >= 0 )
+                {
+                  attributes->m_layer_index = xdata_layer_index;
+                  attributes->SetVisible(false);
+                }
               }
+              else
+              {
+                xdata_layer_index = -2;
+              }
+              //if ( 0 != xdata )
+              //{
+              //  xdata->m_type = ON__3dmV1_XDATA::hidden_object_layer_name;
+              //  xdata->m_string = buffer;               
+              //}
             }
-            else
-            {
-              xdata_layer_index = -2;
-            }
-            //if ( 0 != xdata )
-            //{
-            //  xdata->m_type = ON__3dmV1_XDATA::hidden_object_layer_name;
-            //  xdata->m_string = buffer;               
-            //}
+            onfree(buffer);
           }
         }
         else if ( !on_stricmp("RhFreezePrevLayer",xid) )
         {
           // v1 object is locked - real layer name is in xdata
-          char* buffer = (char*)alloca((sizeof_data+1)*sizeof(buffer[0]));
-          buffer[0] = 0;
-          buffer[sizeof_data] = 0;
-          if ( ReadByte(sizeof_data,buffer)  )
+          if ( sizeof_data > 0 )
           {
-            if ( -1 == xdata_layer_index )
+            char* buffer = (char*)onmalloc((sizeof_data+1)*sizeof(buffer[0]));
+            buffer[0] = 0;
+            buffer[sizeof_data] = 0;
+            if ( ReadByte(sizeof_data,buffer)  )
             {
-              xdata_layer_index = Read3dmV1LayerIndex(buffer);
-              if ( xdata_layer_index >= 0 )
+              if ( -1 == xdata_layer_index )
               {
-                attributes->m_layer_index = xdata_layer_index;
-                attributes->SetMode(ON::locked_object);
+                xdata_layer_index = Read3dmV1LayerIndex(buffer);
+                if ( xdata_layer_index >= 0 )
+                {
+                  attributes->m_layer_index = xdata_layer_index;
+                  attributes->SetMode(ON::locked_object);
+                }
               }
+              else
+              {
+                xdata_layer_index = -2;
+              }
+              //if ( 0 != xdata )
+              //{
+              //  xdata->m_type = ON__3dmV1_XDATA::locked_object_layer_name;
+              //  xdata->m_string = buffer;            
+              //}
             }
-            else
-            {
-              xdata_layer_index = -2;
-            }
-            //if ( 0 != xdata )
-            //{
-            //  xdata->m_type = ON__3dmV1_XDATA::locked_object_layer_name;
-            //  xdata->m_string = buffer;            
-            //}
+            onfree(buffer);
           }
         }
         else if ( !on_stricmp("RhAnnotateArrow",xid) && 24 == sizeof_data )
@@ -9355,16 +9363,20 @@ bool ON_BinaryArchive::Read3dmV1AttributesOrMaterial(
         }
         else if ( !on_stricmp("RhAnnotateDot",xid) )
         {
-          // v1 annotation dot objects were saved
-          // as TCODE_RH_POINT objects with the
-          // dot text saved in "xdata".
-          char* buffer = (char*)alloca((sizeof_data+1)*sizeof(buffer[0]));
-          buffer[0] = 0;
-          buffer[sizeof_data] = 0;
-          if ( ReadByte(sizeof_data,buffer) && 0 != xdata )
+          if ( sizeof_data > 0 )
           {
-            xdata->m_type = ON__3dmV1_XDATA::dot_text;
-            xdata->m_string = buffer;            
+            // v1 annotation dot objects were saved
+            // as TCODE_RH_POINT objects with the
+            // dot text saved in "xdata".
+            char* buffer = (char*)onmalloc((sizeof_data+1)*sizeof(buffer[0]));
+            buffer[0] = 0;
+            buffer[sizeof_data] = 0;
+            if ( ReadByte(sizeof_data,buffer) && 0 != xdata )
+            {
+              xdata->m_type = ON__3dmV1_XDATA::dot_text;
+              xdata->m_string = buffer;            
+            }
+            onfree(buffer);
           }
         }
         else 
@@ -13559,7 +13571,7 @@ bool ON_WriteOneObjectArchive(
 
   while(pObject)
   {
-    rc = archive.Write3dmStartSection( version, "Archive created by ON_WriteOneObjectArchive "__DATE__" "__TIME__ );
+    rc = archive.Write3dmStartSection( version, "Archive created by ON_WriteOneObjectArchive " __DATE__ " " __TIME__ );
     if ( !rc )
       break;
 
@@ -15363,7 +15375,9 @@ const wchar_t* ON_FileIterator::NextFile()
 
     memset( current_name, 0, sizeof(current_name) );
     ON_ConvertUTF8ToWideChar(
-      &m_dirent.d_name[0],-1, // null terminated utf8 string
+      false, // no BOM in input file name as utf8 string
+      &m_dirent.d_name[0],
+      -1, // null terminated utf8 string
       &current_name[0], ((int)(sizeof(current_name)/sizeof(current_name[0]))) - 1, // output wchar_t string
       0, // null output error status
       (4|8|16), // mask common conversion errors

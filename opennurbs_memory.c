@@ -105,6 +105,8 @@ size_t onmsize( const void* memblock )
     sz = _msize( (void*)memblock );
 #elif defined(ON_COMPILER_XCODE)
     sz = malloc_size( (void*)memblock );
+#elif defined(ON_COMPILER_ANDROIDNDK)
+    sz = dlmalloc_usable_size( (void*)memblock );
 #else
     // No predictable function exists and
     // nothing in core opennurbs code uses
@@ -113,7 +115,7 @@ size_t onmsize( const void* memblock )
     // platform, then report it to the support
     // contact on http://opennurbs.org and
     // the code will be added in the next release.
-    ON_ERROR("onmsize not implemented on this compiler or platform.")
+    ON_ERROR("onmsize not implemented on this compiler or platform.");
     sz = 0;
 #endif
   }

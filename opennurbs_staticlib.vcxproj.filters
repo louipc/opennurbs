@@ -326,6 +326,12 @@
     <ClCompile Include="opennurbs_compress.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="opennurbs_quaternion.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="opennurbs_photogrammetry.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="opennurbs.h">
@@ -629,6 +635,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="opennurbs_compress.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="opennurbs_quaternion.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="opennurbs_photogrammetry.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
