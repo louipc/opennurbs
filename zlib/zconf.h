@@ -8,6 +8,23 @@
 #ifndef ZCONF_H
 #define ZCONF_H
 
+#if defined(_MSC_VER)
+/*
+Robert McNeel & associates builds with warning level /W4
+The following pragma is needed to supress hundreds of C4131 warnings in the zlib code.
+warning C4131: ... : uses old-style declarator
+*/
+#pragma warning( disable : 4131 )
+
+/*
+Robert McNeel & associates builds with warning level /W4
+The following pragma is needed to supress 2 of C4127 warnings in the zlib code.
+warning C4127: conditional expression is constant
+*/
+#pragma warning( disable : 4127 )
+
+#endif
+
 
 /* BEGIN -- OpenNURBS Modification 
 //          OpenNURBS requires zlib to be compiled
@@ -287,9 +304,7 @@
 #  define FAR
 #endif
 
-#if !defined(__MACTYPES__)
 typedef unsigned char  Byte;  /* 8 bits */
-#endif
 typedef unsigned int   uInt;  /* 16 bits or more */
 typedef unsigned int  uLong; /* 32 bits or more */
 

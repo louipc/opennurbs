@@ -16,11 +16,18 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
 
-ON_BOOL32
+bool
 ON_BrepVertex::Write( ON_BinaryArchive& file ) const
 {
-  ON_BOOL32 rc = file.WriteInt( m_vertex_index );
+  bool rc = file.WriteInt( m_vertex_index );
   if ( rc )
     rc = file.WritePoint( point );
   if ( rc )
@@ -30,10 +37,10 @@ ON_BrepVertex::Write( ON_BinaryArchive& file ) const
   return rc;
 }
 
-ON_BOOL32
+bool
 ON_BrepVertex::Read( ON_BinaryArchive& file )
 {
-  ON_BOOL32 rc = file.ReadInt( &m_vertex_index );
+  bool rc = file.ReadInt( &m_vertex_index );
   if ( rc )
     rc = file.ReadPoint( point );
   if ( rc )
@@ -43,9 +50,9 @@ ON_BrepVertex::Read( ON_BinaryArchive& file )
   return rc;
 }
 
-ON_BOOL32 ON_BrepEdge::Write( ON_BinaryArchive& file ) const
+bool ON_BrepEdge::Write( ON_BinaryArchive& file ) const
 {
-  ON_BOOL32 rc = file.WriteInt( m_edge_index );
+  bool rc = file.WriteInt( m_edge_index );
   if (rc) rc = file.WriteInt( m_c3i );
   int i = ProxyCurveIsReversed() ? 1 : 0;
   if (rc) rc = file.WriteInt( i );
@@ -62,11 +69,11 @@ ON_BOOL32 ON_BrepEdge::Write( ON_BinaryArchive& file ) const
   return rc;
 }
 
-ON_BOOL32 ON_BrepEdge::Read( ON_BinaryArchive& file )
+bool ON_BrepEdge::Read( ON_BinaryArchive& file )
 {
   int bReversed = false;
   ON_Interval proxy_domain;
-  ON_BOOL32 rc = file.ReadInt( &m_edge_index );
+  bool rc = file.ReadInt( &m_edge_index );
   if (rc) rc = file.ReadInt( &m_c3i );
   if (rc) rc = file.ReadInt( &bReversed );
   if (rc) rc = file.ReadInterval( proxy_domain );
@@ -84,7 +91,7 @@ ON_BOOL32 ON_BrepEdge::Read( ON_BinaryArchive& file )
         domain = proxy_domain;
     }
   }
-  SetProxyCurve( NULL, proxy_domain );
+  SetProxyCurve( nullptr, proxy_domain );
   if ( bReversed )
     ON_CurveProxy::Reverse();
   SetDomain(domain);
@@ -92,10 +99,10 @@ ON_BOOL32 ON_BrepEdge::Read( ON_BinaryArchive& file )
   return rc;
 }
 
-ON_BOOL32 ON_BrepTrim::Write( ON_BinaryArchive& file ) const
+bool ON_BrepTrim::Write( ON_BinaryArchive& file ) const
 {
   ON_3dPoint P(0.0,0.0,0.0);
-  ON_BOOL32 rc = file.WriteInt( m_trim_index );
+  bool rc = file.WriteInt( m_trim_index );
   int i;
   if ( rc )
     rc = file.WriteInt( m_c2i );
@@ -145,11 +152,11 @@ ON_BOOL32 ON_BrepTrim::Write( ON_BinaryArchive& file ) const
   return rc;
 }
 
-ON_BOOL32 ON_BrepTrim::Read( ON_BinaryArchive& file )
+bool ON_BrepTrim::Read( ON_BinaryArchive& file )
 {
   ON_3dPoint P[2];
   int i;
-  ON_BOOL32 rc = file.ReadInt( &m_trim_index );
+  bool rc = file.ReadInt( &m_trim_index );
   if ( rc )
     rc = file.ReadInt( &m_c2i );
   if ( rc )
@@ -266,10 +273,10 @@ ON_BOOL32 ON_BrepTrim::Read( ON_BinaryArchive& file )
   return rc;
 }
 
-ON_BOOL32 ON_BrepLoop::Write( ON_BinaryArchive& file ) const
+bool ON_BrepLoop::Write( ON_BinaryArchive& file ) const
 {
   int i;
-  ON_BOOL32 rc = file.WriteInt( m_loop_index );
+  bool rc = file.WriteInt( m_loop_index );
   if (rc)
     rc = file.WriteArray( m_ti );
   i = m_type;
@@ -280,10 +287,10 @@ ON_BOOL32 ON_BrepLoop::Write( ON_BinaryArchive& file ) const
   return rc;
 }
 
-ON_BOOL32 ON_BrepLoop::Read( ON_BinaryArchive& file )
+bool ON_BrepLoop::Read( ON_BinaryArchive& file )
 {
   int i;
-  ON_BOOL32 rc = file.ReadInt( & m_loop_index );
+  bool rc = file.ReadInt( & m_loop_index );
   if (rc)
     rc = file.ReadArray( m_ti );
 
@@ -310,7 +317,7 @@ ON_BOOL32 ON_BrepLoop::Read( ON_BinaryArchive& file )
   return rc;
 }
 
-ON_BOOL32 ON_BrepFace::Write( ON_BinaryArchive& file ) const
+bool ON_BrepFace::Write( ON_BinaryArchive& file ) const
 {
   bool rc = file.WriteInt( m_face_index );
   if ( rc )
@@ -324,7 +331,7 @@ ON_BOOL32 ON_BrepFace::Write( ON_BinaryArchive& file ) const
   return rc;
 }
 
-ON_BOOL32 ON_BrepFace::Read( ON_BinaryArchive& file )
+bool ON_BrepFace::Read( ON_BinaryArchive& file )
 {
   int i;
   bool rc = file.ReadInt( &m_face_index );
@@ -348,7 +355,7 @@ ON_BOOL32 ON_BrepFace::Read( ON_BinaryArchive& file )
   return rc;
 }
 
-ON_BOOL32 ON_BrepVertexArray::Read( ON_BinaryArchive& file )
+bool ON_BrepVertexArray::Read( ON_BinaryArchive& file )
 {
   Empty();
   ON__UINT32 tcode = 0;
@@ -381,10 +388,10 @@ ON_BOOL32 ON_BrepVertexArray::Read( ON_BinaryArchive& file )
   return rc;
 }
 
-ON_BOOL32 ON_BrepVertexArray::Write( ON_BinaryArchive& file ) const
+bool ON_BrepVertexArray::Write( ON_BinaryArchive& file ) const
 {
   int i;
-  ON_BOOL32 rc = file.BeginWrite3dmChunk( TCODE_ANONYMOUS_CHUNK, 0 );
+  bool rc = file.BeginWrite3dmChunk( TCODE_ANONYMOUS_CHUNK, 0 );
   if (rc) {
     rc = file.Write3dmChunkVersion(1,0);
     const int count = Count();
@@ -398,7 +405,7 @@ ON_BOOL32 ON_BrepVertexArray::Write( ON_BinaryArchive& file ) const
   return rc;
 }
 
-ON_BOOL32 ON_BrepEdgeArray::Read( ON_BinaryArchive& file )
+bool ON_BrepEdgeArray::Read( ON_BinaryArchive& file )
 {
   Empty();
   ON__UINT32 tcode = 0;
@@ -431,10 +438,10 @@ ON_BOOL32 ON_BrepEdgeArray::Read( ON_BinaryArchive& file )
   return rc;
 }
 
-ON_BOOL32 ON_BrepEdgeArray::Write( ON_BinaryArchive& file ) const
+bool ON_BrepEdgeArray::Write( ON_BinaryArchive& file ) const
 {
   int i;
-  ON_BOOL32 rc = file.BeginWrite3dmChunk( TCODE_ANONYMOUS_CHUNK, 0 );
+  bool rc = file.BeginWrite3dmChunk( TCODE_ANONYMOUS_CHUNK, 0 );
   if (rc) {
     rc = file.Write3dmChunkVersion(1,0);
     const int count = Count();
@@ -448,7 +455,7 @@ ON_BOOL32 ON_BrepEdgeArray::Write( ON_BinaryArchive& file ) const
   return rc;
 }
 
-ON_BOOL32 ON_BrepTrimArray::Read( ON_BinaryArchive& file )
+bool ON_BrepTrimArray::Read( ON_BinaryArchive& file )
 {
   Empty();
   ON__UINT32 tcode = 0;
@@ -492,10 +499,10 @@ ON_BOOL32 ON_BrepTrimArray::Read( ON_BinaryArchive& file )
   return rc;
 }
 
-ON_BOOL32 ON_BrepTrimArray::Write( ON_BinaryArchive& file ) const
+bool ON_BrepTrimArray::Write( ON_BinaryArchive& file ) const
 {
   int i;
-  ON_BOOL32 rc = file.BeginWrite3dmChunk( TCODE_ANONYMOUS_CHUNK, 0 );
+  bool rc = file.BeginWrite3dmChunk( TCODE_ANONYMOUS_CHUNK, 0 );
   if (rc) {
     rc = file.Write3dmChunkVersion(1,0);
     const int count = Count();
@@ -509,7 +516,7 @@ ON_BOOL32 ON_BrepTrimArray::Write( ON_BinaryArchive& file ) const
   return rc;
 }
 
-ON_BOOL32 ON_BrepLoopArray::Read( ON_BinaryArchive& file )
+bool ON_BrepLoopArray::Read( ON_BinaryArchive& file )
 {
   Empty();
   ON__UINT32 tcode = 0;
@@ -542,10 +549,10 @@ ON_BOOL32 ON_BrepLoopArray::Read( ON_BinaryArchive& file )
   return rc;
 }
 
-ON_BOOL32 ON_BrepLoopArray::Write( ON_BinaryArchive& file ) const
+bool ON_BrepLoopArray::Write( ON_BinaryArchive& file ) const
 {
   int i;
-  ON_BOOL32 rc = file.BeginWrite3dmChunk( TCODE_ANONYMOUS_CHUNK, 0 );
+  bool rc = file.BeginWrite3dmChunk( TCODE_ANONYMOUS_CHUNK, 0 );
   if (rc) {
     rc = file.Write3dmChunkVersion(1,0);
     const int count = Count();
@@ -559,7 +566,7 @@ ON_BOOL32 ON_BrepLoopArray::Write( ON_BinaryArchive& file ) const
   return rc;
 }
 
-ON_BOOL32 ON_BrepFaceArray::Read( ON_BinaryArchive& file )
+bool ON_BrepFaceArray::Read( ON_BinaryArchive& file )
 {
   Empty();
   ON__UINT32 tcode = 0;
@@ -604,10 +611,10 @@ ON_BOOL32 ON_BrepFaceArray::Read( ON_BinaryArchive& file )
   return rc;
 }
 
-ON_BOOL32 ON_BrepFaceArray::Write( ON_BinaryArchive& file ) const
+bool ON_BrepFaceArray::Write( ON_BinaryArchive& file ) const
 {
   int i;
-  ON_BOOL32 rc = file.BeginWrite3dmChunk( TCODE_ANONYMOUS_CHUNK, 0 );
+  bool rc = file.BeginWrite3dmChunk( TCODE_ANONYMOUS_CHUNK, 0 );
   if (rc) 
   {
     rc = file.Write3dmChunkVersion(1,1); // 1.1 added m_face_uuid
@@ -633,14 +640,22 @@ ON_BOOL32 ON_BrepFaceArray::Write( ON_BinaryArchive& file ) const
 }
 
 
-ON_BOOL32 ON_Brep::Write( ON_BinaryArchive& file ) const
+bool ON_Brep::Write( ON_BinaryArchive& file ) const
 {
   const ON_Brep* brep = this;
   ON_Brep* v2brep = 0;
 
-  //ON_BOOL32 rc = file.Write3dmChunkVersion(3,0); // serialization version
-  //ON_BOOL32 rc = file.Write3dmChunkVersion(3,1); // added meshes
-  ON_BOOL32 rc = file.Write3dmChunkVersion(3,2); // added m_is_solid
+
+  //bool rc = file.Write3dmChunkVersion(3,0); // serialization version
+  //bool rc = file.Write3dmChunkVersion(3,1); // added meshes
+
+  int minor_version 
+    = (file.Archive3dmVersion() <= 50)
+    ? 2
+    : 3 // August 9, 2016 m_region_topology added to V6 files.
+    ;
+
+  bool rc = file.Write3dmChunkVersion(3,minor_version); // added m_is_solid
 
   // 2d curves
   if (rc) rc = brep->m_C2.Write(file);
@@ -684,7 +699,7 @@ ON_BOOL32 ON_Brep::Write( ON_BinaryArchive& file ) const
     if ( rc )
     {
       for ( fi = 0; rc && fi < face_count; fi++ ) {
-        const ON_Mesh* mesh = file.Save3dmRenderMeshes() ? brep->m_F[fi].m_render_mesh : 0;
+        const ON_Mesh* mesh = file.Save3dmRenderMesh(ON::object_type::brep_object) ? brep->m_F[fi].m_render_mesh : 0;
         b = mesh ? 1 : 0;
         rc = file.WriteChar(b);
         if (rc && mesh) {
@@ -702,7 +717,7 @@ ON_BOOL32 ON_Brep::Write( ON_BinaryArchive& file ) const
     if ( rc )
     {
       for ( fi = 0; rc && fi < face_count; fi++ ) {
-        const ON_Mesh* mesh = file.Save3dmAnalysisMeshes() ? brep->m_F[fi].m_analysis_mesh : 0;
+        const ON_Mesh* mesh = file.Save3dmAnalysisMesh(ON::object_type::brep_object) ? brep->m_F[fi].m_analysis_mesh : 0;
         b = mesh ? 1 : 0;
         rc = file.WriteChar(b);
         if (rc && mesh) {
@@ -723,7 +738,47 @@ ON_BOOL32 ON_Brep::Write( ON_BinaryArchive& file ) const
     if ( !file.WriteInt( m_is_solid ) )
       rc = false;
   }
+
   // end of chunk version 3.2
+
+  if (rc)
+  {
+    const bool bWriteRegionTopology
+      = (nullptr != m_region_topology)
+      && (m_F.UnsignedCount() > 0)
+      && (m_region_topology->m_FS.UnsignedCount() == 2 * m_F.UnsignedCount());
+
+    if (minor_version <= 2)
+    {
+      if (bWriteRegionTopology && minor_version == 2 && 50 == file.Archive3dmVersion())
+        Internal_AttachV5RegionTopologyAsUserData(file);
+    }
+    else if (minor_version >= 3)
+    {
+      // begin chunk verson 3.3
+
+      // region topology chunk added
+      if (!file.BeginWrite3dmAnonymousChunk(1))
+        return false;
+
+      rc = false;
+      for (;;)
+      {
+        if (!file.WriteBool(bWriteRegionTopology))
+          break;
+        if (bWriteRegionTopology)
+        {
+          if (!m_region_topology->Write(file))
+            break;
+        }
+        rc = true;
+        break;
+      }
+      if (!file.EndWrite3dmChunk())
+        rc = false;
+      // end chunk version 3.3
+    }
+  }
 
   if ( 0 != v2brep )
     delete v2brep;
@@ -765,7 +820,7 @@ void ReadFillInMissingBoxes( ON_Brep& brep )
   }
 }
 
-ON_BOOL32 ON_Brep::Read( ON_BinaryArchive& file )
+bool ON_Brep::Read( ON_BinaryArchive& file )
 {
   int i;
   int C2_count = 0;
@@ -773,7 +828,7 @@ ON_BOOL32 ON_Brep::Read( ON_BinaryArchive& file )
   int S_count = 0;
   int major_version = 0;
   int minor_version = 0;
-  ON_BOOL32 rc = file.Read3dmChunkVersion( &major_version, &minor_version );
+  bool rc = file.Read3dmChunkVersion( &major_version, &minor_version );
   if ( rc && major_version == 2 ) 
   {
     rc = ReadOld200(file,minor_version); // legacy trimmed face
@@ -958,6 +1013,45 @@ ON_BOOL32 ON_Brep::Read( ON_BinaryArchive& file )
       rc =  file.ReadInt( &m_is_solid );
       if ( m_is_solid < 0 || m_is_solid >= 3 )
         m_is_solid = 0;
+      if (rc && minor_version >= 3)
+      {
+        // begin chunk verson 3.3
+
+        // region topology chunk added
+        int region_topology_chunk_version = 0;
+        if (!file.BeginRead3dmAnonymousChunk(&region_topology_chunk_version))
+          rc = false;
+        else
+        {
+          bool rc1 = false;
+          for (;;)
+          {
+            if (region_topology_chunk_version < 1)
+              break;
+
+            bool bReadRegionTopology = false;
+            if (!file.ReadBool(&bReadRegionTopology))
+              break;
+
+            if (bReadRegionTopology)
+            {
+              m_region_topology = new ON_BrepRegionTopology();
+              if (!m_region_topology->Read(file))
+              {
+                delete m_region_topology;
+                m_region_topology = nullptr;
+                break;
+              }
+            }
+            rc1 = true;
+            break;
+          }
+          if (!file.EndRead3dmChunk())
+            rc1 = false;
+          if (false == rc1)
+            rc = false;
+        }
+      }
     }
   }
 
@@ -1107,10 +1201,11 @@ bool ON_Brep::ReadOld200( ON_BinaryArchive& file, int minor_version )
         b = 0;
         if (rc) rc = file.ReadChar( &b ); // true if legacy trim managed 3d edge
         if (rc) rc = file.ReadInt( &trim.m_ei );
-        if (b) {
-          if ( trim.m_ei < 0 || trim.m_ei >= c3_count )
+        if ( trim.m_ei < 0 || trim.m_ei >= c3_count )
+        {
+          trim.m_ei = -1;
+          if (b)
           {
-            trim.m_ei = -1;
             ON_ERROR("ON_Brep::ReadOld201 - trim.m_ei out of range.");
             rc = false;
             break;
@@ -1124,9 +1219,9 @@ bool ON_Brep::ReadOld200( ON_BinaryArchive& file, int minor_version )
           trim.m_c2i = -1;
           break;
         }
-        int k = trim.m_bRev3d;
-        if (rc) rc = file.ReadInt(&k);
-        if (rc) trim.m_bRev3d = (k!=0);
+        int bRev3d_as_int = trim.m_bRev3d;
+        if (rc) rc = file.ReadInt(&bRev3d_as_int);
+        if (rc) trim.m_bRev3d = (bRev3d_as_int!=0);
         if (rc) rc = file.ReadInt(&gcon_flag);
         if (rc) rc = file.ReadInt(&mono_flag);
         if (rc) rc = file.ReadDouble(&trim.m__legacy_3d_tol);
@@ -1345,9 +1440,9 @@ bool ON_Brep::ReadOld100( ON_BinaryArchive& file )
 
 bool ON_Brep::ReadOld101( ON_BinaryArchive& file )
 {
-  ON_Object*  pO = NULL;
-  ON_Curve*   pC = NULL;
-  ON_Surface* pS = NULL;
+  ON_Object*  pO = nullptr;
+  ON_Curve*   pC = nullptr;
+  ON_Surface* pS = nullptr;
   int i, count;
 
   // 2d curves
@@ -1355,14 +1450,14 @@ bool ON_Brep::ReadOld101( ON_BinaryArchive& file )
   m_C2.Reserve(count);
   for ( i = 0; i < count; i++ ) 
   {
-    pO = NULL;
+    pO = nullptr;
     file.ReadObject( &pO );
     pC = ON_Curve::Cast(pO);
     if ( !pC )
       delete pO; // ERROR!
     m_C2.Append( pC );
-    pC = NULL;
-    pO = NULL;
+    pC = nullptr;
+    pO = nullptr;
   }
 
   // 3d curves
@@ -1370,14 +1465,14 @@ bool ON_Brep::ReadOld101( ON_BinaryArchive& file )
   m_C3.Reserve(count);
   for ( i = 0; i < count; i++ ) 
   {
-    pO = NULL;
+    pO = nullptr;
     file.ReadObject( &pO );
     pC = ON_Curve::Cast(pO);
     if ( !pC )
       delete pO; // ERROR!
     m_C3.Append( pC );
-    pC = NULL;
-    pO = NULL;
+    pC = nullptr;
+    pO = nullptr;
   }
 
   // untrimmed surfaces
@@ -1385,14 +1480,14 @@ bool ON_Brep::ReadOld101( ON_BinaryArchive& file )
   m_S.Reserve(count);
   for ( i = 0; i < count; i++ ) 
   {
-    pO = NULL;
+    pO = nullptr;
     file.ReadObject( &pO );
     pS = ON_Surface::Cast(pO);
     if ( !pS )
       delete pO; // ERROR!
     m_S.Append( pS );
-    pS = NULL;
-    pO = NULL;
+    pS = nullptr;
+    pO = nullptr;
   }
 
   // vertices
@@ -1463,12 +1558,12 @@ bool ON_Brep::ReadOld101( ON_BinaryArchive& file )
 ON_Curve* ON_Brep::Read100_BrepCurve( ON_BinaryArchive& ) const
 {
   // TODO - look at old Rhino I/O tookit code and read b-rep curves
-  return NULL;
+  return nullptr;
 }
 
 ON_Surface* ON_Brep::Read100_BrepSurface( ON_BinaryArchive& ) const
 {
   // TODO - look at old Rhino I/O tookit code and read b-rep surfaces
-  return NULL;
+  return nullptr;
 }
 

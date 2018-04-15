@@ -16,75 +16,95 @@
 
 #include "opennurbs.h"
 
-const ON_Color ON_Color::UnsetColor(ON_UNSET_COLOR);
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
 
-ON_Color::ON_Color() : m_color(0) 
-{}
+ON_Color::ON_Color(unsigned int colorref)
+  : m_color(colorref) 
+{
+  // No adjustments are required on big endian computers because all 
+  // unsigned int conversion and all IO preserves the order of the 
+  // ON_Color::m_RGBA[4] bytes.
+}
 
-ON_Color::ON_Color(unsigned int colorref) : m_color(colorref) 
-{}
-
-ON_Color::ON_Color(int r, int g, int b) : m_color(0) 
+ON_Color::ON_Color(int r, int g, int b)
 {
   SetRGB(r,g,b);
 }
 
-ON_Color::ON_Color(int r, int g, int b, int a) : m_color(0) 
+ON_Color::ON_Color(int r, int g, int b, int a)
 {
   SetRGBA(r,g,b,a);
 }
 
 unsigned int ON_Color::WindowsRGB() const
 {
-  unsigned int RGB = ON_Color(Red(),Green(),Blue());
+  ON_Color RGB = ON_Color(Red(),Green(),Blue());
   return RGB;
 }
 
 ON_Color::operator unsigned int() const
 {
+  // No adjustments are required on big endian computers because all 
+  // unsigned int conversion and all IO preserves the order of the 
+  // ON_Color::m_RGBA[4] bytes.
   return m_color;
 }
 
 int ON_Color::Compare( const ON_Color& b ) const
 {
-  unsigned int bc = b;
-  return (((int)m_color) - ((int)bc));
+  int ac = (int)m_color;
+  int bc = (int)b.m_color;
+#if defined(ON_BIG_ENDIAN)
+  unsinged char* swapper = (unsigned char*)&ac;
+  unsigned char c = swapper[0]; swapper[0] = swapper[3]; swapper[3] = c;
+  c = swapper[1]; swapper[1] = swapper[2]; swapper[2] = c;
+  swapper = (unsigned char*)&bc;
+  c = swapper[0]; swapper[0] = swapper[3]; swapper[3] = c;
+  c = swapper[1]; swapper[1] = swapper[2]; swapper[2] = c;
+#endif
+  return ac-bc; // overflow roll over is fine - important thing is that answer is consistent.
 }
 
 int ON_Color::Red() const
-{ return m_color & 0xFF;}
+{ return m_RGBA[ON_Color::kRedByteIndex];}
 
 int ON_Color::Green() const
-{ return (m_color>>8) & 0xFF;}
+{ return m_RGBA[ON_Color::kGreenByteIndex];}
 
 int ON_Color::Blue() const
-{ return (m_color>>16) & 0xFF;}
+{ return m_RGBA[ON_Color::kBlueByteIndex];}
 
 int ON_Color::Alpha() const
-{ return (m_color>>24) & 0xFF;}
+{ return m_RGBA[ON_Color::kAlphaByteIndex];}
 
 double ON_Color::FractionRed() const
 { 
   //return Red()/255.0;
-  return (m_color & 0xFF)*0.003921568627450980392156862745; // better fodder for optimizer
+  return m_RGBA[ON_Color::kRedByteIndex]*0.003921568627450980392156862745; // better fodder for optimizer
 }
 
 double ON_Color::FractionGreen() const       
 { 
   //return Green()/255.0;
-  return ((m_color>>8) & 0xFF)*0.003921568627450980392156862745; // better fodder for optimizer
+  return m_RGBA[ON_Color::kGreenByteIndex]*0.003921568627450980392156862745; // better fodder for optimizer
 }
 
 double ON_Color::FractionBlue() const       
 { 
   //return Blue()/255.0;
-  return ((m_color>>16) & 0xFF)*0.003921568627450980392156862745; // better fodder for optimizer
+  return m_RGBA[ON_Color::kBlueByteIndex]*0.003921568627450980392156862745; // better fodder for optimizer
 }
 
 double ON_Color::FractionAlpha() const       
 { 
   //return Alpha()/255.0;
-  return ((m_color>>24) & 0xFF)*0.003921568627450980392156862745; // better fodder for optimizer
+  return m_RGBA[ON_Color::kAlphaByteIndex]*0.003921568627450980392156862745; // better fodder for optimizer
 }
 
 void ON_Color::SetRGB(int r,int g,int b) // 0 to 255
@@ -100,7 +120,7 @@ void ON_Color::SetFractionalRGB(double r,double g,double b)
 void ON_Color::SetAlpha(int alpha)
 {
 	if (alpha < 0 ) alpha = 0; else if ( alpha > 255 ) alpha = 255;	
-	m_color = (m_color & 0x00FFFFFF) | (alpha << 24 );
+	m_RGBA[ON_Color::kAlphaByteIndex] = (unsigned char)alpha;
 }
 
 void ON_Color::SetFractionalAlpha(double alpha)
@@ -116,7 +136,10 @@ ON_Color::SetRGBA( int red, int green, int blue, int alpha )
 	if (green < 0 ) green = 0; else if ( green > 255 ) green = 255;	
 	if (blue  < 0 ) blue  = 0; else if ( blue  > 255 ) blue  = 255;	
 	if (alpha < 0 ) alpha = 0; else if ( alpha > 255 ) alpha = 255;	
-	m_color = (alpha << 24 ) | (blue << 16) | (green << 8) | red;
+  m_RGBA[ON_Color::kRedByteIndex] = (unsigned char)red;
+  m_RGBA[ON_Color::kGreenByteIndex] = (unsigned char)green;
+  m_RGBA[ON_Color::kBlueByteIndex] = (unsigned char)blue;
+  m_RGBA[ON_Color::kAlphaByteIndex] = (unsigned char)alpha;
 }
 
 void

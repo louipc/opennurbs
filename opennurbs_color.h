@@ -24,12 +24,70 @@
 class ON_CLASS ON_Color
 {
 public:
-	// Constructors & Conversions -     also default copy and assignment	
+  ON_Color() = default;
+  ~ON_Color() = default;
+  ON_Color(const ON_Color&) = default;
+  ON_Color& operator=(const ON_Color&) = default;
 
-  static const ON_Color UnsetColor; // 0xFFFFFFFF
+  static const ON_Color UnsetColor;       // 0xFFFFFFFFu
+  static const ON_Color Black;            // 0x00000000u
+  static const ON_Color White;            // 0x00FFFFFFu on little endan, 0xFFFFFF00u on big endian
+  static const ON_Color SaturatedRed;     // 0x000000FFu on little endan, 0xFF000000u on big endian
+  static const ON_Color SaturatedGreen;   // 0x0000FF00u on little endan, 0x00FF0000u on big endian
+  static const ON_Color SaturatedBlue;    // 0x00FF0000u on little endan, 0x0000FF00u on big endian
+  static const ON_Color SaturatedYellow;  // 0x0000FFFFu on little endan, 0xFFFF0000u on big endian
+  static const ON_Color SaturatedCyan;    // 0x00FFFF00u on little endan, 0x00FFFF00u on big endian
+  static const ON_Color SaturatedMagenta; // 0x00FF00FFu on little endan, 0xFF00FF00u on big endian
+  static const ON_Color Gray126;          // R = G = B = 128 (medium)
+  static const ON_Color Gray160;          // R = G = B = 160 (medium light)
+  static const ON_Color Gray230;          // R = G = B = 230 (light)
 
-  // Default is R = 0, G = 0, B = 0, A = 0
-	ON_Color();
+  // If you need to use byte indexing to convert RGBA components to and from
+  // an unsigned int ON_Color value and want your code to work on both little
+  // and big endian computers, then use the RGBA_byte_index enum.
+  //
+  // unsigned int u;
+  // unsigned char* rgba = &y;
+  // rbga[ON_Color::kRedByteIndex] = red value 0 to 255.
+  // rbga[ON_Color::kGreenByteIndex] = green value 0 to 255.
+  // rbga[ON_Color::kBlueByteIndex] = blue value 0 to 255.
+  // rbga[ON_Color::kAlphaByteIndex] = alpha value 0 to 255.
+  // ON_Color color = u;
+  enum RGBA_byte_index : unsigned int
+  {
+    // same for both little and big endian computers.
+    kRedByteIndex = 0,
+    kGreenByteIndex = 1,
+    kBlueByteIndex = 2,
+    kAlphaByteIndex = 3
+  };
+
+  // If you need to use shifting to convert RGBA components to and from
+  // an unsigned int ON_COlor value and you want your code to work 
+  // on both little and big endian computers, use the RGBA_shift enum.
+  //
+  // unsigned int u = 0;
+  // u |= ((((unsigned int)red)   & 0xFFU) << ON_Color::RGBA_shift::kRedShift);
+  // u |= ((((unsigned int)green) & 0xFFU) << ON_Color::RGBA_shift::kGreenShift);
+  // u |= ((((unsigned int)blue)  & 0xFFU) << ON_Color::RGBA_shift::kBlueShift);
+  // u |= ((((unsigned int)alpha) & 0xFFU) << ON_Color::RGBA_shift::kAlphaShift);
+  // ON_Color color = u;
+  enum RGBA_shift : unsigned int
+  {
+#if defined(ON_LITTLE_ENDIAN)
+    kRedShift = 0,
+    kGreenShift = 8,
+    kBlueShift = 16,
+    kAlphaShift = 24
+#elif defined(ON_BIG_ENDIAN)
+    kRedShift = 24,
+    kGreenShift = 16,
+    kBlueShift = 8,
+    kAlphaShift = 0
+#else
+#error unknown endian
+#endif
+  };
 
   // Sets A = 0
 	ON_Color(
@@ -45,10 +103,16 @@ public:
     int alpha  // ( 0 to 255 )  (0 = opaque, 255 = transparent)
     );
 
-  // Construct from Windows COLORREF
-	ON_Color(unsigned int);
+  /*
+  Parameters:
+    colorref - [in]
+      Windows COLORREF in little endian RGBA order.
+  */
+	ON_Color(
+    unsigned int colorref
+    );
 
-	// Conversion to Windows COLORREF
+	// Conversion to Windows COLORREF in little endian RGBA order.
   operator unsigned int() const;	
 
   /*
@@ -128,11 +192,24 @@ public:
          );
 
 private:
-  // m_color is in Windows COLORREF format.
-  //
-  //  0xaabbggrr,  rr= red component 0-255, etc. (little endian order)
-  //               aa=0 means opaque, aa=255 means transparent.
-	unsigned int m_color;
+  union {
+    // On little endian (Intel) computers, m_color has the same byte order
+    // as Windows COLORREF values.
+    // On little endian computers, m_color = 0xaabbggrr as an unsigned int value.
+    // On big endian computers, m_color = 0xrrggbbaa as an unsigned int value
+    //  rr = red component 0-255
+    //  gg = grean component 0-255
+    //  bb = blue component 0-255
+    //  aa = alpha 0-255. 0 means opaque, 255 means transparent.
+    unsigned int m_color = 0;
+
+    // m_colorComponent is a 4 unsigned byte array in RGBA order
+    // red component = m_RGBA[ON_Color::RGBA_byte::kRed]
+    // grean component = m_RGBA[ON_Color::RGBA_byte::kGreen]
+    // blue component = m_RGBA[ON_Color::RGBA_byte::kBlue]
+    // alpha component = m_RGBA[ON_Color::RGBA_byte::kAlpha]
+    unsigned char m_RGBA[4];
+  };
 };
 
 #endif

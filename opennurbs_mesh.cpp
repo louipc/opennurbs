@@ -16,6 +16,16 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
+
+
 
 // NEVER COPY OR MOVE THE NEXT 2 LINES
 #define ON_BOZO_VACCINE_17F24E7521BE4a7b9F3D7F85225247E3
@@ -27,47 +37,59 @@
 
 ///////////////////////////////////////////////////////
 //
-// Double precision vertices user data
+// Rhino V5 Double precision vertices user data
+// Used to read and write version 5 .3dm files.
 //
 
-class /* DO NOT copy, move, or export this class */ ON_MeshDoubleVertices : public ON_UserData
+class /* DO NOT copy, move, or export this class */ ON_V5_MeshDoubleVertices : public ON_UserData
 {
-  ON_OBJECT_DECLARE(ON_MeshDoubleVertices);
+  ON_OBJECT_DECLARE(ON_V5_MeshDoubleVertices);
 
 public:
-  ON_MeshDoubleVertices();
-  ~ON_MeshDoubleVertices();  
+  ON_V5_MeshDoubleVertices();
+  ~ON_V5_MeshDoubleVertices();  
 
   // default copy constructor and operator= work fine.
 
   /*
-    If the mesh has ON_MeshDoubleVertices user data, then return
+    If the mesh has ON_V5_MeshDoubleVertices user data, then return
     a pointer to it.
   */
-  static ON_MeshDoubleVertices* Get(const ON_Mesh* mesh);
+  static ON_V5_MeshDoubleVertices* GetV5(const ON_Mesh* mesh);
 
   /*
-    Attach new ON_MeshDoubleVertices user data to the mesh.
-    This will fail and return NULL if the mesh already has
-    ON_MeshDoubleVertices user data.
+    Attach new ON_V5_MeshDoubleVertices user data to the mesh.
+    This will fail and return nullptr if the mesh already has
+    ON_V5_MeshDoubleVertices user data.
   */
-  static ON_MeshDoubleVertices* Attach(const ON_Mesh* mesh);
+  static ON_V5_MeshDoubleVertices* AttachV5(const ON_Mesh* mesh);
 
   // virtual ON_Object overrides
-  ON_BOOL32 IsValid( ON_TextLog* = NULL ) const;
-  void Dump( ON_TextLog& ) const;
-  unsigned int SizeOf() const;
-  ON__UINT32 DataCRC(ON__UINT32) const;
-  ON_BOOL32 Write(ON_BinaryArchive&) const;
-  ON_BOOL32 Read(ON_BinaryArchive&);
+  bool IsValid( class ON_TextLog* text_log = nullptr ) const override;
+  void Dump( ON_TextLog& ) const override;
+  unsigned int SizeOf() const override;
+  ON__UINT32 DataCRC(ON__UINT32) const override;
+  bool Write(ON_BinaryArchive&) const override;
+  bool Read(ON_BinaryArchive&) override;
 
   // virtual ON_UserData overrides
-  ON_BOOL32 GetDescription( ON_wString& );
-  ON_BOOL32 Archive() const; 
-  ON_BOOL32 Transform( const ON_Xform& ); 
+  bool GetDescription( ON_wString& ) override;
+  bool Archive() const override;
+  bool Transform( const ON_Xform& ) override;
+
+  bool DeleteAfterWrite(
+    const class ON_BinaryArchive& archive,
+    const class ON_Object* parent_object
+    ) const override;
+
+  bool DeleteAfterRead( 
+    const class ON_BinaryArchive& archive,
+    class ON_Object* parent_object
+    ) const override;
+
 
 #if !defined(ON_BOZO_VACCINE_17F24E7521BE4a7b9F3D7F85225247E3)
-#error DO NOT copy, move or export the definition of ON_MeshDoubleVertices
+#error DO NOT copy, move or export the definition of ON_V5_MeshDoubleVertices
 #endif
 #undef ON_BOZO_VACCINE_17F24E7521BE4a7b9F3D7F85225247E3
 
@@ -89,24 +111,14 @@ public:
   // Whenever there is a question about which values are valid,
   // it is assumed the m_V array is valid and the double precision
   // informtion should be destroyed.
-  int m_fcount;  // single precision vertex count
-  int m_dcount;  // double precision vertex count
-  ON__UINT32 m_fCRC; // crc of float vertex array
-  ON__UINT32 m_dCRC; // crc of double vertex array
+  int m_fcount = 0;  // single precision vertex count
+  int m_dcount = 0;  // double precision vertex count
+  ON__UINT32 m_fCRC = 0; // crc of float vertex array
+  ON__UINT32 m_dCRC = 0; // crc of double vertex array
 
-  ON_3dPointArray m_dV; // double precision mesh vertices
+  ON_3dPointArray m_V5_dV; // double precision mesh vertices
 };
 
-static const ON_3dPoint* Mesh_dV(const ON_Mesh& mesh)
-{
-  if ( mesh.HasDoublePrecisionVertices() && mesh.DoublePrecisionVerticesAreValid() )
-  {
-    const ON_3dPointArray& a = mesh.DoublePrecisionVertices();
-    if ( a.Count() == mesh.m_V.Count() )
-      return a.Array();
-  }
-  return 0;
-}
 
 ON_MeshCurveParameters::ON_MeshCurveParameters()
 {
@@ -155,12 +167,24 @@ void ON_MeshEdge::AppendFaceIndex(int face_index)
 bool
 ON_MeshFace::IsValid(int mesh_vertex_count) const
 {
-  return (    vi[0] >= 0 && vi[0] < mesh_vertex_count
-           && vi[1] >= 0 && vi[1] < mesh_vertex_count
-           && vi[2] >= 0 && vi[2] < mesh_vertex_count
-           && vi[3] >= 0 && vi[3] < mesh_vertex_count
-           && vi[0] != vi[1] && vi[1] != vi[2] && vi[2] != vi[0] 
-           && (vi[2]==vi[3]||(vi[0] != vi[3] && vi[1] != vi[3])) );
+  return (vi[0] >= 0 && vi[0] < mesh_vertex_count
+    && vi[1] >= 0 && vi[1] < mesh_vertex_count
+    && vi[2] >= 0 && vi[2] < mesh_vertex_count
+    && vi[3] >= 0 && vi[3] < mesh_vertex_count
+    && vi[0] != vi[1] && vi[1] != vi[2] && vi[2] != vi[0]
+    && (vi[2] == vi[3] || (vi[0] != vi[3] && vi[1] != vi[3])));
+}
+
+bool
+ON_MeshFace::IsValid(unsigned int mesh_vertex_count) const
+{
+  const unsigned int* uvi = (const unsigned int*)vi;
+  return (uvi[0] < mesh_vertex_count
+    && uvi[1] < mesh_vertex_count
+    && uvi[2] < mesh_vertex_count
+    && uvi[3] < mesh_vertex_count
+    && uvi[0] != uvi[1] && uvi[1] != uvi[2] && uvi[2] != uvi[0]
+    && (uvi[2] == uvi[3] || (uvi[0] != uvi[3] && uvi[1] != uvi[3])));
 }
 
 
@@ -479,6 +503,7 @@ ON_Mesh& ON_Mesh::operator=( const ON_Mesh& src )
     ON_Geometry::operator=(src);
 
     m_V  = src.m_V;
+    m_dV = src.m_dV;
     m_F  = src.m_F;
     m_N  = src.m_N;
     m_FN = src.m_FN;
@@ -487,6 +512,47 @@ ON_Mesh& ON_Mesh::operator=( const ON_Mesh& src )
     m_S  = src.m_S;
     m_H  = src.m_H;
     m_hidden_count = src.m_hidden_count;
+
+
+    unsigned int ngon_count = src.HasNgons() ? src.m_Ngon.UnsignedCount() : 0;
+    if ( ngon_count > 0 )
+    {
+      const unsigned int src_V_count = src.m_V.UnsignedCount();
+      const unsigned int src_F_count = src.m_F.UnsignedCount();
+      m_Ngon.Reserve(ngon_count);
+      for ( unsigned int i = 0; i < ngon_count; i++ )
+      {
+        const ON_MeshNgon* src_ngon = src.m_Ngon[i];
+        if ( 0 == src_ngon )
+          continue;
+        if ( src_ngon->m_Vcount <= 0 )
+          continue;
+        if ( 0 == src_ngon->m_vi )
+          continue;
+        if ( src_ngon->m_Vcount > src_V_count )
+        {
+          ON_ERROR("Corrupt ngon");
+          continue;
+        }
+        if ( src_ngon->m_Fcount > src_F_count )
+        {
+          ON_ERROR("Corrupt ngon");
+          continue;
+        }
+        if ( 0 == src_ngon->m_fi && src_ngon->m_Fcount > 0 )
+        {
+          ON_ERROR("Corrupt ngon");
+          continue;
+        }
+        ON_MeshNgon* ngon = m_NgonAllocator.CopyNgon(src_ngon);
+        if (ngon)
+          m_Ngon.Append(ngon);
+      }
+      if ( 0 != src.NgonMap())
+      {
+        this->CreateNgonMap();
+      }
+    }
 
     m_Ctag = src.m_Ctag;
     m_Ttag = src.m_Ttag;
@@ -520,7 +586,8 @@ ON_Mesh& ON_Mesh::operator=( const ON_Mesh& src )
     m_mesh_is_oriented = src.m_mesh_is_oriented;
     m_mesh_is_solid    = src.m_mesh_is_solid;
 
-    memcpy(m_vbox,src.m_vbox,sizeof(m_vbox));
+    m_vertex_bbox = src.m_vertex_bbox;
+    m_tight_bbox_cache = src.m_tight_bbox_cache;
     memcpy(m_nbox,src.m_nbox,sizeof(m_nbox));
     memcpy(m_tbox,src.m_tbox,sizeof(m_tbox));
 
@@ -572,6 +639,11 @@ void ON_Mesh::Destroy()
   m_S.Destroy();
   m_K.Destroy();
   m_C.Destroy();
+  m_NgonMap.Destroy();
+  m_Ngon.Destroy();
+  m_NgonAllocator.DeallocateAllNgons();
+  m_vertex_bbox = ON_BoundingBox::UnsetBoundingBox;
+  m_tight_bbox_cache.RemoveAllBoundingBoxes();
 }
 
 void ON_Mesh::EmergencyDestroy()
@@ -593,18 +665,262 @@ static bool ON_MeshIsNotValid(bool bSilentError)
   return bSilentError ? false : ON_IsNotValid(); // good place for a breakpoint;
 }
 
-ON_BOOL32 ON_Mesh::IsValid( ON_TextLog* text_logx ) const
+static unsigned int ON_MeshNgonIsNotValid(bool bSilentError)
 {
-  // If low bit of text_log pointer is 1, then ON_Error is not called when the
-  // knot vector is invalid.
+  if (!bSilentError)
+    ON_IsNotValid(); // good place for a breakpoint;
+  return 0;
+}
+
+
+static int compare2u(const void* a, const void*b)
+{
+  unsigned int x = ((const unsigned int*)a)[0];
+  unsigned int y = ((const unsigned int*)b)[0];
+  if ( x < y)
+    return -1;
+  if ( x > y)
+    return 1;
+  x = ((const unsigned int*)a)[1];
+  y = ((const unsigned int*)b)[1];
+  if ( x < y)
+    return -1;
+  if ( x > y)
+    return 1;
+  return 0;
+}
+
+unsigned int ON_MeshNgon::IsValid(
+  const ON_MeshNgon* ngon,
+  unsigned int ngon_index,
+  ON_TextLog* text_logx,
+  unsigned int mesh_vertex_count,
+  unsigned int mesh_face_count,
+  const ON_MeshFace* mesh_F,
+  ON_SimpleArray< unsigned int >& workspace_buffer
+  )
+{
+  workspace_buffer.SetCount(0);
+  if ( nullptr == ngon )
+    return true; // null ngons are ok
+
   const ON__INT_PTR lowbit = 1;
   const ON__INT_PTR hightbits = ~lowbit;
   bool bSilentError = ( 0 != (lowbit & ((ON__INT_PTR)text_logx)) );
   ON_TextLog* text_log = (ON_TextLog*)(((ON__INT_PTR)text_logx) & hightbits);
 
-  const int facet_count = FaceCount();
-  const int vertex_count = VertexCount();
-  int fi, vi;
+  if (ngon->m_Vcount < 3)
+  {
+    if ( text_log )
+    {
+      text_log->Print("ON_Mesh.Ngon(%u)->m_Vcount < 3.\n",ngon_index);
+    }
+    return ON_MeshNgonIsNotValid(bSilentError);
+  }
+
+  if (ngon->m_Fcount < 1)
+  {
+    if ( text_log )
+    {
+      text_log->Print("ON_Mesh.Ngon(%u)->m_Fcount < 1.\n",ngon_index);
+    }
+    return ON_MeshNgonIsNotValid(bSilentError);
+  }
+
+  if ( nullptr == ngon->m_vi )
+  {
+    if ( text_log )
+    {
+      text_log->Print("ON_Mesh.Ngon(%u)->m_vi is nullptr.\n",ngon_index);
+    }
+    return ON_MeshNgonIsNotValid(bSilentError);
+  }
+
+  if ( nullptr == ngon->m_fi )
+  {
+    if ( text_log )
+    {
+      text_log->Print("ON_Mesh.Ngon(%u)->m_fi is nullptr.\n",ngon_index);
+    }
+    return ON_MeshNgonIsNotValid(bSilentError);
+  }
+
+  for (unsigned int nvi = 0; nvi < ngon->m_Vcount; nvi++)
+  {
+    if (ngon->m_vi[nvi] >= mesh_vertex_count)
+    {
+      if ( text_log )
+      {
+        text_log->Print("ON_Mesh.Ngon(%u)->m_vi[%u] is invalid.\n",ngon_index,nvi);
+      }
+      return ON_MeshNgonIsNotValid(bSilentError);
+    }
+  }
+
+  for (unsigned int nfi = 0; nfi < ngon->m_Fcount; nfi++)
+  {
+    unsigned int fi = ngon->m_fi[nfi];
+    if (fi >= mesh_face_count)
+    {
+      if (text_log)
+      {
+        text_log->Print("ON_Mesh.Ngon(%u)->m_fi[%u] is invalid.\n", ngon_index, nfi);
+      }
+      return ON_MeshNgonIsNotValid(bSilentError);
+    }
+  }
+
+  if (nullptr == mesh_F)
+  {
+    // mesh faces are required to check the boundary
+    return true;
+  }
+
+  if (1 == ngon->m_Fcount && ngon->m_Vcount >= 3 && ngon->m_Vcount <= 4)
+  {
+    // fast test for a valid single face ngon
+    unsigned int fi = ngon->m_fi[0];
+    if (false == mesh_F[fi].IsValid(mesh_vertex_count))
+    {
+      if (text_log)
+      {
+        text_log->Print("ON_Mesh.Ngon(%u)->m_fi[0] is invalid.\n", ngon_index);
+      }
+      return ON_MeshNgonIsNotValid(bSilentError);
+    }
+    const unsigned int* fvi = (const unsigned int*)mesh_F[fi].vi;
+    for (unsigned int nvi = 0; nvi < ngon->m_Vcount; nvi++)
+    {
+      if (fvi[0] == ngon->m_vi[nvi] && fvi[1] == ngon->m_vi[(nvi+1)%ngon->m_Vcount] && fvi[2] == ngon->m_vi[(nvi+2)%ngon->m_Vcount])
+      {
+        if (3 == ngon->m_Vcount && fvi[3] == fvi[2])
+          return 3;
+        if (4 == ngon->m_Vcount && fvi[3] == ngon->m_vi[(nvi+3)%ngon->m_Vcount])
+          return 4;
+      }
+    }
+    // boundary may be reversed
+  }
+
+  unsigned int* workspace = workspace_buffer.Reserve(8*ngon->m_Fcount);
+  ON_2udex* edges = (ON_2udex*)workspace;
+  unsigned int edge_count = 0;
+  for (unsigned int nfi = 0; nfi < ngon->m_Fcount; nfi++)
+  {
+    unsigned int fi = ngon->m_fi[nfi];
+
+    const unsigned int* fvi = (const unsigned int*)(mesh_F[fi].vi);
+    unsigned int vi0;
+    unsigned int vi1 = fvi[3];
+    for (const unsigned int* fvi1 = fvi + 4; fvi < fvi1; fvi++)
+    {
+      vi0 = vi1;
+      vi1 = *fvi;
+      if (vi0 < vi1)
+      {
+        edges[edge_count].i = vi0;
+        edges[edge_count++].j = vi1;
+      }
+      else if (vi0 > vi1)
+      {
+        edges[edge_count].i = vi1;
+        edges[edge_count++].j = vi0;
+      }
+    }
+  }
+
+  if (edge_count < ngon->m_Vcount)
+  {
+    if (text_log)
+    {
+      text_log->Print("ON_Mesh.Ngon(%u) has invalid face or vertex list.\n",ngon_index);
+    }
+    return ON_MeshNgonIsNotValid(bSilentError);
+  }
+
+  ON_qsort(edges, edge_count, sizeof(edges[0]),compare2u);
+
+  unsigned int bdry_edge_count = 0;
+  for (unsigned int i = 0; i < edge_count; /*empty iterator*/)
+  {
+    const ON_2udex e0 = edges[i++];
+    if (i < edge_count && e0.i == edges[i].i && e0.j == edges[i].j)
+    {
+      // not a boundary edge
+      for (i++; i < edge_count; i++)
+      {
+        if (e0.i != edges[i].i || e0.j != edges[i].j)
+          break;
+      }
+    }
+    else
+    {
+      edges[bdry_edge_count++] = e0;
+    }
+  }
+
+  if (bdry_edge_count < ngon->m_Vcount)
+  {
+    if (text_log)
+    {
+      text_log->Print("ON_Mesh.Ngon(%u) has invalid face or vertex list.\n",ngon_index);
+    }
+    return ON_MeshNgonIsNotValid(bSilentError);
+  }
+
+  ON_SortUnsignedIntArray( ON::sort_algorithm::quick_sort, workspace, 2*bdry_edge_count );
+
+  for (unsigned int nvi = 0; nvi < ngon->m_Vcount; nvi++)
+  {
+    if ( nullptr == ON_BinarySearchUnsignedIntArray( ngon->m_vi[nvi], workspace, 2*bdry_edge_count) )
+    {
+      if ( text_log )
+      {
+        text_log->Print("ON_Mesh.Ngon(%u)->m_vi[%u] is not a boundary vertex.\n",ngon_index,nvi);
+      }
+      return ON_MeshNgonIsNotValid(bSilentError);
+    }
+  }
+
+  // It is possible that the ngon is still not valid.
+  //
+  // If bdry_edge_count > ngon->m_Vcount, then there "could" be one or
+  // more inner "holes" and the ngon->m_vi[] could reference a vertex
+  // on an inner boundary.
+  //
+  // The vertices in ngon->m_v[] may not be a proper outer boundary.
+  //
+  // ...
+
+
+  return bdry_edge_count;
+}
+
+unsigned int ON_MeshNgon::IsValid(
+  const ON_MeshNgon* ngon,
+  unsigned int ngon_index,
+  ON_TextLog* text_logx,
+  unsigned int mesh_vertex_count,
+  unsigned int mesh_face_count,
+  const ON_MeshFace* mesh_F
+  )
+{
+  // If low bit of text_log pointer is 1, then ON_Error is not called when the ngon is invalid.
+  ON_SimpleArray< unsigned int > workspace_buffer;
+  return ON_MeshNgon::IsValid(ngon,ngon_index,text_logx,mesh_vertex_count,mesh_face_count,mesh_F,workspace_buffer);
+}
+
+bool ON_Mesh::IsValid( ON_TextLog* text_logx ) const
+{
+  // If low bit of text_log pointer is 1, then ON_Error is not called when the mesh is invalid.
+  const ON__INT_PTR lowbit = 1;
+  const ON__INT_PTR hightbits = ~lowbit;
+  bool bSilentError = ( 0 != (lowbit & ((ON__INT_PTR)text_logx)) );
+  ON_TextLog* text_log = (ON_TextLog*)(((ON__INT_PTR)text_logx) & hightbits);
+
+  const unsigned int facet_count = FaceUnsignedCount();
+  const unsigned int vertex_count = VertexUnsignedCount();
+  unsigned int fi, vi;
 
   if (facet_count < 1) 
   {
@@ -624,32 +940,66 @@ ON_BOOL32 ON_Mesh::IsValid( ON_TextLog* text_logx ) const
     return ON_MeshIsNotValid(bSilentError);
   }
 
-  if ( m_N.Count() > 0 && m_N.Count() != vertex_count )
+
+  if ( m_V.UnsignedCount() != vertex_count )
   {
     if ( text_log )
     {
-      text_log->Print("ON_Mesh.m_N.Count() = %d (should be 0 or %d=vertex_count).\n",
-                      m_N.Count(),vertex_count);
+      text_log->Print("ON_Mesh.m_V.Count() = %u (should be %u=vertex_count).\n",
+                      m_V.UnsignedCount(),vertex_count);
     }
     return ON_MeshIsNotValid(bSilentError);
   }
 
-  if ( m_T.Count() > 0 && m_T.Count() != vertex_count )
+  if ( m_dV.UnsignedCount() > 0 && m_dV.UnsignedCount() != vertex_count )
   {
     if ( text_log )
     {
-      text_log->Print("ON_Mesh.m_T.Count() = %d (should be 0 or %d=vertex_count).\n",
-                      m_T.Count(),vertex_count);
+      text_log->Print("ON_Mesh.m_dV.Count() = %u (should be 0 or %u=vertex_count).\n",
+                      m_dV.UnsignedCount(),vertex_count);
     }
     return ON_MeshIsNotValid(bSilentError);
   }
 
-  if ( m_S.Count() > 0 && m_S.Count() != vertex_count )
+  if ( 0 != m_dV.UnsignedCount() )
+  {
+    if (false == HasSynchronizedDoubleAndSinglePrecisionVertices())
+    {
+      if ( text_log )
+      {
+        text_log->Print("ON_Mesh.m_dV[] and m_V[] are not synchronized.\n",
+                        m_dV.UnsignedCount(),vertex_count);
+      }
+      return ON_MeshIsNotValid(bSilentError);
+    }
+  }
+
+  if ( m_N.UnsignedCount() > 0 && m_N.UnsignedCount() != vertex_count )
   {
     if ( text_log )
     {
-      text_log->Print("ON_Mesh.m_S.Count() = %d (should be 0 or %d=vertex_count).\n",
-                      m_S.Count(),vertex_count);
+      text_log->Print("ON_Mesh.m_N.Count() = %u (should be 0 or %u=vertex_count).\n",
+                      m_N.UnsignedCount(),vertex_count);
+    }
+    return ON_MeshIsNotValid(bSilentError);
+  }
+
+  if ( m_T.UnsignedCount() > 0 && m_T.UnsignedCount() != vertex_count )
+  {
+    if ( text_log )
+    {
+      text_log->Print("ON_Mesh.m_T.Count() = %u (should be 0 or %u=vertex_count).\n",
+                      m_T.UnsignedCount(),vertex_count);
+    }
+    return ON_MeshIsNotValid(bSilentError);
+  }
+
+  if ( m_S.UnsignedCount() > 0 && m_S.UnsignedCount() != vertex_count )
+  {
+    if ( text_log )
+    {
+      text_log->Print("ON_Mesh.m_S.Count() = %u (should be 0 or %u=vertex_count).\n",
+                      m_S.UnsignedCount(),vertex_count);
     }
     return ON_MeshIsNotValid(bSilentError);
   }
@@ -663,35 +1013,43 @@ ON_BOOL32 ON_Mesh::IsValid( ON_TextLog* text_logx ) const
       {
         if ( text_log )
         {
-          text_log->Print("ON_Mesh.m_N[%d] is not a unit vector (length = %g).\n",vi,sqrt(x));
+          text_log->Print("ON_Mesh.m_N[%u] is not a unit vector (length = %g).\n",vi,sqrt(x));
         }
         return ON_MeshIsNotValid(bSilentError);
       }
     }
   }
 
-	// Greg Arden 9 May 2003. Fixes TRR#10604.  Attempt to detect meshes with non-finite vertices
-	// by testing the bounding box.
   int i;
   for ( i = 0; i < 3; i++ )
-  {
-    if ( !ON_IsValid( m_vbox[0][i] ) || !ON_IsValid( m_vbox[1][i] ) )
+  {    
+    const double float_max = 3.402823466e+38;
+    if ( m_vertex_bbox.IsNotEmpty()  )
     {
-      if ( text_log )
+      if (
+           fabs(m_vertex_bbox.m_min.MaximumCoordinate()) > float_max
+        || fabs(m_vertex_bbox.m_max.MaximumCoordinate()) > float_max
+        )
       {
-        text_log->Print("ON_Mesh.m_vbox is not finite.  Check for invalid vertices\n");
-      }		
-	    return ON_MeshIsNotValid(bSilentError);
+	      // Greg Arden 9 May 2003. Fixes TRR#10604.  
+        // Attempt to detect meshes with non-float-finite vertices by testing the bounding box.
+        if (text_log)
+        {
+          text_log->Print("ON_Mesh.m_fvertex_bbox is not finite.  Check for invalid vertices\n");
+        }
+        return ON_MeshIsNotValid(bSilentError);
+      }
     }	
   }
 
   const ON_3dPoint* dV = 0;
   while ( HasDoublePrecisionVertices() )
   {
-    bool bValidDoubles = DoublePrecisionVerticesAreValid();
+    const unsigned int vertex_count_local = VertexUnsignedCount();
+    bool bValidDoubles = (vertex_count_local == m_dV.UnsignedCount());
     if ( bValidDoubles )
       dV = DoublePrecisionVertices().Array();
-    bool bValidFloats  = SinglePrecisionVerticesAreValid();
+    bool bValidFloats  = (vertex_count_local == m_V.UnsignedCount());
     bool bSynchronized = HasSynchronizedDoubleAndSinglePrecisionVertices();
     if ( bSynchronized && bValidDoubles && bValidFloats )
       break;
@@ -705,25 +1063,6 @@ ON_BOOL32 ON_Mesh::IsValid( ON_TextLog* text_logx ) const
 	    return ON_MeshIsNotValid(bSilentError);
     }
 
-    if ( !bValidDoubles )
-    {
-      if ( text_log )
-      {
-        text_log->Print("Double precision vertices appear to be ok but are not marked as valid\n");
-      }		
-	    return ON_MeshIsNotValid(bSilentError);
-    }
-
-    if ( !bValidFloats )
-    {
-      if ( text_log )
-      {
-        text_log->Print("Single precision vertices appear to be ok but are not marked as valid\n");
-      }		
-	    return ON_MeshIsNotValid(bSilentError);
-    }
-
-
     break;
   }
 
@@ -736,9 +1075,9 @@ ON_BOOL32 ON_Mesh::IsValid( ON_TextLog* text_logx ) const
         if ( text_log )
         {
           if ( !m_F[fi].IsValid( vertex_count) )
-            text_log->Print("ON_Mesh.m_F[%d].vi[] has invalid vertex indices.\n",fi);
+            text_log->Print("ON_Mesh.m_F[%u].vi[] has invalid vertex indices.\n",fi);
           else
-            text_log->Print("ON_Mesh.m_F[%d] has degenerate double precision vertex locations.\n",fi);
+            text_log->Print("ON_Mesh.m_F[%u] has degenerate double precision vertex locations.\n",fi);
         }
         return ON_MeshIsNotValid(bSilentError);
       }
@@ -770,12 +1109,25 @@ ON_BOOL32 ON_Mesh::IsValid( ON_TextLog* text_logx ) const
       if ( !m_F[fi].IsValid( vertex_count ) ) 
       {
         if ( text_log )
-          text_log->Print("ON_Mesh.m_F[%d].vi[] has invalid vertex indices.\n",fi);
+          text_log->Print("ON_Mesh.m_F[%u].vi[] has invalid vertex indices.\n",fi);
         return ON_MeshIsNotValid(bSilentError);
       }
     }
   }
 
+  const unsigned int ngon_count = m_Ngon.UnsignedCount();
+  if (ngon_count > 0)
+  {
+    ON_SimpleArray< unsigned int > workspace_buffer;
+    for (unsigned int ngon_index = 0; ngon_index < ngon_count; ngon_index++)
+    {
+      const ON_MeshNgon* ngon = m_Ngon[ngon_index];
+      if (nullptr == ngon)
+        continue; // valid - means the ngon was removed
+      if (0 == ON_MeshNgon::IsValid(ngon, ngon_index, text_logx, (unsigned int)vertex_count, (unsigned int)facet_count, m_F.Array(), workspace_buffer))
+        return false;
+    }
+  }
 
   return true;
 }
@@ -797,6 +1149,7 @@ void ON_Mesh::Dump( ON_TextLog& dump ) const
   dump.Print("double precision: %s\n",bDoubles?"true":"false");
   dump.Print("vertex normals:   %s\n",HasVertexNormals()?"true":"false");
   dump.Print("face normals:     %s\n",HasFaceNormals()?"true":"false");
+  dump.Print("n-gons:           %s\n",HasNgons()?"true":"false");
   dump.Print("srf parameters:   %s\n",HasSurfaceParameters()?"true":"false");
   dump.Print("tex coords:       %s\n",HasTextureCoordinates()?"true":"false");
   dump.Print("vertex kappa:     %s\n",HasPrincipalCurvatures()?"true":"false");
@@ -957,6 +1310,42 @@ void ON_Mesh::Dump( ON_TextLog& dump ) const
     }
   }
 
+  if ( HasNgons() )
+  {
+    const ON_MeshFaceList mesh_face_list(this);
+
+    const int ngon_count = NgonCount();
+    dump.Print("%d mesh n-gons:\n",ngon_count);
+    {
+      dump.PushIndent();
+      for (i = 0; i < ngon_count; i++)
+      {
+        if ( i == half_max && 2*half_max < ngon_count )
+        {
+          dump.Print("...\n");
+          i = ngon_count-half_max;
+        }
+        else
+        {
+          const ON_MeshNgon* ngon = Ngon(i);
+          if ( 0 == ngon )
+            dump.Print("Ngon(%d) = null\n",i);
+          else
+          {
+            dump.Print("Ngon(%d): ",i);
+            ngon->Dump(dump);
+            const int bcount = (int)ngon->BoundaryEdgeCount(mesh_face_list);
+            const int outer_boundary_count = (int)ngon->OuterBoundaryEdgeCount();
+            const int inner_boundary_count = bcount - outer_boundary_count;
+            dump.Print(" boundary counts outer = %d, inner = %d", outer_boundary_count, inner_boundary_count);
+            dump.Print("\n");
+          }
+        }
+      }
+      dump.PopIndent();
+    }
+  }
+
 
   dump.PopIndent();
 }
@@ -1098,7 +1487,7 @@ bool ON_Mesh::Write_2( int Vcount, ON_BinaryArchive& file ) const
     const int Kcount = (m_V.Count() == m_K.Count()) ? Vcount : 0;
     const int Ccount = (m_V.Count() == m_C.Count()) ? Vcount : 0;
 
-    if ( e == ON::big_endian ) 
+    if (e == ON::endian::big_endian)
     {
       // These calls temporarily put the m_V[], m_N[], m_T[], m_K[]
       // and m_C[] arrays in little endian byte order because 3dm archives
@@ -1122,7 +1511,7 @@ bool ON_Mesh::Write_2( int Vcount, ON_BinaryArchive& file ) const
     if (rc) rc = file.WriteCompressedBuffer( Tcount*sizeof(ON_2fPoint),         m_T.Array() );
     if (rc) rc = file.WriteCompressedBuffer( Kcount*sizeof(ON_SurfaceCurvature),m_K.Array() );
     if (rc) rc = file.WriteCompressedBuffer( Ccount*sizeof(ON_Color),           m_C.Array() );
-    if ( e == ON::big_endian ) 
+    if (e == ON::endian::big_endian)
     {
       // These calls restore the m_V[], m_N[], m_T[], m_K[] and m_C[] arrays
       // to the correct big endian runtime byte order.  This must be done even
@@ -1149,7 +1538,7 @@ bool ON_Mesh::Read_2( int vcount, ON_BinaryArchive& file )
   if ( vcount > 0 ) 
   {
     size_t sz = 0;
-    int bFailedCRC;
+    bool bFailedCRC;
 
     sz = 0;
     if (rc) rc = file.ReadCompressedBufferSize( &sz );
@@ -1236,7 +1625,7 @@ bool ON_Mesh::Read_2( int vcount, ON_BinaryArchive& file )
       }
     }
     
-    if ( e == ON::big_endian ) 
+    if (e == ON::endian::big_endian)
     {
       // This code assumes sizeof(ON_Color)=4, sizeof(float)=4 
       // and sizeof(double)=8.
@@ -1256,17 +1645,228 @@ bool ON_Mesh::Read_2( int vcount, ON_BinaryArchive& file )
   return rc;
 }
 
+static
+bool WriteMeshNgons( ON_BinaryArchive& file, const ON_SimpleArray<ON_MeshNgon*>& ngons )
+{
+  unsigned int i, Vcount;
+  if ( !file.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,0) )
+    return false;
 
-ON_BOOL32 ON_Mesh::Write( ON_BinaryArchive& file ) const
+  bool rc = false;
+  for(;;)
+  {
+    unsigned int ngon_count = ngons.UnsignedCount();
+    if (!file.WriteInt(ngon_count))
+      break;
+
+    for ( i = 0; i < ngon_count; i++)
+    {
+      const ON_MeshNgon* ngon = ngons[i];
+      Vcount = ( 0 != ngon && ngon->m_Vcount > 0 && ngon->m_Fcount > 0 && 0 != ngon->m_vi && 0 != ngon->m_fi ) 
+        ? ngon->m_Vcount 
+        : 0;
+      if ( !file.WriteInt(Vcount) )
+        break;
+      if (Vcount <= 0 )
+        continue;
+      if ( !file.WriteInt(ngon->m_Fcount) )
+        break;
+      if ( !file.WriteInt(Vcount,ngon->m_vi) )
+        break;
+      if ( !file.WriteInt(ngon->m_Fcount,ngon->m_fi) )
+        break;
+    }
+
+    if (i==ngon_count)
+      rc = true;
+
+    break;
+  }
+
+  if ( !file.EndWrite3dmChunk() )
+    rc = false;
+
+  return rc;
+}
+
+static
+bool ReadMeshNgons( ON_BinaryArchive& file, ON_MeshNgonAllocator& a, ON_SimpleArray<ON_MeshNgon*>& ngons )
+{
+  ngons.SetCount(0);
+
+  int major_version = 0;
+  int minor_version = 0;
+  unsigned int i, Vcount, Fcount;
+  if ( !file.BeginRead3dmChunk(TCODE_ANONYMOUS_CHUNK,&major_version,&minor_version) )
+    return false;
+
+  bool rc = false;
+  for(;;)
+  {
+    unsigned int ngon_count = 0;
+    if (!file.ReadInt(&ngon_count))
+      break;
+
+    ngons.Reserve(ngon_count);
+
+    for ( i = 0; i < ngon_count; i++)
+    {
+      Vcount = 0;
+      if ( !file.ReadInt(&Vcount) )
+        break;
+      if ( Vcount <= 0 )
+        continue;
+      if ( !file.ReadInt(&Fcount) )
+        break;
+      ON_MeshNgon* ngon = a.AllocateNgon(Vcount,Fcount);
+      if ( !file.ReadInt(Vcount,ngon->m_vi) )
+        break;
+      if ( !file.ReadInt(ngon->m_Fcount,ngon->m_fi) )
+        break;
+      ngons.Append(ngon);
+    }
+
+    if (i == ngon_count)
+      rc = true;
+
+    break;
+  }
+
+  if ( !file.EndRead3dmChunk() )
+    rc = false;
+
+  return rc;
+}
+
+
+static
+bool WriteMeshDoublePrecisionVertices(
+  ON_BinaryArchive& file,
+  const ON_SimpleArray<ON_3dPoint>& dV
+  )
+{
+  const int major_version = 1;
+  const int minor_version = 0;
+  if ( !file.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,major_version,minor_version) )
+    return false;
+
+  bool rc = false;
+
+  for (;;)
+  {
+    const unsigned int dVcount = dV.UnsignedCount();
+    if (!file.WriteInt(dVcount))
+      break;
+    if (0 == dVcount)
+    {
+      rc = true;
+      break;
+    }
+
+    const ON::endian e = file.Endian();
+    if (e == ON::endian::big_endian)
+    {
+      file.ToggleByteOrder(dVcount * 3, 8, dV.Array(), (void*)dV.Array());
+    }
+    if (!file.WriteCompressedBuffer(dVcount*sizeof(ON_3dPoint), dV.Array()))
+      break;
+    if (e == ON::endian::big_endian)
+    {
+      file.ToggleByteOrder(dVcount * 3, 8, dV.Array(), (void*)dV.Array());
+    }
+
+    rc = true;
+    break;
+  }
+
+  if ( !file.EndWrite3dmChunk() )
+    rc = false;
+
+  return rc;
+}
+
+static
+bool ReadMeshDoublePrecisionVertices( 
+  ON_BinaryArchive& file, 
+  ON_SimpleArray<ON_3dPoint>& dV 
+  )
+{
+  dV.SetCount(0);
+
+  int major_version = 0;
+  int minor_version = 0;
+  if ( !file.BeginRead3dmChunk(TCODE_ANONYMOUS_CHUNK,&major_version,&minor_version) )
+    return false;
+
+  bool rc = false;
+  for(;;)
+  {
+    if (1 != major_version)
+      break;
+
+    unsigned int dVcount = 0;
+    if (!file.ReadInt(&dVcount))
+      break;
+
+    if (0 == dVcount)
+    {
+      rc = true;
+      break;
+    }
+
+    size_t sz = 0;
+    if (!file.ReadCompressedBufferSize( &sz ))
+      break;
+
+    if (sz != ((size_t)dVcount)*sizeof(ON_3dPoint))
+    {
+      ON_ERROR("Compressed double precision vertex point buffer size is wrong.");
+      break;
+    }
+
+    dV.SetCapacity(dVcount);
+    dV.SetCount(dVcount);
+    ON_3dPoint* a = dV.Array();
+    if (nullptr == a || dVcount != dV.UnsignedCount())
+    {
+      ON_ERROR("Unable to allocate double precision vertex point array.");
+      break;
+    }
+    
+    bool bFailedCRC = 0;
+    if (!file.ReadCompressedBuffer( sz, a, &bFailedCRC))
+      break;
+
+    rc = true;
+    break;
+  }
+
+  if (!rc)
+    dV.SetCount(0);
+  if ( !file.EndRead3dmChunk() )
+    rc = false;
+
+  return rc;
+}
+
+bool ON_Mesh::Write( ON_BinaryArchive& file ) const
 {
   int i;
   //const int major_version = 1; // uncompressed
   //const int major_version = 2; // beta format (never used)
   const int major_version = 3; // compressed
-  bool rc = file.Write3dmChunkVersion(major_version,5);
 
-  const int vcount = VertexCount();
-  const int fcount = FaceCount();
+  const int minor_version 
+    = (file.Archive3dmVersion() >= 60) 
+    //? 6  // ngons saved in V6 files as of mid November, 2013
+    //? 7  // double precision vertices no longer on user data.
+    ? 8  // double precision vertex box
+    : 5;
+
+  bool rc = file.Write3dmChunkVersion(major_version,minor_version);
+
+  const unsigned int vcount = VertexUnsignedCount();
+  const unsigned int fcount = FaceUnsignedCount();
 
   if (rc) rc = file.WriteInt( vcount );
   if (rc) rc = file.WriteInt( fcount );
@@ -1275,7 +1875,20 @@ ON_BOOL32 ON_Mesh::Write( ON_BinaryArchive& file ) const
   if (rc) rc = file.WriteInterval( m_srf_domain[0] );
   if (rc) rc = file.WriteInterval( m_srf_domain[1] );
   if (rc) rc = file.WriteDouble( 2, m_srf_scale );
-  if (rc) rc = file.WriteFloat( 6, &m_vbox[0][0] );
+
+  // legacy float precision vertex bounding box
+  float fbbox[2][3] = { { 1.0f, 1.0f, 1.0f }, { -1.0f, -1.0f, -1.0f } };
+  if (m_vertex_bbox.IsNotEmpty())
+  {
+    fbbox[0][0] = ON_FloatFloor(m_vertex_bbox.m_min.x);
+    fbbox[0][1] = ON_FloatFloor(m_vertex_bbox.m_min.y);
+    fbbox[0][2] = ON_FloatFloor(m_vertex_bbox.m_min.z);
+    fbbox[1][0] = ON_FloatCeil(m_vertex_bbox.m_max.x);
+    fbbox[1][1] = ON_FloatCeil(m_vertex_bbox.m_max.y);
+    fbbox[1][2] = ON_FloatCeil(m_vertex_bbox.m_max.z);
+  }
+  if (rc) rc = file.WriteFloat( 6, &fbbox[0][0] );
+
   if (rc) rc = file.WriteFloat( 6, &m_nbox[0][0] );
   if (rc) rc = file.WriteFloat( 4, &m_tbox[0][0] );
 
@@ -1340,18 +1953,18 @@ ON_BOOL32 ON_Mesh::Write( ON_BinaryArchive& file ) const
   if (rc) rc = file.WriteUuid( m_Ttag.m_mapping_id );
  
   // compressed m_S[]
-  if ( rc && vcount > 0 ) 
+  if ( rc && vcount > 0U ) 
   {
     // Before 201011049 there was a bug that let m_S[] arrays
     // with the wrong size get saved in files. 
-    const int Scount = (vcount == m_S.Count()) ? m_S.Count() : 0;
+    const unsigned int Scount = (vcount == m_S.UnsignedCount()) ? m_S.UnsignedCount() : 0;
     const ON::endian e = file.Endian();
-    if ( e == ON::big_endian ) 
+    if (e == ON::endian::big_endian)
     {
       file.ToggleByteOrder( Scount*2, 8, m_S.Array(), (void*)m_S.Array() );
     }
     if (rc) rc = file.WriteCompressedBuffer( Scount*sizeof(ON_2dPoint),m_S.Array() );
-    if ( e == ON::big_endian ) 
+    if (e == ON::endian::big_endian)
     {
       file.ToggleByteOrder( Scount*2, 8, m_S.Array(), (void*)m_S.Array() );
     }
@@ -1366,6 +1979,50 @@ ON_BOOL32 ON_Mesh::Write( ON_BinaryArchive& file ) const
   if (rc) rc = file.WriteChar( m_mesh_is_solid );
 
 
+  if ( rc && minor_version >= 6 )
+  {
+    // added n-gons version 3.6
+    bool bHasNgons = HasNgons();    
+    rc =  file.WriteBool(bHasNgons);
+    if (rc && bHasNgons)
+      rc = WriteMeshNgons(file,m_Ngon);
+
+    if (rc && minor_version >= 7)
+    {
+      // added explicit double precision vertices chunk version 3.7
+      // (used to be on user data)
+      const bool bHasDoublePrecisionVertices = HasDoublePrecisionVertices();
+      if (rc) rc = file.WriteBool(bHasDoublePrecisionVertices);
+      if (rc && bHasDoublePrecisionVertices)
+        rc = WriteMeshDoublePrecisionVertices(file, m_dV);
+
+      if (rc && minor_version >= 8)
+      {
+        rc = file.WriteBoundingBox(m_vertex_bbox);
+      }
+    }
+  }
+  
+  
+  if (rc 
+    && 50 == file.Archive3dmVersion() 
+    && vcount > 0 
+    && HasSynchronizedDoubleAndSinglePrecisionVertices() 
+    )
+  {
+    // save double precision vertices using V5 user data.
+    ON_V5_MeshDoubleVertices* ud = ON_V5_MeshDoubleVertices::AttachV5(this);
+    if (nullptr != ud)
+    {
+      ud->m_V5_dV = m_dV;
+      ud->m_dcount = ud->m_V5_dV.UnsignedCount();
+      ud->m_dCRC = ud->DoubleCRC();
+      ud->m_fcount = m_V.UnsignedCount();
+      ud->m_fCRC = ON_V5_MeshDoubleVertices::FloatCRC(m_V);
+      // This obsolete user data will be deleted after it is written to the V5 .3dm file.
+    }
+  }
+
   return rc;
 }
 
@@ -1378,10 +2035,9 @@ ON_BOOL32 ON_Mesh::Write( ON_BinaryArchive& file ) const
 //// {B988A6C2-61A6-45a7-AAEE-9AED7EF4E316}
 static const ON_UUID obsolete_default_srfp_mapping_id = { 0xb988a6c2, 0x61a6, 0x45a7, { 0xaa, 0xee, 0x9a, 0xed, 0x7e, 0xf4, 0xe3, 0x16 } };
 
-// overrides virtual ON_Object::Write
-ON_BOOL32 ON_TextureMapping::Write(
-        ON_BinaryArchive& file
-      ) const
+bool ON_TextureMapping::Internal_WriteV5(
+  ON_BinaryArchive& file
+  ) const
 {
   bool rc = file.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,1);
   if (rc)
@@ -1389,13 +2045,13 @@ ON_BOOL32 ON_TextureMapping::Write(
 
     for(;;)
     {
-      rc = file.WriteUuid( m_mapping_id);
+      rc = file.WriteUuid( Id() );
       if (!rc) break;
 
-      rc = file.WriteInt( m_type );
+      rc = file.WriteInt( static_cast<unsigned int>(m_type) );
       if (!rc) break;
 
-      rc = file.WriteInt( m_projection );
+      rc = file.WriteInt( static_cast<unsigned int>(m_projection) );
       if (!rc) break;
 
       rc = file.WriteXform( m_Pxyz );
@@ -1405,14 +2061,14 @@ ON_BOOL32 ON_TextureMapping::Write(
       rc = file.WriteXform( m_uvw );
       if (!rc) break;
 
-      rc = file.WriteString(m_mapping_name);
+      rc = file.WriteString(Name());
       if (!rc) break;
 
-      rc = file.WriteObject(m_mapping_primitive);
+      rc = file.WriteObject(m_mapping_primitive.get());
       if (!rc) break;
 
       // 13 October 2006 ver 1.1 fields
-      rc = file.WriteInt(m_texture_space);
+      rc = file.WriteInt( static_cast<unsigned int>(m_texture_space) );
       if (!rc) break;
 
       rc = file.WriteBool(m_bCapped);
@@ -1428,16 +2084,14 @@ ON_BOOL32 ON_TextureMapping::Write(
   return rc;
 }
 
-// overrides virtual ON_Object::Read
-ON_BOOL32 ON_TextureMapping::Read(
-        ON_BinaryArchive& file
-      )
+bool ON_TextureMapping::Internal_ReadV5(
+  ON_BinaryArchive& file
+  )
 {
-  Default();
+  *this = ON_TextureMapping::Unset;
 
   int major_version = 0;
   int minor_version = 0;
-  int i;
 
   bool rc = file.BeginRead3dmChunk(TCODE_ANONYMOUS_CHUNK,&major_version,&minor_version);
   if (rc)
@@ -1448,18 +2102,27 @@ ON_BOOL32 ON_TextureMapping::Read(
       // 1.0 fields
       for(;;)
       {
-        rc = file.ReadUuid( m_mapping_id );
+        ON_UUID id = ON_nil_uuid;
+        rc = file.ReadUuid( id );
         if (!rc) break;
-        if ( 0 == ON_UuidCompare(&obsolete_default_srfp_mapping_id,&m_mapping_id) )
-          m_mapping_id = ON_nil_uuid;
+        if (id == ON_nil_uuid || id == ON_TextureMapping::SurfaceParameterTextureMapping.Id())
+        {
+          // nil ids are no longer permitted and
+          // system component ids can not be used by 
+          // ordinary components.
+          id = ON_CreateId();
+        }
+        SetId(id);
 
-        rc = file.ReadInt( &i );
+        unsigned int type_as_unsigned = 0;
+        rc = file.ReadInt( &type_as_unsigned );
         if (!rc) break;
-        m_type = TypeFromInt(i);
+        m_type = TypeFromUnsigned(type_as_unsigned);
 
-        rc = file.ReadInt( &i );
+        unsigned int projection_as_unsigned = 0;
+        rc = file.ReadInt( &projection_as_unsigned );
         if (!rc) break;
-        m_projection = ProjectionFromInt(i);
+        m_projection = ProjectionFromUnsigned(projection_as_unsigned);
 
         rc = file.ReadXform( m_Pxyz );
         if (!rc) break;
@@ -1468,18 +2131,24 @@ ON_BOOL32 ON_TextureMapping::Read(
 
         rc = file.ReadXform( m_uvw );
         if (!rc) break;
+        
+        ON_wString name;
+        rc = file.ReadString(name);
+        if (!rc) break;
+        SetName(name);
 
-        rc = file.ReadString(m_mapping_name);
+		ON_Object* pMappingPrimitive = nullptr;
+        rc = (file.ReadObject(&pMappingPrimitive) >= 0);
         if (!rc) break;
 
-        rc = (file.ReadObject(&m_mapping_primitive) >= 0);
-        if (!rc) break;
+		m_mapping_primitive.reset(pMappingPrimitive);
 
         if ( minor_version >= 1 )
         {
-          rc = file.ReadInt(&i);
+          unsigned int texture_space_as_unsigned = 0;
+          rc = file.ReadInt(&texture_space_as_unsigned);
           if (!rc) break;
-          m_texture_space = TextureSpaceFromInt(i);
+          m_texture_space = TextureSpaceFromUnsigned(texture_space_as_unsigned);
 
           rc = file.ReadBool(&m_bCapped);
           if (!rc) break;
@@ -1495,6 +2164,21 @@ ON_BOOL32 ON_TextureMapping::Read(
 
   return rc;
 }
+
+bool ON_TextureMapping::Write(
+  ON_BinaryArchive& archive
+  ) const
+{
+  return Internal_WriteV5(archive);
+}
+
+bool ON_TextureMapping::Read(
+  ON_BinaryArchive& archive
+  )
+{
+  return Internal_ReadV5(archive);
+}
+
 
 static
 void GetSurfaceParametersHelper( const ON_Mesh& mesh,
@@ -1522,7 +2206,7 @@ void GetSurfaceParametersHelper( const ON_Mesh& mesh,
 }
 
 
-ON_BOOL32 ON_Mesh::Read( ON_BinaryArchive& file )
+bool ON_Mesh::Read( ON_BinaryArchive& file )
 {
   Destroy();
 
@@ -1543,7 +2227,16 @@ ON_BOOL32 ON_Mesh::Read( ON_BinaryArchive& file )
     if (rc) rc = file.ReadInterval( m_srf_domain[0] );
     if (rc) rc = file.ReadInterval( m_srf_domain[1] );
     if (rc) rc = file.ReadDouble( 2, m_srf_scale );
-    if (rc) rc = file.ReadFloat( 6, &m_vbox[0][0] );
+
+    float fbbox[2][3] = { { 1.0f, 1.0f, 1.0f }, { -1.0f, -1.0f, -1.0f } };
+    if (rc) rc = file.ReadFloat( 6, &fbbox[0][0] );
+    if (rc && fbbox[0][0] <= fbbox[1][0] && fbbox[0][1] <= fbbox[1][1] && fbbox[0][2] <= fbbox[1][2] )
+    {
+      // When minor_version >= 8, m_vertex_bbox will be read from the archive later.
+      m_vertex_bbox.m_min = ON_3fPoint(fbbox[0]);
+      m_vertex_bbox.m_max = ON_3fPoint(fbbox[1]);
+    }
+
     if (rc) rc = file.ReadFloat( 6, &m_nbox[0][0] );
     if (rc) rc = file.ReadFloat( 4, &m_tbox[0][0] );
 
@@ -1627,9 +2320,9 @@ ON_BOOL32 ON_Mesh::Read( ON_BinaryArchive& file )
 
     if ( minor_version >= 2 ) 
     {
-      int b = m_packed_tex_rotate;
-      if (rc) rc = file.ReadInt( &b );
-      m_packed_tex_rotate = b?true:false;
+      int b_packed_tex_rotate = m_packed_tex_rotate;
+      if (rc) rc = file.ReadInt( &b_packed_tex_rotate );
+      m_packed_tex_rotate = b_packed_tex_rotate?true:false;
     }
 
     if ( 3 == major_version )
@@ -1643,7 +2336,7 @@ ON_BOOL32 ON_Mesh::Read( ON_BinaryArchive& file )
         if ( rc && vcount > 0 ) 
         {
           size_t sz = 0;
-          ON_BOOL32 bFailedCRC=false;
+          bool bFailedCRC=false;
           if (rc) rc = file.ReadCompressedBufferSize( &sz );
           if (rc && sz) 
           {
@@ -1652,7 +2345,7 @@ ON_BOOL32 ON_Mesh::Read( ON_BinaryArchive& file )
               m_S.SetCapacity(vcount);
               if (rc) rc = file.ReadCompressedBuffer( sz, m_S.Array(), &bFailedCRC );
               if (rc) m_S.SetCount(vcount);
-              if ( ON::big_endian == file.Endian() ) 
+              if (ON::endian::big_endian == file.Endian())
               {
                 file.ToggleByteOrder( m_S.Count()*2, 8, m_S.Array(), (void*)m_S.Array() );
               }
@@ -1692,6 +2385,34 @@ ON_BOOL32 ON_Mesh::Read( ON_BinaryArchive& file )
             if (rc) rc = file.ReadChar( &m_mesh_is_manifold );
             if (rc) rc = file.ReadChar( &m_mesh_is_oriented );
             if (rc) rc = file.ReadChar( &m_mesh_is_solid );
+
+            if ( rc && minor_version >= 6 )
+            {
+              // added n-gons version 3.6
+              bool bHasNgons = false;    
+              rc =  file.ReadBool(&bHasNgons);
+              if (rc && bHasNgons)
+                rc = ReadMeshNgons(file, m_NgonAllocator, m_Ngon);
+              if (rc && minor_version >= 7)
+              {
+                bool bHasDoublePrecisionVertices = false;
+                rc = file.ReadBool(&bHasDoublePrecisionVertices);
+                if (bHasDoublePrecisionVertices)
+                {
+                  // Added explicit double precision vertices chunk version 3.7
+                  // (used to be on user data)
+                  rc = ReadMeshDoublePrecisionVertices(file, m_dV);
+                  if (rc && m_dV.UnsignedCount() == m_V.UnsignedCount() && minor_version <= 7)
+                  {
+                    m_vertex_bbox.Set(m_dV, false);
+                  }
+                }
+                if (rc && minor_version >= 8)
+                {
+                  rc = file.ReadBoundingBox(m_vertex_bbox);
+                }
+              }
+            }
           }
         }
       }
@@ -1747,8 +2468,8 @@ int ON_Mesh::Dimension() const
 //   int breakpoint_here_for_bad_vbox = 0.  
 // The warning disable is here because MS is ignoring it
 // if I put it inside of the function.
-#pragma warning( push )
-#pragma warning( disable : 4189 ) 
+#pragma ON_PRAGMA_WARNING_PUSH
+#pragma ON_PRAGMA_WARNING_DISABLE_MSC( 4189 ) 
 #endif
 
 float ON_FloatFloor(double x)
@@ -1786,106 +2507,52 @@ float ON_FloatCeil(double x)
   return f;
 }
 
-ON_BOOL32 ON_Mesh::GetBBox( // returns true if successful
+bool ON_Mesh::GetBBox( // returns true if successful
        double* boxmin, // minimum
        double* boxmax, // maximum
-       ON_BOOL32 bGrowBox
+       bool bGrowBox
        ) const
 {
-  ON_BOOL32 rc = false;
-  const int facet_count  = FaceCount();
-  const int vertex_count = VertexCount();
+  bool rc = false;
+  const unsigned int facet_count  = FaceCount();
+  const unsigned int vertex_count = VertexCount();
   if ( facet_count >= 1 && vertex_count >= 3 ) 
   {
-    ON_BoundingBox vbox;
-    if ( m_vbox[0][0] > m_vbox[1][0] ) 
+    rc = m_vertex_bbox.IsNotEmpty();
+    if ( false == rc ) 
     {
-      // const lie - cache mesh bounding box
-      float* fbbox[2] = {const_cast<float*>(&m_vbox[0][0]),const_cast<float*>(&m_vbox[1][0])};
-      while ( HasDoublePrecisionVertices() && DoublePrecisionVerticesAreValid() )
+      if ( HasDoublePrecisionVertices() )
       {
-        double dbbox[2][3];
         const ON_3dPointArray& dV = DoublePrecisionVertices();
-        rc = ON_GetPointListBoundingBox(
-                3, 0, vertex_count, 3, &dV[0].x,
-                &dbbox[0][0], &dbbox[1][0], 
-                false 
-                );
-        if (!rc)
-          break;
-        // make sure we round min doubles down to the nearest float
-        // and max doubles up to the nearest float.
-        fbbox[0][0] = ON_FloatFloor(dbbox[0][0]);
-        fbbox[0][1] = ON_FloatFloor(dbbox[0][1]);
-        fbbox[0][2] = ON_FloatFloor(dbbox[0][2]);
-        fbbox[1][0] = ON_FloatCeil(dbbox[1][0]);
-        fbbox[1][1] = ON_FloatCeil(dbbox[1][1]);
-        fbbox[1][2] = ON_FloatCeil(dbbox[1][2]);
-
-        // depending on how
-        if ( SinglePrecisionVerticesAreValid() )
-        {
-          ON_GetPointListBoundingBox(
-                3, 0, vertex_count, 3, &m_V[0].x,
-                &fbbox[0][0], &fbbox[1][0], 
-                true 
-              );
-        }
-        break;
+        if ( dV.UnsignedCount() == m_V.UnsignedCount() )
+          rc = m_vertex_bbox.Set(dV, false);
       }
-
-      if (!rc)
+      if (false == rc)
       {
-        rc = ON_GetPointListBoundingBox( 3, 0, 
-                vertex_count, 3, &m_V[0].x,
-                fbbox[0],fbbox[1],
-                false 
-                );
+        rc = m_vertex_bbox.Set(m_V, false);
       }
-    }
-    else
-    {
-      rc = true;
     }
 
     if ( rc ) 
     {
-      vbox.m_min.x = m_vbox[0][0];
-      vbox.m_min.y = m_vbox[0][1];
-      vbox.m_min.z = m_vbox[0][2];
-      vbox.m_max.x = m_vbox[1][0];
-      vbox.m_max.y = m_vbox[1][1];
-      vbox.m_max.z = m_vbox[1][2];
-      rc = vbox.IsValid();
-      if (rc)
+      ON_BoundingBox vbox(m_vertex_bbox);
+      if ( bGrowBox )
       {
-        if ( bGrowBox )
-        {
-          vbox.Union( ON_BoundingBox(boxmin,boxmax) );
-        }
-
-        boxmin[0] = vbox.m_min.x;
-        boxmin[1] = vbox.m_min.y;
-        boxmin[2] = vbox.m_min.z;
-
-        boxmax[0] = vbox.m_max.x;
-        boxmax[1] = vbox.m_max.y;
-        boxmax[2] = vbox.m_max.z;
+        vbox.Union( ON_BoundingBox(ON_3dPoint(boxmin),ON_3dPoint(boxmax)) );
       }
-#if defined(ON_DEBUG) && !defined(ON_COMPILER_GNU)
-      // generates gcc unused variable warning
-      else
-      {
-        int breakpoint_here_for_bad_vbox=0;
-      }
-#endif
+      boxmin[0] = vbox.m_min.x;
+      boxmin[1] = vbox.m_min.y;
+      boxmin[2] = vbox.m_min.z;
+      boxmax[0] = vbox.m_max.x;
+      boxmax[1] = vbox.m_max.y;
+      boxmax[2] = vbox.m_max.z;
     }
   }
   return rc;
 }
 
 #if defined(ON_COMPILER_MSC)
-#pragma warning( pop )
+#pragma ON_PRAGMA_WARNING_POP
 #endif
 
 bool ON_Mesh::IsDeformable() const
@@ -1898,18 +2565,21 @@ bool ON_Mesh::MakeDeformable()
   return true;
 }
 
-ON_BOOL32 ON_Mesh::Transform( 
+bool ON_Mesh::Transform( 
        const ON_Xform& xform
        )
 {
-  const bool bIsValid_fV = SinglePrecisionVerticesAreValid();
-  const bool bIsValid_dV = DoublePrecisionVerticesAreValid();
+  const unsigned int vertex_count = VertexUnsignedCount();
+  const bool bIsValid_fV = (vertex_count == m_V.UnsignedCount());
+  const bool bIsValid_dV = (vertex_count == m_dV.UnsignedCount());
   const bool bSyncheddV = bIsValid_fV && bIsValid_dV && HasSynchronizedDoubleAndSinglePrecisionVertices();
   TransformUserData(xform);
 	DestroyTree();
 
+  if ( bIsValid_fV )
+   ON_TransformPointList( 3, false, vertex_count, 3, &m_dV[0][0], xform );
+
   double d = xform.Determinant();
-  const int vertex_count = VertexCount();
   bool rc = false;
   if ( bSyncheddV )
   {
@@ -1966,9 +2636,9 @@ ON_BOOL32 ON_Mesh::Transform(
       //     Graphics Gems, Academic Press, Inc., 
       //     pp. 539-547, 1990. 
       ON_Xform N_xform;
-      double d = xform.GetSurfaceNormalXform(N_xform);
+      const double det = xform.GetSurfaceNormalXform(N_xform);
       rc = ON_TransformVectorList( 3, vertex_count, 3, &m_N[0][0], N_xform )?true:false;
-      if ( d < 0.0 )
+      if ( det < 0.0 )
       {
         FlipVertexNormals();
       }
@@ -2023,11 +2693,6 @@ ON_BOOL32 ON_Mesh::Transform(
   if ( fabs(d) <= ON_ZERO_TOLERANCE )
     DestroyTopology(); // transform may not be one-to-one on vertices
 
-  if ( bIsValid_fV )
-    SetSinglePrecisionVerticesAsValid();
-  if ( bIsValid_dV )
-    SetDoublePrecisionVerticesAsValid();
-
   return rc;
 }
 
@@ -2066,41 +2731,39 @@ void ON_Mesh::DestroyRuntimeCache( bool bDelete )
   }
 }
 
-ON_BOOL32 ON_Mesh::SwapCoordinates(
+bool ON_Mesh::SwapCoordinates(
       int i, int j        // indices of coords to swap
       )
 {
   if ( i == j )
     return true;
 
-  const bool bIsValid_fV = SinglePrecisionVerticesAreValid();
-  const bool bIsValid_dV = DoublePrecisionVerticesAreValid();
+  const unsigned int vertex_count = VertexUnsignedCount();
+  const bool bIsValid_fV = (vertex_count == m_V.UnsignedCount());
+  const bool bIsValid_dV = (vertex_count == m_dV.UnsignedCount());
 
-  const int vertex_count = VertexCount();
-  ON_BOOL32 rc = ON_SwapPointListCoordinates( vertex_count, 3, &m_V[0][0], i, j );
-  if ( rc && HasVertexNormals() ) {
+  bool rc = false; 
+  if (bIsValid_dV && ON_SwapPointListCoordinates(vertex_count, 3, &m_dV[0][0], i, j))
+    rc = true;
+
+  if (bIsValid_fV && ON_SwapPointListCoordinates(vertex_count, 3, &m_V[0][0], i, j))
+    rc = true;
+
+  if ( rc && HasVertexNormals() )
+  {
     rc = ON_SwapPointListCoordinates( vertex_count, 3, &m_N[0][0], i, j );
   }
   if ( rc )
   {
     float x;
-    if ( m_vbox[0][0] <= m_vbox[1][0] ) {
-      x = m_vbox[0][i]; m_vbox[0][i] = m_vbox[0][j]; m_vbox[0][j] = x;
-      x = m_vbox[1][i]; m_vbox[1][i] = m_vbox[1][j]; m_vbox[1][j] = x;
-    }
-    if ( m_nbox[0][0] <= m_nbox[1][0] ) {
+    if( m_vertex_bbox.IsNotEmpty())
+      m_vertex_bbox.SwapCoordinates(i, j);
+
+    if ( m_nbox[0][0] <= m_nbox[1][0] ) 
+    {
       x = m_nbox[0][i]; m_nbox[0][i] = m_nbox[0][j]; m_nbox[0][j] = x;
       x = m_nbox[1][i]; m_nbox[1][i] = m_nbox[1][j]; m_nbox[1][j] = x;
     }
-  }
-
-  if ( HasDoublePrecisionVertices() )
-  {
-    DoublePrecisionVertices().SwapCoordinates(i,j);
-    if ( bIsValid_fV )
-      SetSinglePrecisionVerticesAsValid();
-    if ( bIsValid_dV )
-      SetDoublePrecisionVerticesAsValid();
   }
 
   return rc;
@@ -2306,7 +2969,7 @@ int ON_Mesh::GetVertexEdges(
         // need to sort vertex_index[] array
         int* tmp = ws.GetIntMemory(vertex_index_count);
         memcpy(tmp,vertex_index,vertex_index_count*sizeof(tmp[0]));
-        ON_SortIntArray(ON::quick_sort,tmp,vertex_index_count);
+        ON_SortIntArray(ON::sort_algorithm::quick_sort,tmp,vertex_index_count);
         vertex_index = tmp;
         break;
       }
@@ -2350,6 +3013,7 @@ int ON_Mesh::GetVertexEdges(
       if ( edge_ends.i > edge_ends.j )
       {
         j = edge_ends.i; edge_ends.i = edge_ends.j; edge_ends.j = j;
+        edges[ei] = edge_ends;
       }
     }
     ON_qsort( edges.Array() + edges_count0,
@@ -2437,9 +3101,11 @@ int ON_Mesh::SolidOrientation() const
 
   if ( m_mesh_is_solid <= 0 || m_mesh_is_solid > 3 )
   {
-    // NOTE: calling IsSolid() will set m_mesh_is_solid
+    // NOTE: calling IsClosed() will set m_mesh_is_solid
     //       to 3 if mes is non-manifold
-    IsSolid();
+    if ( IsSolid() )
+    {
+    }
   }
 
   switch(m_mesh_is_solid)
@@ -2460,6 +3126,18 @@ int ON_Mesh::SolidOrientation() const
   return 0; // answer "no" if we don't know.
 }
 
+
+bool ON_Mesh::IsPointInside(
+        ON_3dPoint test_point, 
+        double tolerance,
+        bool bStrictlyInside
+        ) const
+{
+  if ( IsSolid() )
+  {
+  }
+  return false;
+}
 
 bool ON_Mesh::IsSolid() const
 {
@@ -2495,7 +3173,7 @@ bool ON_Mesh::IsManifold(
     if ( bTopologicalTest )
     {
       // coincident vertices are assigned the same vertex id
-      ON_Sort(ON::quick_sort,vid,m_V.Array(),vcount,sizeof(m_V[0]),ON_MeshIsManifold_CompareV);
+      ON_Sort(ON::sort_algorithm::quick_sort,vid,m_V.Array(),vcount,sizeof(m_V[0]),ON_MeshIsManifold_CompareV);
       ecount = 0;
       v = m_V.Array();
       ecount = 0;
@@ -2608,15 +3286,15 @@ bool ON_Mesh::IsManifold(
   return bIsManifold;
 }
 
-static void ON_hsort_3dex(ON_3dex *e, size_t nel)
+static void ON_hsort_3udex(ON_3udex *e, size_t nel)
 {
   // dictionary sort e[]
-  size_t i_end,k,i,j;
-  ON_3dex e_tmp;
+  size_t i_end, k, i, j;
+  ON_3udex e_tmp;
 
   if (nel < 2) return;
   k = nel >> 1;
-  i_end = nel-1;
+  i_end = nel - 1;
   for (;;)
   {
     if (k)
@@ -2624,7 +3302,7 @@ static void ON_hsort_3dex(ON_3dex *e, size_t nel)
       --k;
       e_tmp = e[k];
     }
-    else 
+    else
     {
       e_tmp = e[i_end];
       e[i_end] = e[0];
@@ -2635,17 +3313,17 @@ static void ON_hsort_3dex(ON_3dex *e, size_t nel)
       }
     }
     i = k;
-    j = (k<<1) + 1;
-    while (j <= i_end) 
+    j = (k << 1) + 1;
+    while (j <= i_end)
     {
-      if ( j < i_end && ( e[j].i < e[j + 1].i || (e[j].i == e[j + 1].i && (e[j].j < e[j + 1].j || ( e[j].j == e[j + 1].j && e[j].k < e[j + 1].k)) ) ) ) 
+      if (j < i_end && (e[j].i < e[j + 1].i || (e[j].i == e[j + 1].i && (e[j].j < e[j + 1].j || (e[j].j == e[j + 1].j && e[j].k < e[j + 1].k)))))
         j++;
 
-      if ( e_tmp.i < e[j].i || (e_tmp.i == e[j].i && (e_tmp.j < e[j].j || ( e_tmp.j == e[j].j && e_tmp.k < e[j].k) ) ) )
+      if (e_tmp.i < e[j].i || (e_tmp.i == e[j].i && (e_tmp.j < e[j].j || (e_tmp.j == e[j].j && e_tmp.k < e[j].k))))
       {
         e[i] = e[j];
         i = j;
-        j = (j<<1) + 1;
+        j = (j << 1) + 1;
       }
       else
         j = i_end + 1;
@@ -2669,8 +3347,8 @@ static void ON_Mesh_SetClosedHelper(
   char is_oriented = 2;
   for (;;)
   {
-    const int Vcount = mesh.m_V.Count();
-    const int Fcount = mesh.m_F.Count();
+    const unsigned int Vcount = mesh.m_V.UnsignedCount();
+    const unsigned int Fcount = mesh.m_F.UnsignedCount();
     if ( Vcount < 3 || Fcount < 1 )
     {
       ON_ERROR("Mesh is not valid.");
@@ -2682,12 +3360,12 @@ static void ON_Mesh_SetClosedHelper(
       break;
     }
 
-    int i, j;
-    int Vidbuffer[256];
-    int* Vid = mesh.GetVertexLocationIds( 
+    unsigned int i, j;
+    unsigned int Vidbuffer[256];
+    unsigned int* Vid = mesh.GetVertexLocationIds(
                      1,
-                     (Vcount*sizeof(*Vid) <= sizeof(Vidbuffer) ? &Vidbuffer[0] : 0),
-                     0
+                     (Vcount*sizeof(*Vid) <= sizeof(Vidbuffer) ? &Vidbuffer[0] : nullptr),
+                     nullptr // unwanted Vindex[] values
                     );
     if ( 0 == Vid )
     {
@@ -2697,11 +3375,11 @@ static void ON_Mesh_SetClosedHelper(
     }
 
     // build an edge list where the "vertex" indices identify unique 3d locations
-    ON_3dex* E_list = (ON_3dex*)onmalloc(4*Fcount*sizeof(E_list[0]));
-    ON_3dex E;
-    int Vid0;
+    ON_3udex* E_list = (ON_3udex*)onmalloc(4 * Fcount*sizeof(E_list[0]));
+    ON_3udex E;
+    unsigned int Vid0;
     const int* fvi;
-    int E_count = 0;
+    unsigned int E_count = 0;
     const ON_MeshFace* F = mesh.m_F.Array();
     for ( j = 0; j < Fcount; j++ )
     {
@@ -2781,7 +3459,7 @@ static void ON_Mesh_SetClosedHelper(
     }
 
     // sort the the edges
-    ON_hsort_3dex(E_list,E_count);
+    ON_hsort_3udex(E_list,E_count);
 
     // Look for duplicate edges.  If we find an edge with no duplicate,
     // then the mesh is open.  It is possible that degenerate meshes,
@@ -2789,7 +3467,7 @@ static void ON_Mesh_SetClosedHelper(
     is_closed = (Fcount >= 4 && E_count >= 6) ? 1 : 0;
     is_oriented = 1;
     is_manifold = 1;
-    i = -1;
+    i = 0;
     if ( !bClosedOnly || 1 == is_closed ) for ( i = 0; i < E_count; /*empty iterator*/ )
     {
       E = E_list[i];
@@ -2845,7 +3523,7 @@ static void ON_Mesh_SetClosedHelper(
         }
       }
     }
-    if ( i >= E_count )
+    if (E_count > 0 && i >= E_count)
     {
       // is_manifold and is_oriented are set correctly
       bClosedOnly = false;
@@ -2899,38 +3577,42 @@ bool ON_Mesh::IsOriented() const
 }
 
 
+/*
+Returns
+  true if there are zero vertices and zero faces.
+*/
+bool ON_Mesh::IsEmpty() const
+{
+  // Deep sigh.  
+  // The "this == &ON_Mesh::Empty" check is to handle the case when 
+  // confused developers const cast ON_Mesh::Empty and modify it.
+  return (0 == VertexUnsignedCount() && 0 == FaceUnsignedCount());
+}
+
 bool ON_Mesh::SetVertex(
        int vertex_index,
        const ON_3dPoint& vertex_location
        )
 {
-  bool rc = false;
-  int vertex_count = m_V.Count();
-  if ( vertex_index >= 0 && vertex_index <= vertex_count )
+  const unsigned int vertex_count = VertexUnsignedCount();
+  const bool rc = vertex_index >= 0 && ((unsigned int)vertex_index) <= vertex_count;
+  if ( rc )
   {
-    bool bIsValid_fV = false;
-    if ( HasDoublePrecisionVertices() )
+    const unsigned int i = (unsigned int)vertex_index;
+    if ( vertex_count == m_dV.UnsignedCount() )
     {
-      bIsValid_fV = SinglePrecisionVerticesAreValid();
-      ON_3dPointArray& dV = DoublePrecisionVertices();
-      if ( vertex_count == dV.Count() )
-      {
-        bool bIsValid_dV = DoublePrecisionVerticesAreValid();
-        if ( vertex_index < vertex_count ) 
-          dV[vertex_index] = vertex_location;
-        else
-          dV.Append(vertex_location);
-        if ( bIsValid_dV )
-          SetDoublePrecisionVerticesAsValid();
-      }
+      if ( i < vertex_count ) 
+        m_dV[i] = vertex_location;
+      else
+        m_dV.Append(vertex_location);
     }
-    if ( vertex_index < vertex_count ) 
-      m_V[vertex_index] = vertex_location;
-    else
-      m_V.Append(vertex_location);
-    if ( bIsValid_fV )
-      SetSinglePrecisionVerticesAsValid();
-    rc = true;
+    if ( vertex_count == m_V.UnsignedCount() )
+    {
+      if ( i < vertex_count ) 
+        m_V[i] = vertex_location;
+      else
+        m_V.AppendNew() = ON_3fPoint(vertex_location);
+    }
   }
   return rc;
 }
@@ -2940,33 +3622,25 @@ bool ON_Mesh::SetVertex(
        const ON_3fPoint& vertex_location
        )
 {
-  bool rc = false;
-  int vertex_count = m_V.Count();
-  if ( vertex_index >= 0 && vertex_index <= vertex_count )
+  const unsigned int vertex_count = VertexUnsignedCount();
+  const bool rc = vertex_index >= 0 && ((unsigned int)vertex_index) <= vertex_count;
+  if ( rc )
   {
-    bool bIsValid_fV = false;
-    if ( HasDoublePrecisionVertices() )
+    const unsigned int i = (unsigned int)vertex_index;
+    if ( vertex_count == m_dV.UnsignedCount() )
     {
-      bIsValid_fV = SinglePrecisionVerticesAreValid();
-      ON_3dPointArray& dV = DoublePrecisionVertices();
-      if ( vertex_count == dV.Count() )
-      {
-        bool bIsValid_dV = DoublePrecisionVerticesAreValid();
-        if ( vertex_index < vertex_count ) 
-          dV[vertex_index] = vertex_location;
-        else
-          dV.Append(vertex_location);
-        if ( bIsValid_dV )
-          SetDoublePrecisionVerticesAsValid();
-      }
+      if ( i < vertex_count ) 
+        m_dV[i] = vertex_location;
+      else
+        m_dV.Append(vertex_location);
     }
-    if ( vertex_index < vertex_count ) 
-      m_V[vertex_index] = vertex_location;
-    else
-      m_V.Append(vertex_location);
-    if ( bIsValid_fV )
-      SetSinglePrecisionVerticesAsValid();
-    rc = true;
+    if ( vertex_count == m_V.UnsignedCount() )
+    {
+      if ( i < vertex_count ) 
+        m_V[i] = vertex_location;
+      else
+        m_V.Append(vertex_location);
+    }
   }
   return rc;
 }
@@ -3026,6 +3700,115 @@ bool ON_Mesh::SetTextureCoord(
 }
 
 
+unsigned int ON_Mesh::AppendDuplicateVertex(
+  unsigned int vertex_index
+  )
+{
+  const unsigned int vertex_count = VertexUnsignedCount();
+
+  if ( vertex_index >= vertex_count )
+    return ON_UNSET_UINT_INDEX;
+  
+  if (vertex_count == m_V.UnsignedCount())
+  {
+    ON_3fPoint V = m_V[vertex_index];
+    m_V.Append(V);
+  }
+
+  if ( vertex_count == m_dV.UnsignedCount())
+  {
+    ON_3dPoint D = m_dV[vertex_index];
+    m_dV.Append(D);
+  }
+
+  if ( vertex_count == m_N.UnsignedCount() )
+  {
+    ON_3fVector N = m_N[vertex_index];
+    m_N.Append(N);
+  }
+
+  if ( vertex_count == m_T.UnsignedCount() )
+  {
+    ON_2fPoint T = m_T[vertex_index];
+    m_T.Append(T);
+  }
+
+  if ( vertex_count == m_S.UnsignedCount() )
+  {
+    ON_2dPoint S = m_S[vertex_index];
+    m_S.Append(S);
+  }
+
+  if ( vertex_count == m_K.UnsignedCount() )
+  {
+    ON_SurfaceCurvature K = m_K[vertex_index];
+    m_K.Append(K);
+  }
+
+  if ( vertex_count == m_C.UnsignedCount() )
+  {
+    ON_Color C = m_C[vertex_index];
+    m_C.Append(C);
+  }
+
+  if ( vertex_count == m_H.UnsignedCount() )
+  {
+    bool H = m_H[vertex_index];
+    m_H.Append(H);
+  }
+
+  return vertex_count;
+}
+
+/*
+Description:
+  Increases the capactiy of arrays to be at least the requested capacity.
+Parameters:
+  new_vertex_capacity - [in]
+    desired capacity
+Returns:
+  true if successful.
+Remarks:
+  This function is useful if you are getting ready to add a known number
+  of vertices and want to increase the dynamic array capacities before
+  you begin adding vertices.
+*/  
+bool ON_Mesh::ReserveVertexCapacity(
+  size_t new_vertex_capacity
+  )
+{
+  const unsigned int vertex_count = VertexUnsignedCount();
+  if ( new_vertex_capacity <= (size_t)vertex_count )
+    return true;
+  
+  if ( vertex_count == m_V.UnsignedCount() )
+    m_V.Reserve(new_vertex_capacity);
+
+  if ( vertex_count == m_dV.UnsignedCount() )
+    m_dV.Reserve(new_vertex_capacity);
+
+  if ( vertex_count == m_N.UnsignedCount() )
+    m_N.Reserve(new_vertex_capacity);
+
+  if ( vertex_count == m_T.UnsignedCount() )
+    m_T.Reserve(new_vertex_capacity);
+
+  if ( vertex_count == m_S.UnsignedCount() )
+    m_S.Reserve(new_vertex_capacity);
+
+  if ( vertex_count == m_K.UnsignedCount() )
+    m_K.Reserve(new_vertex_capacity);
+
+  if ( vertex_count == m_C.UnsignedCount() )
+    m_C.Reserve(new_vertex_capacity);
+
+  if ( vertex_count == m_H.UnsignedCount() )
+    m_H.Reserve(new_vertex_capacity);
+
+  return true;
+}
+
+
 bool ON_Mesh::SetTriangle(
        int face_index,
        int a,int b ,int c // vertex indices
@@ -3068,6 +3851,11 @@ int ON_Mesh::FaceCount() const
   return m_F.Count();
 }
 
+unsigned int ON_Mesh::FaceUnsignedCount() const
+{
+  return m_F.UnsignedCount();
+}
+
 int ON_Mesh::QuadCount() const
 {
   // number of faces that are quads
@@ -3098,7 +3886,19 @@ int ON_Mesh::InvalidFaceCount() const
 
 int ON_Mesh::VertexCount() const
 {
+  // When m_V becomes obsolete, this will return m_dV.Count().
   return m_V.Count();
+}
+
+unsigned int ON_Mesh::VertexUnsignedCount() const
+{
+  // When m_V becomes obsolete, this will return m_dV.UnsignedCount().
+  return m_V.UnsignedCount();
+}
+
+bool ON_Mesh::HasNgons() const
+{
+  return ( m_F.Count() > 0 && m_Ngon.Count() );
 }
 
 bool ON_Mesh::HasVertexNormals() const
@@ -3149,6 +3949,7 @@ ON_Mesh::CachedTextureCoordinates( const ON_UUID& mapping_id ) const
       {
         return TC;
       }
+      TC++;
     }
   }
   return 0;
@@ -3182,8 +3983,8 @@ void ON_Mesh::InvalidateBoundingBoxes()
 
 void ON_Mesh::InvalidateVertexBoundingBox()
 {
-  m_vbox[0][0] = m_vbox[0][1] = m_vbox[0][2] =  1.0;
-  m_vbox[1][0] = m_vbox[1][1] = m_vbox[1][2] = -1.0;
+  m_vertex_bbox = ON_BoundingBox::UnsetBoundingBox;
+  m_tight_bbox_cache.RemoveAllBoundingBoxes();
 }
 
 void ON_Mesh::InvalidateVertexNormalBoundingBox()
@@ -3304,11 +4105,18 @@ bool ON_Mesh::GetCurvatureStats( // returns true if successful
 
 int ON_MeshTopology::WaitUntilReady(int sleep_value) const
 {
+
   return m_b32IsValid;
+
 }
 
 
 bool ON_Mesh::TopologyExists() const
+{
+  return HasMeshTopology();
+}
+
+bool ON_Mesh::HasMeshTopology() const
 {
   return (1 == m_top.WaitUntilReady(0));
 }
@@ -3327,6 +4135,144 @@ const ON_MeshTopology& ON_Mesh::Topology() const
 
   return m_top;
 }
+
+static ON_MeshTriangle ON_UnsetMeshTriangleInitalizer()
+{
+  ON_MeshTriangle unset_mesh_triangle;
+  unset_mesh_triangle.m_vi[0] = ON_UNSET_UINT_INDEX;
+  unset_mesh_triangle.m_vi[1] = ON_UNSET_UINT_INDEX;
+  unset_mesh_triangle.m_vi[2] = ON_UNSET_UINT_INDEX;
+  return unset_mesh_triangle;
+}
+
+
+const ON_MeshTriangle ON_MeshTriangle::UnsetMeshTriangle(ON_UnsetMeshTriangleInitalizer());
+
+bool ON_MeshTriangle::IsValid( 
+      size_t mesh_vertex_count
+      ) const
+{
+  if ( mesh_vertex_count < 2 || mesh_vertex_count >= (size_t)ON_UNSET_UINT_INDEX )
+    return false;
+  if ( m_vi[0] == m_vi[1] || m_vi[1] == m_vi[2] || m_vi[2] == m_vi[0] )
+    return false;
+  const unsigned int c = (unsigned int)mesh_vertex_count;
+  if ( m_vi[0] >= c || m_vi[1] >= c || m_vi[2] >= c )
+    return false;
+  return true;  
+}
+
+bool ON_MeshTriangle::IsValid(
+      size_t mesh_vertex_count,
+      const class ON_3fPoint* V
+      ) const
+{
+  if ( false == IsValid(mesh_vertex_count) )
+    return false;
+  if ( 0 == V )
+    return false;
+  return ( V[m_vi[0]] != V[m_vi[1]] && V[m_vi[1]] != V[m_vi[2]] && V[m_vi[2]] != V[m_vi[0]] );
+}
+
+bool ON_MeshTriangle::IsValid(
+      size_t mesh_vertex_count,
+      const class ON_3dPoint* V
+      ) const
+{
+  if ( false == IsValid(mesh_vertex_count) )
+    return false;
+  if ( 0 == V )
+    return false;
+  return ( V[m_vi[0]] != V[m_vi[1]] && V[m_vi[1]] != V[m_vi[2]] && V[m_vi[2]] != V[m_vi[0]] );
+}
+
+bool ON_MeshTriangle::IsValid(
+      const class ON_3dPointListRef& vertex_list
+      ) const
+{
+  if ( false == IsValid(vertex_list.PointCount()) )
+    return false;
+  ON_3dPoint V[3] = {vertex_list[m_vi[0]],vertex_list[m_vi[1]],vertex_list[m_vi[2]]};
+  return ( V[0] != V[1] && V[1] != V[2] && V[2] != V[3] );
+}
+
+void ON_MeshTriangle::Flip()
+{
+  unsigned int i = m_vi[1];
+  m_vi[1] = m_vi[2];
+  m_vi[2] = i;
+}
+
+
+static bool ON_MeshTriangle_GetTriangleNormal(
+   const double* p,
+   const double* q,
+   const double* r,
+   class ON_3dVector& triangle_normal
+  )
+{
+  const double a[3] = {r[0]-p[0],r[1]-p[1],r[2]-p[2]};
+  const double b[3] = {p[0]-q[0],p[1]-q[1],p[2]-q[2]};
+
+  triangle_normal.x = a[1]*b[2] - b[1]*a[2];
+  triangle_normal.y = a[2]*b[0] - b[2]*a[0];
+  triangle_normal.z = a[0]*b[1] - b[0]*a[1];
+  return triangle_normal.Unitize();
+}
+
+bool ON_MeshTriangle::GetTriangleNormal(
+  const class ON_3dPoint* dV, 
+  class ON_3dVector& triangle_normal 
+  ) const
+{
+  if ( 0 == dV )
+    return false;
+  return ON_MeshTriangle_GetTriangleNormal(&dV[m_vi[0]].x,&dV[m_vi[1]].x,&dV[m_vi[2]].x,triangle_normal);
+}
+
+bool ON_MeshTriangle::GetTriangleNormal(
+  const class ON_3fPoint* fV, 
+  class ON_3dVector& triangle_normal 
+  ) const
+{
+  const ON_3dPoint p(fV[m_vi[0]]);
+  const ON_3dPoint q(fV[m_vi[1]]);
+  const ON_3dPoint r(fV[m_vi[2]]);
+  return ON_MeshTriangle_GetTriangleNormal(&p.x,&q.x,&r.x,triangle_normal);
+}
+
+bool ON_MeshTriangle::GetTriangleNormal(
+  const class ON_3dPointListRef& vertex_list, 
+  class ON_3dVector& triangle_normal
+  ) const
+{
+  const ON_3dPoint p(vertex_list[m_vi[0]]);
+  const ON_3dPoint q(vertex_list[m_vi[1]]);
+  const ON_3dPoint r(vertex_list[m_vi[2]]);
+  return ON_MeshTriangle_GetTriangleNormal(&p.x,&q.x,&r.x,triangle_normal);
+}
+
+bool ON_MeshTriangle::GetTriangleNormal(
+   ON_3dPoint point0,
+   ON_3dPoint point1,
+   ON_3dPoint point2,
+   class ON_3dVector& triangle_normal
+  )
+{
+  return ON_MeshTriangle_GetTriangleNormal(&point0.x,&point1.x,&point2.x,triangle_normal);
+}
+
+static ON_MeshFace ON_UnsetMeshFaceInitalizer()
+{
+  ON_MeshFace unset_mesh_face;
+  unset_mesh_face.vi[0] = -1;
+  unset_mesh_face.vi[1] = -1;
+  unset_mesh_face.vi[2] = -1;
+  unset_mesh_face.vi[3] = -1;
+  return unset_mesh_face;
+}
+
+const ON_MeshFace ON_MeshFace::UnsetMeshFace(ON_UnsetMeshFaceInitalizer());
 
 void ON_Mesh::DestroyTopology()
 {
@@ -3362,51 +4308,13 @@ ON_MeshFace::Flip()
   }
 }
 
-/*
-ON_MeshEdge::ON_MeshEdge() : m_fcount(0)
-{
-  m_fi = m_private_fi;
-  m_private_fi[0] = 0;
-  m_private_fi[0] = 0;
-}
-
-ON_MeshEdge::~ON_MeshEdge()
-{
-  if ( m_fi && m_fi != m_private_fi ) onfree((void*)m_fi);
-}
-
-ON_MeshEdge::ON_MeshEdge( const ON_MeshEdge& src ) : m_fcount(0), m_fi(0)
-{
-  *this = src;
-}
-
-int ON_MeshEdge::FaceIndexCount() const
-{
-  return m_fcount;
-}
-
-const int* ON_MeshEdge::FaceIndexArray() const
-{
-  return m_fi;
-}
-
-int& ON_MeshEdge::operator[](int i)
-{
-  return (i>=0&&i<m_fcount) ? m_fi[i] : m_private_fi[0];
-}
-
-int ON_MeshEdge::operator[](int i) const
-{
-  return (i>=0&&i<m_fcount) ? m_fi[i] : m_private_fi[0];
-}
-*/
-
 void 
 ON_Mesh::Flip()
 {
   FlipFaceOrientation();
   FlipFaceNormals();
   FlipVertexNormals();
+  FlipNgonOrientation();
 
   // Do not modify m_S[] or m_T[]
   // values here.
@@ -3419,7 +4327,7 @@ ON_Mesh::FlipVertexNormals()
   const int vcount = VertexCount();
   if ( HasVertexNormals() ) {
     for ( i = 0; i < vcount; i++ ) {
-      m_N[i].Reverse();
+      m_N[i] = -m_N[i];
     }
   }
 }
@@ -3431,7 +4339,7 @@ ON_Mesh::FlipFaceNormals()
   const int fcount = FaceCount();
   if ( HasFaceNormals() ) {
     for( i = 0; i < fcount; i++ ) {
-      m_FN[i].Reverse();
+      m_FN[i] = -m_FN[i];
     }
   }
 }
@@ -3448,6 +4356,8 @@ ON_Mesh::FlipFaceOrientation()
     DestroyTopology(); // flipping changes order of face corners
 }
 
+
+
 bool ON_MeshFace::ComputeFaceNormal( const ON_3dPoint* dV, ON_3dVector& FN ) const
 {
   if ( 0 != dV )
@@ -3459,7 +4369,7 @@ bool ON_MeshFace::ComputeFaceNormal( const ON_3dPoint* dV, ON_3dVector& FN ) con
       return true;
   }
 
-  FN.Zero();
+  FN = ON_3dVector::ZeroVector;
   return false;
 }
 
@@ -3474,12 +4384,160 @@ bool ON_MeshFace::ComputeFaceNormal( const ON_3fPoint* fV, ON_3dVector& FN ) con
       return true;
   }
 
-  FN.Zero();
+  FN = ON_3dVector::ZeroVector;
   return false;
 }
 
-bool
-ON_Mesh::ComputeFaceNormal( int fi )
+bool ON_MeshFace::ComputeFaceNormal( const class ON_3dPointListRef& vertex_list, ON_3dVector& FN ) const
+{
+  ON_3dVector a = vertex_list[vi[2]] - vertex_list[vi[0]];
+  ON_3dVector b = vertex_list[vi[3]] - vertex_list[vi[1]];
+  FN = ON_CrossProduct( a, b ); // works for triangles, quads, and nonplanar quads
+  if ( FN.Unitize() )
+    return true;
+
+  FN = ON_3dVector::ZeroVector;
+  return false;
+}
+
+
+unsigned int ON_MeshFace::GetCornerNormals(
+  const class ON_3dPointListRef& vertex_list,
+  ON_3dVector corner_normals[4]
+  ) const
+{
+  unsigned int rc = 0;
+  
+  if (vi[2] == vi[3])
+  {
+    if (ComputeFaceNormal(vertex_list, corner_normals[0]))
+    {
+      rc = 4;
+    }
+    else
+    {
+      corner_normals[0] = ON_3dVector::UnsetVector;
+      corner_normals[1] = corner_normals[0];
+      corner_normals[2] = corner_normals[0];
+      corner_normals[3] = corner_normals[0];
+    }
+    return rc;
+  }
+  else
+  {
+    const double unset_x = ON_3dVector::UnsetVector.x;
+    ON_3dVector C = vertex_list[vi[0]] - vertex_list[vi[3]];
+    if (!C.Unitize())
+      C = ON_3dVector::UnsetVector;
+    ON_3dVector B = C;
+    for (unsigned int i = 0; i < 4; i++)
+    {
+      ON_3dVector A = B;
+      if (3 == i)
+        B = C;
+      else
+      {
+        B = vertex_list[vi[i + 1]] - vertex_list[vi[i]];
+        if (!B.Unitize())
+          B = ON_3dVector::UnsetVector;
+      }
+
+      if (unset_x != A.x && unset_x != B.x)
+      {
+        corner_normals[i] = ON_CrossProduct(A, B);
+        if (corner_normals[i].Unitize())
+        {
+          rc++;
+          continue;
+        }
+      }
+
+      corner_normals[i] = ON_3dVector::UnsetVector;
+    }
+  }
+
+  return rc;
+}
+
+bool ON_MeshFace::GetPlaneEquation(
+  const class ON_3dPointListRef& vertex_list,
+  ON_PlaneEquation& face_plane_equation
+  ) const
+{
+  ON_3dVector N;
+  if (ComputeFaceNormal(vertex_list, N) && face_plane_equation.Create(vertex_list[vi[0]], N))
+    return true;
+
+  face_plane_equation = ON_PlaneEquation::UnsetPlaneEquation;
+  return false;
+}
+
+bool ON_MeshFace::IsPlanar( 
+  double planar_tolerance,
+  double angle_tolerance_radians,
+  const class ON_3dPointListRef& vertex_list, 
+  ON_PlaneEquation* face_plane_equation
+  ) const
+{
+  ON_PlaneEquation e;
+
+  for (;;)
+  {
+    if (!GetPlaneEquation(vertex_list, e))
+      break;
+
+    if ( face_plane_equation )
+      *face_plane_equation = e;
+
+    if (vi[2] == vi[3])
+      return true; // triangle
+
+    if (planar_tolerance >= 0.0)
+    {
+      double h0, h1, h;
+      h0 = h1 = 0.0;
+      for (int i = 1; i < 3; i++)
+      {
+        if (vi[i - 1] == vi[i])
+          continue;
+        h = e.ValueAt(vertex_list[vi[i]]);
+        if (h < h0)
+          h0 = h;
+        else if (h > h1)
+          h1 = h;
+        else
+          continue;
+        if (h1 - h0 > planar_tolerance)
+        {
+          return false;
+        }
+      }
+    }
+
+    if (angle_tolerance_radians >= 0.0)
+    {
+      ON_3dVector corner_normals[4];
+      GetCornerNormals(vertex_list, corner_normals);
+      const double unset_x = ON_3dVector::UnsetVector.x;
+      const double cos_atol = (angle_tolerance_radians < ON_PI) ? cos(angle_tolerance_radians) : -1.0;
+      for (unsigned int i = 0; i < 2; i++)
+      {
+        if (unset_x != corner_normals[i].x && unset_x != corner_normals[i+2].x && corner_normals[i] * corner_normals[i+2] < cos_atol)
+          return false;
+      }
+    }
+
+    return true;
+  }
+
+  if (face_plane_equation)
+    *face_plane_equation = ON_PlaneEquation::UnsetPlaneEquation;
+
+  return false;
+}
+
+
+bool ON_Mesh::ComputeFaceNormal( int fi )
 {
   if ( fi < 0 )
     return false;
@@ -3498,10 +4556,10 @@ ON_Mesh::ComputeFaceNormal( int fi )
   return rc;
 }
 
-bool
-ON_Mesh::ComputeFaceNormals()
+bool ON_Mesh::ComputeFaceNormals()
 {
   bool rc = false;
+  //const unsigned int vcount = VertexUnsignedCount();
   const int fcount = FaceCount();
   if ( fcount > 0 )
   {
@@ -3512,7 +4570,7 @@ ON_Mesh::ComputeFaceNormals()
       m_FN.SetCapacity(fcount);
     m_FN.SetCount(0);
     rc = true;
-    if ( HasDoublePrecisionVertices() && DoublePrecisionVerticesAreValid() )
+    if ( HasSynchronizedDoubleAndSinglePrecisionVertices() )
     {      
       const ON_3dPointArray& dV = DoublePrecisionVertices();
       for ( fi = 0; fi < fcount; fi++ ) {
@@ -3521,7 +4579,7 @@ ON_Mesh::ComputeFaceNormals()
         b = dV[vi[3]] - dV[vi[1]];
         n = ON_CrossProduct( a, b ); // works for triangles, quads, and nonplanar quads
         n.Unitize();
-        m_FN.Append(n);
+        m_FN.AppendNew() = ON_3fVector(n);
       }
     }
     else
@@ -3532,7 +4590,7 @@ ON_Mesh::ComputeFaceNormals()
         b = m_V[vi[3]] - m_V[vi[1]];
         n = ON_CrossProduct( a, b ); // works for triangles, quads, and nonplanar quads
         n.Unitize();
-        m_FN.Append(n);
+        m_FN.AppendNew() = ON_3fVector(n);
       }
     }
   }
@@ -3566,7 +4624,7 @@ bool ON_Mesh::CombineCoincidentVertices(
   //if ( vcount > 0 && rc ) {
   //  ON_Workspace ws;
   //  int* index = ws.GetIntMemory(vcount);
-  //  rc = m_V.Sort( ON::quick_sort, index, compareRadial3fPoint );
+  //  rc = m_V.Sort( ON::sort_algorithm::quick_sort, index, compareRadial3fPoint );
   //  int i, j;
   //  ON_3fPoint p0, p1, pmin, pmax;
   //  for ( i = 0; i < vcount; i++ ) {
@@ -3681,7 +4739,7 @@ bool ON_Mesh::CombineIdenticalVertices(
   bool rc = false;
   ON_Mesh& mesh = *this;
 
-  int vertex_count = mesh.VertexCount();
+  int vertex_count = mesh.m_V.Count();
   if ( vertex_count > 0 )
   {
     ON_SimpleArray<int> index_array(vertex_count);
@@ -3722,7 +4780,7 @@ bool ON_Mesh::CombineIdenticalVertices(
       remap[k] = -1;
 
     ON_Sort( 
-          ON::quick_sort,
+          ON::sort_algorithm::quick_sort,
           index,
           mp.p0,                 // data buffer
           vertex_count,
@@ -3773,6 +4831,22 @@ bool ON_Mesh::CombineIdenticalVertices(
       for ( k = 0; k < remap_vertex_count; k++ )
         mp.V[k] = p[k];
       mesh.m_V.SetCount(remap_vertex_count);
+
+      if (vertex_count == m_dV.Count())
+      {
+        ON_SimpleArray<ON_3dPoint> dp_array;
+        ON_3dPoint* dp = dp_array.Reserve(remap_vertex_count);
+        ON_3dPoint* D = m_dV.Array();
+        for (k = 0; k < vertex_count; k++)
+        {
+          dp[remap[k]] = D[k];
+        }
+        for (k = 0; k < remap_vertex_count; k++)
+          D[k] = dp[k];
+        m_dV.SetCount(remap_vertex_count);
+      }
+      else
+        m_dV.Destroy();
 
       if ( 0 != mp.N )
       {
@@ -3860,22 +4934,34 @@ bool ON_Mesh::CombineIdenticalVertices(
         fvi[3] = remap[fvi[3]];
       }
 
-      if (0 != NgonList())
+      if ( HasNgons() )
       {
-        //This mesh has an ngon list.
-        //Modify the vertex indexes in the ngons as 
-        //we did the faces above
-        ON_MeshNgonList* ngonlist = ModifyNgonList();
-        int kk, kkct = ngonlist->NgonCount();
-        for (kk = 0; kk < kkct; kk++)
+        for ( int ngon_index = 0; ngon_index < m_Ngon.Count(); ngon_index++ )
         {
-          ON_MeshNgon* ngon = ngonlist->Ngon(kk);
-          if (0 == ngon)
+          ON_MeshNgon* ngon = m_Ngon[ngon_index];
+          if ( 0 == ngon )
             continue;
-          for ( k = 0; k < ngon->N; k++ )
-            ngon->vi[k] = remap[ngon->vi[k]];
+          for ( unsigned int ngon_vertex_index = 0; ngon_vertex_index < ngon->m_Vcount; ngon_vertex_index++ )
+            ngon->m_vi[ngon_vertex_index] = remap[ngon->m_vi[ngon_vertex_index]];
         }
       }
+
+      //if (0 != V4V5_NgonList())
+      //{
+      //  //This mesh has an ngon list.
+      //  //Modify the vertex indexes in the ngons as 
+      //  //we did the faces above
+      //  ON_V4V5_MeshNgonList* ngonlist = V4V5_ModifyNgonList();
+      //  int kk, kkct = ngonlist->V4V5_NgonCount();
+      //  for (kk = 0; kk < kkct; kk++)
+      //  {
+      //    ON_MeshNgon* ngon = ngonlist->V4V5_Ngon(kk);
+      //    if (0 == ngon)
+      //      continue;
+      //    for ( k = 0; k < ngon->m_N; k++ )
+      //      ngon->m_vi[k] = remap[ngon->m_vi[k]];
+      //  }
+      //}
 
       mesh.DestroyPartition();
       mesh.DestroyTopology();
@@ -3916,9 +5002,30 @@ void ON_Mesh::Append( int mesh_count, const ON_Mesh* const* meshes )
   bool bHasVertexColors        = (0 == vcount0 || HasVertexColors());
   bool bHasSurfaceParameters   = (0 == vcount0 || HasSurfaceParameters());
   bool bHasDoubles             = (0 == vcount0 || HasSynchronizedDoubleAndSinglePrecisionVertices());
+  bool bHasNgonMap             = (NgonCount() > 0 && 0 != NgonMap());
+
+  bool bHasSurfaceDomain
+    = bHasSurfaceParameters
+    && (0 == vcount0 || (m_srf_domain[0].IsIncreasing() && m_srf_domain[1].IsIncreasing()));
+
+  ON_Interval srf_domain[2];
+  srf_domain[0] = (bHasSurfaceDomain && vcount0  > 0) ? m_srf_domain[0] : ON_Interval::EmptyInterval;
+  srf_domain[1] = (bHasSurfaceDomain && vcount0  > 0) ? m_srf_domain[1] : ON_Interval::EmptyInterval;
+  
+  bool bHasTexturePackingDomain
+    = bHasTextureCoordinates
+    && (0 == vcount0 || (m_packed_tex_domain[0].IsIncreasing() && m_packed_tex_domain[1].IsIncreasing()));
+
+  ON_Interval packed_tex_domain[2];
+  packed_tex_domain[0] = (bHasTexturePackingDomain && vcount0  > 0) ? m_packed_tex_domain[0] : ON_Interval::EmptyInterval;
+  packed_tex_domain[1] = (bHasTexturePackingDomain && vcount0  > 0) ? m_packed_tex_domain[1] : ON_Interval::EmptyInterval;
+  bool packed_tex_rotate = (bHasTexturePackingDomain && m_packed_tex_rotate) ? true : false;
+
+  double srf_scale[2] = { m_srf_scale[0], m_srf_scale[1]};
 
   int fcount = fcount0;
   int vcount = vcount0;
+  unsigned int merged_count = vcount0 > 0 ? 1 : 0;
   for ( mi = 0; mi < mesh_count; mi++ )
   {
     m = meshes[mi];
@@ -3927,6 +5034,9 @@ void ON_Mesh::Append( int mesh_count, const ON_Mesh* const* meshes )
     int vcount1 = m->m_V.Count();
     if ( vcount1 <= 0 )
       continue;
+
+    merged_count++;
+
     int fcount1 = m->m_F.Count();
     if ( fcount1 > 0 )
       fcount += fcount1;
@@ -3945,10 +5055,97 @@ void ON_Mesh::Append( int mesh_count, const ON_Mesh* const* meshes )
       bHasDoubles = false;
     if ( bHasFaceNormals && fcount1 > 0 && !m->HasFaceNormals() )
       bHasFaceNormals = false;
+
+    if (bHasSurfaceDomain)
+    {
+      bHasSurfaceDomain
+        = bHasSurfaceParameters
+        && m->m_srf_domain[0].IsIncreasing()
+        && m->m_srf_domain[1].IsIncreasing();
+      if (bHasSurfaceDomain)
+      {
+        srf_domain[0].Union(m->m_srf_domain[0]);
+        srf_domain[1].Union(m->m_srf_domain[1]);
+      }
+    }
+
+    if (1 == merged_count && bHasSurfaceParameters && bHasSurfaceDomain)
+    {
+      srf_scale[0] = m->m_srf_scale[0];
+      srf_scale[1] = m->m_srf_scale[1];
+    }
+    else
+    {
+      srf_scale[0] = 0.0;
+      srf_scale[1] = 0.0;
+    }
+
+    if (bHasTexturePackingDomain)
+    {
+      // 2014-04-01 Dale Lear
+      //   Trying to merger packed_tex_domain[] intervals
+      //   is questionable at best.
+      //   A strong argument can be made for simply deleting
+      //   packed texture domain information when there are
+      //   two non-empty meshes that are merged.
+      bHasTexturePackingDomain
+        = bHasTextureCoordinates
+        && m->m_packed_tex_domain[0].IsIncreasing()
+        && m->m_packed_tex_domain[1].IsIncreasing();
+      if (packed_tex_rotate != (m->m_packed_tex_rotate?true:false))
+      {
+        if (0 == vcount0 && 0 == mi)
+        {
+          packed_tex_rotate = (m->m_packed_tex_rotate ? true : false);
+        }
+        else
+        {
+          bHasTexturePackingDomain = false;
+        }
+      }
+      if (bHasTexturePackingDomain)
+      {
+        if (1 == merged_count)
+        {
+          packed_tex_rotate = (m->m_packed_tex_rotate ? true : false);
+        }
+        else if (packed_tex_rotate != (m->m_packed_tex_rotate ? true : false))
+        {
+          bHasTexturePackingDomain = false;
+        }
+        packed_tex_domain[0].Union(m->m_packed_tex_domain[0]);
+        packed_tex_domain[1].Union(m->m_packed_tex_domain[1]);
+      }     
+    }
   }
+
 
   if ( vcount <= vcount0 && fcount <= fcount0 )
     return;
+
+  if (!bHasSurfaceParameters || !bHasSurfaceDomain)
+  {
+    srf_domain[0] = ON_Interval::EmptyInterval;
+    srf_domain[1] = ON_Interval::EmptyInterval;
+    srf_scale[0] = 0.0;
+    srf_scale[1] = 0.0;
+  }
+
+  if (!bHasTextureCoordinates || !bHasTexturePackingDomain)
+  {
+    packed_tex_domain[0] = ON_Interval::EmptyInterval;
+    packed_tex_domain[1] = ON_Interval::EmptyInterval;
+    packed_tex_rotate = false;
+  }
+
+  m_srf_domain[0] = srf_domain[0];
+  m_srf_domain[1] = srf_domain[1];
+  m_srf_scale[0] = srf_scale[0];
+  m_srf_scale[1] = srf_scale[1];
+
+  m_packed_tex_domain[0] = packed_tex_domain[0];
+  m_packed_tex_domain[1] = packed_tex_domain[1];
+  m_packed_tex_rotate = packed_tex_rotate;
 
   m_top.Destroy();
 
@@ -3956,23 +5153,13 @@ void ON_Mesh::Append( int mesh_count, const ON_Mesh* const* meshes )
   // we modify m_V[] because DoublePrecisionVertices() will
   // attempt to update the double precision information
   // when it notices that m_V has new vertices added.
-  ON_MeshDoubleVertices* dv = 0;
-  if ( bHasDoubles )
-  {
-    dv = ON_MeshDoubleVertices::Get(this);
-    if ( 0 == dv && 0 == m_V.Count() )
-    {
-      DoublePrecisionVertices(); // creates ON_MeshDoubleVertices info on "this"
-      dv = ON_MeshDoubleVertices::Get(this);
-    }
-    if ( 0 == dv )
-      bHasDoubles = false;
-  }
 
   m_V.Reserve(vcount);
   m_F.Reserve(fcount);
   for (mi = 0; mi < mesh_count; mi++ )
   {
+    const unsigned int vcount0_local = m_V.UnsignedCount();
+    const unsigned int fcount0_local = m_F.UnsignedCount();
     m = meshes[mi];
     if ( 0 == m )
       continue;
@@ -3982,58 +5169,70 @@ void ON_Mesh::Append( int mesh_count, const ON_Mesh* const* meshes )
     int fcount1 = m->m_F.Count();
     if ( fcount1 > 0 )
     {
-      int vc0 = m_V.Count();
       j = m_F.Count();
       m_F.Append(fcount1,m->m_F.Array());
       fcount1 += j;
       while (j < fcount1)
       {
         vi = m_F[j].vi;
-        vi[0] += vc0;
-        vi[1] += vc0;
-        vi[2] += vc0;
-        vi[3] += vc0;
+        vi[0] += (int)vcount0_local;
+        vi[1] += (int)vcount0_local;
+        vi[2] += (int)vcount0_local;
+        vi[3] += (int)vcount0_local;
         j++;
       }
     }
     m_V.Append(vcount1,m->m_V.Array());
+    if ( m->HasNgons() )
+    {
+      if ( 0 != m->NgonMap() )
+        bHasNgonMap = true;
+      m_NgonMap.Destroy();
+      unsigned int ngon_count = m->NgonUnsignedCount();
+      for ( unsigned int ni = 0; ni < ngon_count; ni++ )
+      {
+        const ON_MeshNgon* ngon0 = m->Ngon(ni);
+        if ( 0 == ngon0 )
+          continue;
+        if ( 0 == ngon0->m_Vcount && 0 == ngon0->m_Fcount )
+          continue;
+        ON_MeshNgon* ngon1 = this->m_NgonAllocator.CopyNgon(ngon0);
+        if ( 0 == ngon1 )
+          continue;
+        for ( unsigned int nvi = 0; nvi < ngon1->m_Vcount; nvi++ )
+        {
+          ngon1->m_vi[nvi] += vcount0_local;
+        }
+        for ( unsigned int nfi = 0; nfi < ngon1->m_Fcount; nfi++ )
+        {
+          ngon1->m_fi[nfi] += fcount0_local;
+        }
+        this->AddNgon(ngon1);
+      }
+    }
   }
 
   if ( bHasDoubles)
   {
     // Now update the double precision vertex locations.
-    dv->m_dV.Reserve(vcount);
+    m_dV.Reserve(vcount);
     for (mi = 0; mi < mesh_count; mi++ )
     {
       m = meshes[mi];
-      if ( 0 == m || m->m_V.Count() <= 0 )
+      if ( 0 == m || m->m_dV.Count() <= 0 )
         continue;
-      ON_MeshDoubleVertices* dv1 = ON_MeshDoubleVertices::Get(m);
-      if ( 0 == dv1 )
-        break;
-      dv->m_dV.Append(dv1->m_dV.Count(),dv1->m_dV.Array());
+      m_dV.Append(m->m_dV.Count(),m->m_dV.Array());
     }
-    if ( dv->m_dV.Count() == vcount )
-    {
-      // The calculation of the CRCs in the following calls
-      // is what slows down appending meshes one-by-one
-      // when thousands of meshes are being appended.
-      // That's why the code is structured to do the calculation
-      // a single time here.
-      SetSinglePrecisionVerticesAsValid();
-      SetDoublePrecisionVerticesAsValid();
-    }
-    else
-    {
-      DestroyDoublePrecisionVertices();
-    }
+    if (m_dV.Count() != vcount)
+      bHasDoubles = false;
   }
-  else
+
+  if ( false == bHasDoubles )
   {
+    bHasDoubles = false;
     DestroyDoublePrecisionVertices();
   }
-
-
+  
   if ( bHasVertexNormals ) 
   {
     m_N.Reserve(vcount);
@@ -4161,6 +5360,9 @@ void ON_Mesh::Append( int mesh_count, const ON_Mesh* const* meshes )
   SetClosed(-99);
   SetSolidOrientation(-99);
   InvalidateBoundingBoxes();
+
+  if ( NgonCount() > 0 && bHasNgonMap )
+    CreateNgonMap();
 }
 
 void ON_Mesh::Append( const ON_Mesh& m )
@@ -4170,16 +5372,508 @@ void ON_Mesh::Append( const ON_Mesh& m )
   Append(1,meshes);
 }
 
-ON_MeshParameters::ON_MeshParameters()
+
+ON_MeshParameters::MESH_STYLE ON_MeshParameters::MeshStyleFromUnsigned(
+  unsigned int mesh_style_as_unsigned
+)
 {
-  Default();
+  switch (mesh_style_as_unsigned)
+  {
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_STYLE::unset_mesh_style);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_STYLE::render_mesh_fast);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_STYLE::render_mesh_quality);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_STYLE::render_mesh_custom);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_STYLE::render_mesh_per_object);
+  }
+
+  ON_ERROR("Invalid mesh_style_as_unsigned parameter");
+  return ON_MeshParameters::MESH_STYLE::unset_mesh_style;
 }
 
-ON_MeshParameters::~ON_MeshParameters()
+
+ON_MeshParameters::MESH_PARAMETER_ID ON_MeshParameters::MeshParameterIdFromUnsigned(
+  unsigned int mesh_parameter_id_as_unsigned
+)
 {
+  switch (mesh_parameter_id_as_unsigned)
+  {
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::unspecified_mesh_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::bComputeCurvature_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::bSimplePlanes_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::bRefine_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::bJaggedSeams_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::bDoublePrecision_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::mesher_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::texture_range_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::tolerance_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::relative_tolerance_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::min_tolerance_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::min_edge_length_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::max_edge_length_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::grid_aspect_ratio_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::grid_min_count_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::grid_max_count_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::grid_angle_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::grid_amplification_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::refine_angle_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::face_type_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::srf_domain_parameter_id);
+
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::bClosedObjectPostProcess_id);
+
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::mesher_id);
+
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::crv_tess_min_num_segments_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::crv_tess_angle_tol_in_degrees_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::crv_tess_max_dist_between_points_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::crv_tess_min_parametric_ratio_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::bEvaluatorBasedTessellation_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::srf_tess_chord_height_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::srf_tess_angle_tol_in_degrees_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::srf_tess_max_edge_length_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::srf_tess_min_edge_length_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::srf_tess_min_edge_length_ratio_uv_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::srf_tess_max_aspect_ratio_parameter_id);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::smoothing_passes_parameter_id);
+  
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_MeshParameters::MESH_PARAMETER_ID::max_mesh_parameter_id);
+  }
+  
+  ON_ERROR("Invalid mesh_parameter_id_as_unsigned parameter");
+  return ON_MeshParameters::MESH_PARAMETER_ID::unspecified_mesh_parameter_id;
+
 }
 
-double ON_MeshParameters::MinEdgeLength( double max_edge_length, double tolerance )
+void ON_MeshParameters::Internal_SetCharHelper(unsigned int u, unsigned char minc, unsigned char maxc, unsigned char* dest)
+{
+  if (u > 255)
+    return;
+  const unsigned char c = (unsigned char)u;
+  if (c >= minc && c <= maxc && c != *dest)
+  {
+    m_geometry_settings_hash = ON_SHA1_Hash::ZeroDigest;
+    *dest = c;
+  }
+}
+
+void ON_MeshParameters::Internal_SetBoolHelper(bool b, bool* dest)
+{
+  b = b ? true : false;
+  if (b != *dest)
+  {
+    m_geometry_settings_hash = ON_SHA1_Hash::ZeroDigest;
+    *dest = b;
+  }
+}
+
+void ON_MeshParameters::Internal_SetDoubleHelper(double x, double minx, double maxx, double* dest)
+{
+  if (!ON_IsValid(x))
+    return;
+  if (ON_UNSET_VALUE != minx && !(x >= minx))
+    return;
+  if (ON_UNSET_VALUE != maxx && !(x <= maxx))
+    return;
+  if (x == *dest)
+    return;
+  m_geometry_settings_hash = ON_SHA1_Hash::ZeroDigest;
+  *dest = x;
+}
+
+void ON_MeshParameters::Internal_SetIntHelper(int i, int mini, int maxi, int* dest)
+{
+  if (!ON_IsValid(i))
+    return;
+  if (ON_UNSET_INT_INDEX != mini && !(i >= mini))
+    return;
+  if (ON_UNSET_INT_INDEX != maxi && !(i <= maxi))
+    return;
+  if (i == *dest)
+    return;
+  m_geometry_settings_hash = ON_SHA1_Hash::ZeroDigest;
+  *dest = i;
+}
+
+const bool ON_MeshParameters::CustomSettings() const
+{
+  return m_bCustomSettings;
+}
+
+void ON_MeshParameters::SetCustomSettings(
+  bool bCustomSettings
+)
+{
+  Internal_SetBoolHelper(bCustomSettings, &m_bCustomSettings);
+}
+
+const bool ON_MeshParameters::CustomSettingsEnabled() const
+{
+  return m_bCustomSettingsEnabled;
+}
+
+void ON_MeshParameters::SetCustomSettingsEnabled(
+  bool bCustomSettingsEnabled
+)
+{
+  Internal_SetBoolHelper(bCustomSettingsEnabled, &m_bCustomSettingsEnabled);
+}
+
+
+const bool ON_MeshParameters::ComputeCurvature() const
+{
+  return m_bComputeCurvature;
+}
+
+void ON_MeshParameters::SetComputeCurvature(
+  bool bComputeCurvature
+)
+{
+  Internal_SetBoolHelper(bComputeCurvature, &m_bComputeCurvature);
+}
+
+
+
+const bool ON_MeshParameters::SimplePlanes() const
+{
+  return m_bSimplePlanes;
+}
+
+void ON_MeshParameters::SetSimplePlanes(
+  bool bSimplePlanes
+)
+{
+  Internal_SetBoolHelper(bSimplePlanes, &m_bSimplePlanes);
+}
+
+
+
+const bool ON_MeshParameters::Refine() const
+{
+  return m_bRefine;
+}
+
+void ON_MeshParameters::SetRefine(
+  bool bRefine
+)
+{
+  Internal_SetBoolHelper(bRefine, &m_bRefine);
+}
+
+
+
+const bool ON_MeshParameters::JaggedSeams() const
+{
+  return m_bJaggedSeams;
+}
+
+void ON_MeshParameters::SetJaggedSeams(
+  bool bJaggedSeams
+)
+{
+  Internal_SetBoolHelper(bJaggedSeams, &m_bJaggedSeams);
+}
+
+const bool ON_MeshParameters::DoublePrecision() const
+{
+  return m_bDoublePrecision;
+}
+
+void ON_MeshParameters::SetDoublePrecision(
+  bool bDoublePrecision
+)
+{
+  Internal_SetBoolHelper(bDoublePrecision, &m_bDoublePrecision);
+}
+
+const unsigned int ON_MeshParameters::Mesher() const
+{ 
+  return static_cast<unsigned int>(m_mesher);
+
+}
+
+void ON_MeshParameters::SetMesher(
+  unsigned int mesher
+)
+{
+  Internal_SetCharHelper(mesher, 0, 1, &m_mesher);
+}
+
+const unsigned int ON_MeshParameters::TextureRange() const
+{
+  return static_cast<unsigned int>(m_texture_range);
+}
+
+void ON_MeshParameters::SetTextureRange(
+  unsigned int texture_range
+)
+{
+  Internal_SetCharHelper(texture_range, 1, 2, &m_texture_range);
+}
+
+const bool ON_MeshParameters::TextureRangeIsValid() const
+{
+  return (1 == m_texture_range || 2 == m_texture_range);
+}
+
+void ON_MeshParameters::SetTextureRangePictureFrameHack()
+{
+  // A 2012 hack to fix cited issues. Serch for calls in core Rhino
+  // code for comments with more details.
+  //   Fix http://mcneel.myjetbrains.com/youtrack/issue/RH-17042
+  //     Setting mp.TextureRange() = 0 here fixes RH-17042.
+  //     What's one more hack where picture frames are concerned?
+  //     As of March 26, tech support felt this picture frame tc bug was
+  //     so critical that we held up the release of Rhino 5 SR2
+  //     for this fix.
+  //
+  //   In November of 2012, tech support felt the following
+  //   five bugs were so critical, Rhino SR1 could not be released.
+  //     http://dev.mcneel.com/bugtrack/?q=120560 = http://mcneel.myjetbrains.com/youtrack/issue/RH-15423
+  //     http://dev.mcneel.com/bugtrack/?q=101150 = http://mcneel.myjetbrains.com/youtrack/issue/RH-12450
+  //     http://dev.mcneel.com/bugtrack/?q=105787 = http://mcneel.myjetbrains.com/youtrack/issue/RH-13203
+  //     http://dev.mcneel.com/bugtrack/?q=119292 = http://mcneel.myjetbrains.com/youtrack/issue/RH-15277
+  //     http://dev.mcneel.com/bugtrack/?q=119294 = http://mcneel.myjetbrains.com/youtrack/issue/RH-15279
+  //
+  // Do not modify this code without testing all the bugs listed above.
+  // If you modify this code, put in an extensive comment that includes
+  // bug citations.
+  unsigned int invalid_texture_range = 0;
+  Internal_SetCharHelper(invalid_texture_range, 0, 0, &m_texture_range);
+}
+
+
+const bool ON_MeshParameters::ClosedObjectPostProcess() const
+{
+  return m_bClosedObjectPostProcess;
+}
+void ON_MeshParameters::SetClosedObjectPostProcess(
+  bool bClosedObjectPostProcess
+) 
+{
+  Internal_SetBoolHelper(bClosedObjectPostProcess, &m_bClosedObjectPostProcess);
+}
+
+
+const double ON_MeshParameters::Tolerance() const 
+{
+  return m_tolerance;
+}
+
+void ON_MeshParameters::SetTolerance(
+  double tolerance
+) 
+{
+  Internal_SetDoubleHelper(tolerance, 0.0, ON_UNSET_VALUE, &m_tolerance);
+}
+
+unsigned int ON_MeshParameters::SubDDisplayMeshDensity() const
+{
+  // If this was set using the "slider", 
+  const int mesh_density_percentage = GeometrySettingsDensityPercentage(-1);
+
+  const double relative_density
+    = (mesh_density_percentage >= 0)
+    ? (((double)mesh_density_percentage) / 100.0)
+    : RelativeTolerance();
+
+  if (false == (relative_density >= 0.0 && relative_density <= 1.0))
+    return ON_SubDLimitMesh::DefaultDisplayDensity;
+
+  unsigned int subd_mesh_density = (unsigned int)floor(relative_density*ON_SubDLimitMesh::MaximumDisplayDensity);
+  return subd_mesh_density;
+}
+
+const double ON_MeshParameters::RelativeTolerance() const
+{
+  return m_relative_tolerance;
+}
+
+void ON_MeshParameters::SetRelativeTolerance(
+  double relative_tolerance
+)
+{
+  Internal_SetDoubleHelper(relative_tolerance, 0.0, 1.0, &m_relative_tolerance);
+}
+        
+const double ON_MeshParameters::MinimumTolerance() const 
+{
+  return m_min_tolerance;
+}
+
+void ON_MeshParameters::SetMinimumTolerance(
+  double minimum_tolerance
+)
+{
+  Internal_SetDoubleHelper(minimum_tolerance, 0.0, ON_UNSET_VALUE, &m_min_tolerance);
+}
+
+const double ON_MeshParameters::MinimumEdgeLength() const
+{ 
+  return m_min_edge_length;
+}
+
+void ON_MeshParameters::SetMinimumEdgeLength(
+  double minimum_edge_length
+)
+{
+  // Allow 0.0 or values >= ON_ZERO_TOLERANCE
+  const double minx
+    = (0.0 == minimum_edge_length)
+    ? 0.0
+    : ON_ZERO_TOLERANCE;
+  Internal_SetDoubleHelper(minimum_edge_length, minx, ON_UNSET_VALUE, &m_min_edge_length);
+}
+
+const double ON_MeshParameters::MaximumEdgeLength() const { return m_max_edge_length; }
+void ON_MeshParameters::SetMaximumEdgeLength(
+  double maximum_edge_length
+) 
+{
+  Internal_SetDoubleHelper(maximum_edge_length, 0.0, ON_UNSET_VALUE, &m_max_edge_length);
+}
+
+const double ON_MeshParameters::GridAspectRatio() const
+{
+  return m_grid_aspect_ratio;
+}
+
+void ON_MeshParameters::SetGridAspectRatio(
+  double grid_aspect_ratio
+)
+{
+  Internal_SetDoubleHelper(grid_aspect_ratio, 0.0, ON_UNSET_VALUE, &m_grid_aspect_ratio);
+}
+
+const int ON_MeshParameters::GridMinCount() const
+{
+  return m_grid_min_count;
+}
+
+void ON_MeshParameters::SetGridMinCount(
+  int grid_min_count
+)
+{
+  Internal_SetIntHelper(grid_min_count, 0, ON_UNSET_INT_INDEX, &m_grid_min_count);
+}
+
+const int ON_MeshParameters::GridMaxCount() const
+{
+  return m_grid_max_count;
+}
+
+void ON_MeshParameters::SetGridMaxCount(
+  int grid_max_count
+)
+{
+  Internal_SetIntHelper(grid_max_count, 0, ON_UNSET_INT_INDEX, &m_grid_max_count);
+}
+
+const double ON_MeshParameters::GridAngleRadians() const
+{
+  return m_grid_angle_radians;
+}
+
+void ON_MeshParameters::SetGridAngleRadians(
+  double grid_angle_radians
+)
+{
+  if (grid_angle_radians > ON_PI && grid_angle_radians < (1.0 + ON_EPSILON)*2.0*ON_PI)
+    grid_angle_radians = ON_PI;
+  Internal_SetDoubleHelper(grid_angle_radians, 0.0, ON_PI, &m_grid_angle_radians);
+}
+
+const double ON_MeshParameters::GridAngleDegrees() const
+{
+  return ON_DegreesFromRadians(GridAngleRadians());
+}
+
+void ON_MeshParameters::SetGridAngleDegrees(
+  double grid_angle_degrees
+)
+{
+  SetGridAngleRadians(ON_RadiansFromDegrees(grid_angle_degrees));
+}
+
+const double ON_MeshParameters::GridAmplification() const
+{
+  return m_grid_amplification;
+}
+
+void ON_MeshParameters::SetGridAmplification(
+  double grid_amplification
+)
+{
+  Internal_SetDoubleHelper(grid_amplification, 0.0, ON_UNSET_VALUE, &m_grid_amplification);
+}
+
+const double ON_MeshParameters::RefineAngleRadians() const
+{
+  return m_refine_angle_radians;
+}
+
+void ON_MeshParameters::SetRefineAngleRadians(
+  double refine_angle_radians
+) 
+{
+  if (refine_angle_radians > ON_PI && refine_angle_radians < (1.0 + ON_EPSILON)*2.0*ON_PI)
+    refine_angle_radians = ON_PI;
+  Internal_SetDoubleHelper(refine_angle_radians, 0.0, ON_PI, &m_refine_angle_radians);
+}
+
+
+const double ON_MeshParameters::RefineAngleDegrees() const
+{
+  return ON_DegreesFromRadians(RefineAngleRadians());
+}
+
+void ON_MeshParameters::SetRefineAngleDegrees(
+  double refine_angle_degrees
+) 
+{
+  SetRefineAngleRadians(ON_RadiansFromDegrees(refine_angle_degrees));
+}
+
+const unsigned int ON_MeshParameters::FaceType() const
+{
+  return static_cast<unsigned int>(m_face_type);
+}
+
+void ON_MeshParameters::SetFaceType(
+  unsigned int face_type
+)
+{
+  Internal_SetCharHelper(face_type, 0, 2, &m_face_type);
+}
+
+
+ON_MeshParameters::ON_MeshParameters(
+  double density,
+  double min_edge_length
+  )
+{
+  // non-default values
+  SetTextureRange(0);
+  SetGridAngleRadians(0.0);
+  SetGridAmplification(0.0);
+  SetRefineAngleRadians(0.0);
+  SetMinimumEdgeLength(min_edge_length);
+
+  if ( ON_IsValid(density) )
+  {
+    if ( density < 0.0 )
+      density = 0.0;
+    else if ( density > 1.0 )
+      density = 1.0;
+    SetRelativeTolerance(density);
+    SetRefine((density < 0.65));
+    SetSimplePlanes((0.0 == density));
+  }
+}
+
+double ON_MeshParameters::MinimumEdgeLengthFromTolerance( 
+  double max_edge_length,
+  double tolerance 
+)
 {
   // The 1.0e-4 is a guess.  1.0e-12 was too small to help with objects
   // like the one in 67885.
@@ -4191,7 +5885,10 @@ double ON_MeshParameters::MinEdgeLength( double max_edge_length, double toleranc
   return min_edge_length;
 }
 
-double ON_MeshParameters::Tolerance( double density, double actual_size )
+double ON_MeshParameters::ToleranceFromObjectSize(
+  double relative_tolerance,
+  double actual_size
+)
 {
   // min_rel_tol creates the most facets
   //const double min_rel_tol = 5.0e-5;
@@ -4199,32 +5896,32 @@ double ON_MeshParameters::Tolerance( double density, double actual_size )
   //max rel tol creates the fewest facets
   //const double max_rel_tol = 0.1;
   //m_relative_tolerance = 0.0;
-  //if ( density <= 0.0 )
+  //if ( relative_tolerance <= 0.0 )
   //  m_relative_tolerance = max_rel_tol;
-  //else if ( density >= 1.0 )
+  //else if ( relative_tolerance >= 1.0 )
   //  m_relative_tolerance = min_rel_tol;
   //else
   //{
   //  ON_Interval e(log10(max_rel_tol),log10(min_rel_tol));
-  //  m_relative_tolerance = pow(10.0,e.ParameterAt(density));
+  //  m_relative_tolerance = pow(10.0,e.ParameterAt(relative_tolerance));
   //}
 
   double tol = 0.0;
   double x, e;
-  if ( ON_IsValid(density) && ON_IsValid(actual_size)
-       && density > 0.0 && actual_size > 0.0 )
+  if ( ON_IsValid(relative_tolerance) && ON_IsValid(actual_size)
+       && relative_tolerance > 0.0 && actual_size > 0.0 )
   {
-    if ( density > 1.0 )
-      density = 1.0;
+    if ( relative_tolerance > 1.0 )
+      relative_tolerance = 1.0;
 
-    //e = (density*(12.0 + density*(2.0*density - 9.0)));
-    //e = (1.0 + density*(8.0 - 4.0*density));
-    //e = 1.0 + density*4.0;
+    //e = (relative_tolerance*(12.0 + relative_tolerance*(2.0*relative_tolerance - 9.0)));
+    //e = (1.0 + relative_tolerance*(8.0 - 4.0*relative_tolerance));
+    //e = 1.0 + relative_tolerance*4.0;
     //x = 5.0*pow(10.0,-e);
 
-    e = (density < 0.5) 
-      ? 1.0 + density*(6.0 - 4.0*density) // 1.0 + 4.0*density
-      : 2.0 + 2.0*density;
+    e = (relative_tolerance < 0.5) 
+      ? 1.0 + relative_tolerance*(6.0 - 4.0*relative_tolerance) // 1.0 + 4.0*relative_tolerance
+      : 2.0 + 2.0*relative_tolerance;
     x = pow(10.0,-e);
 
     tol = actual_size*x;
@@ -4232,481 +5929,227 @@ double ON_MeshParameters::Tolerance( double density, double actual_size )
   return tol;
 }
 
-static ON_MeshParameters FastRenderMeshParameters()
+bool operator==(const ON_MeshParameters& a, const ON_MeshParameters& b)
 {
-  // If you change these, put your name, the date, and the reasons for
-  // the change in this comment so we can keep track of what we are
-  // trying to accomplish;
-  ON_MeshParameters mp;
-
-  // Added 27 April 2006 for the Meshkateers
-  //   Attempting to make jagged and faster render meshes a little
-  //   more dense.
-  //
-  // Turn off everything ...
-  mp.m_bComputeCurvature = false;
-  mp.m_tolerance = 0.0;
-  mp.m_bJaggedSeams  = false;
-  mp.m_max_edge_length = 0.0;
-  mp.m_grid_aspect_ratio = 0.0;
-  mp.m_grid_max_count = 0;
-  mp.m_grid_angle = 0.0;
-  mp.m_grid_amplification = 0.0;
-  mp.m_refine_angle = 0.0;
-
-  // ... except ...
-  // The m_relative_tolerance setting must be set so that
-  // 0.0005 = ON_MeshParameters::Tolerance(m_relative_tolerance,1.0).
-  mp.m_relative_tolerance = 0.65;
-  //double x = Tolerance(m_relative_tolerance,1.0);
-
-  mp.m_grid_min_count     = 16;
-  mp.m_min_edge_length    = 0.0001;
-  mp.m_bRefine            = true;
-  mp.m_bSimplePlanes      = true;
-
-  mp.m_texture_range = 2; // Don't change this without speaking to Dale Lear
-
-  //{
-  //  // 16 July, 2002 - copied V2 hard coded "jagged and faster" render mesh settings
-  //  //
-  //  // Settings used in V2, V3 and early V4 beta
-  //  mp.m_refine_angle       = 20.0*ON_PI/180.0;
-  //  mp.m_grid_angle         = 20.0*ON_PI/180.0;
-  //  mp.m_grid_aspect_ratio  = 0.0;
-  //  mp.m_min_edge_length    = 0.0001;
-  //  mp.m_max_edge_length    = 0.0;
-  //  mp.m_tolerance          = 0.0;
-  //  mp.m_grid_min_count     = 16;
-  //  mp.m_bRefine            = 1;
-  //  mp.m_bJaggedSeams       = 0;
-  //  mp.m_bSimplePlanes      = 0;
-  //}
-
-  return mp;
+  return 0 == ON_MeshParameters::Compare(a,b);
 }
 
-static ON_MeshParameters QualityRenderMeshParameters()
+bool operator!=(const ON_MeshParameters& a, const ON_MeshParameters& b)
 {
-  // If you change these, put your name, the date, and the reasons for
-  // the change in this comment so we can keep track of what we are
-  // trying to accomplish;
-  ON_MeshParameters mp;
-
-  // Added 27 April 2006 for the Meshkateers
-  //   Attempting to make smooth and slower render meshing a little
-  //   faster.
-  //
-  // Turn off everything ...
-  mp.m_bComputeCurvature = false;
-  mp.m_tolerance = 0.0;
-  mp.m_bJaggedSeams  = false;
-  mp.m_max_edge_length = 0.0;
-  mp.m_grid_aspect_ratio = 0.0;
-  mp.m_grid_max_count = 0;
-  mp.m_grid_angle = 0.0;
-  mp.m_grid_amplification = 0.0;
-
-  // ... except ...
-  // The m_relative_tolerance setting must be set so that
-  // 0.00025 = ON_MeshParameters::Tolerance(m_relative_tolerance,1.0).
-  mp.m_relative_tolerance = 0.8;
-  //double x = Tolerance(m_relative_tolerance,1.0);
-
-  mp.m_grid_min_count     = 16;
-  mp.m_min_edge_length    = 0.0001;
-  mp.m_bRefine            = true;
-  mp.m_bSimplePlanes      = true;
-  mp.m_refine_angle       = 20.0*ON_PI/180.0;
-
-  mp.m_texture_range = 2; // Don't change this without speaking to Dale Lear
-
-
-  //// 16 July, 2002 - copied V2 hard coded "smooth and slower" render mesh settings
-  ////
-  //// Settings used in V2, V3 and early V4 beta
-  //mp.m_refine_angle       = 15.0*ON_PI/180.0;
-  //mp.m_grid_angle         = 15.0*ON_PI/180.0;
-  //mp.m_grid_aspect_ratio  = 6.0;
-  //mp.m_min_edge_length    = 0.0001;
-  //mp.m_max_edge_length    = 0.0;
-  //mp.m_tolerance          = 0.0;
-  //mp.m_grid_min_count     = 16;
-  //mp.m_bRefine            = 1;
-  //mp.m_bJaggedSeams       = 0;
-  //mp.m_bSimplePlanes      = 0;
-
-  return mp;
-}
-
-const ON_MeshParameters ON_MeshParameters::FastRenderMesh(FastRenderMeshParameters());
-
-const ON_MeshParameters ON_MeshParameters::QualityRenderMesh(QualityRenderMeshParameters());
-
-void ON_MeshParameters::JaggedAndFasterMeshParameters()
-{
-  *this = ON_MeshParameters::FastRenderMesh;
-}
-
-void ON_MeshParameters::SmoothAndSlowerMeshParameters()
-{
-  *this = ON_MeshParameters::QualityRenderMesh;
-}
-
-void ON_MeshParameters::DefaultAnalysisMeshParameters()
-{
-  Default();
-
-  // 7 July 2006 Dale Lear
-  //    I added this line for RR 10330
-  Set( 0.5, m_min_edge_length );
-
-  m_texture_range = 1; // THIS IS REQUIRED - DO NOT CHANGE IT
-
-  // Meshkateers 
-  //   Add your stuff below this line.
-  //   Do not change m_texture_range.
-}
-
-bool ON_MeshParameters::operator==(const ON_MeshParameters& m2) const
-{
-  return (Compare(m2)==0) ? true : false;
-}
-
-bool ON_MeshParameters::operator!=(const ON_MeshParameters& m2) const
-{
-  return (Compare(m2)) ? true : false;
-}
-
-bool ON_MeshParameters::operator==(const ON_Mesh& mesh) const
-{
-  const ON_MeshParameters* mp1 = mesh.MeshParameters();
-  return mp1 ? (*this == *mp1) : false;
-}
-
-bool ON_MeshParameters::operator!=(const ON_Mesh& mesh) const
-{
-  const ON_MeshParameters* mp1 = mesh.MeshParameters();
-  return mp1 ? (*this != *mp1) : true;
+  return 0 != ON_MeshParameters::Compare(a,b);
 }
 
 void ON_MeshParameters::Dump( ON_TextLog& text_log ) const
 {
-  text_log.Print("Gridding:\n");
+  text_log.Print(L"Gridding:\n");
   text_log.PushIndent();
-  text_log.Print("Min grid count = %d\n",m_grid_min_count);
-  text_log.Print("Max grid count = %d\n",m_grid_max_count);
-  text_log.Print("Gridding angle = %g radians (%g degrees)\n",m_grid_angle,180.0*m_grid_angle/ON_PI);
-  text_log.Print("Aspect ratio = %g\n",m_grid_aspect_ratio);
-  text_log.Print("Amplification = %g\n",m_grid_amplification);
+  text_log.Print(L"Min grid count = %d\n",m_grid_min_count);
+  text_log.Print(L"Max grid count = %d\n",m_grid_max_count);
+  text_log.Print(L"Gridding angle = %g radians (%g degrees)\n",GridAngleRadians(),GridAngleDegrees());
+  text_log.Print(L"Aspect ratio = %g\n",m_grid_aspect_ratio);
+  text_log.Print(L"Amplification = %g\n",m_grid_amplification);
   text_log.PopIndent();
 
-  text_log.Print("Refining:\n");
+  text_log.Print(L"Refining:\n");
   text_log.PushIndent();
-  text_log.Print("Refine = %s\n",m_bRefine?"true":"false");
-  text_log.Print("Refine angle = %g radians (%g degrees)\n",m_refine_angle,180.0*m_refine_angle/ON_PI);
+  text_log.Print(L"Refine = %ls\n", m_bRefine? L"true" : L"false");
+  text_log.Print(L"Refine angle = %g radians (%g degrees)\n",RefineAngleRadians(),RefineAngleDegrees());
   text_log.PopIndent();
 
-  text_log.Print("Metrics:\n");
+  text_log.Print(L"Metrics:\n");
   text_log.PushIndent();
-  text_log.Print("Density = %g (relative tolerance = %g)\n",m_relative_tolerance,ON_MeshParameters::Tolerance(m_relative_tolerance,1.0));
-  text_log.Print("Minimum tolerance = %g\n",m_min_tolerance);
-  text_log.Print("Tolerance = %g\n",m_tolerance);
-  text_log.Print("Min edge length = %g\n",m_min_edge_length);
-  text_log.Print("Max edge length = %g\n",m_max_edge_length);
+  text_log.Print(L"Tolerance from size 1 object = %g (relative tolerance = %g)\n",ON_MeshParameters::ToleranceFromObjectSize(RelativeTolerance(),1.0),RelativeTolerance());
+  text_log.Print(L"Minimum tolerance = %g\n",MinimumTolerance());
+  text_log.Print(L"Tolerance = %g\n",m_tolerance);
+  text_log.Print(L"Min edge length = %g\n",m_min_edge_length);
+  text_log.Print(L"Max edge length = %g\n",m_max_edge_length);
   text_log.PopIndent();
 
-  text_log.Print("Misceleanous:\n");
+  text_log.Print(L"Misceleanous:\n");
   text_log.PushIndent();
-  text_log.Print("Face type = %d\n",m_face_type );
-  text_log.Print("Compute curvature = %s\n",m_bComputeCurvature?"true":"false");
-  text_log.Print("Texture range = %d\n",m_texture_range);
-  text_log.Print("Simple planes = %s\n",m_bSimplePlanes?"true":"false");
-  text_log.Print("Jagged Seams = %s\n",m_bJaggedSeams?"true":"false");
-  text_log.Print("Double Precision = %s\n",m_bDoublePrecision?"true":"false");
-  text_log.Print("Custom settings = %s\n",m_bCustomSettings?"true":"false");
+  text_log.Print(L"Face type = %d\n",m_face_type );
+  text_log.Print(L"Compute curvature = %ls\n",m_bComputeCurvature?L"true":L"false");
+  text_log.Print(L"Texture range = %d\n",m_texture_range);
+  text_log.Print(L"Simple planes = %ls\n",m_bSimplePlanes?L"true":L"false");
+  text_log.Print(L"Jagged Seams = %ls\n",m_bJaggedSeams?L"true":L"false");
+  text_log.Print(L"Double Precision = %ls\n",m_bDoublePrecision?L"true":L"false");
+  text_log.Print(L"Closed object mesh healing = %ls\n",ClosedObjectPostProcess()?L"true":L"false");
+  text_log.Print(L"Custom settings = %ls\n",m_bCustomSettings?L"true":L"false");
+
+  
   text_log.PopIndent();
 }
 
-void ON_MeshParameters::Default()
+static double ON_MeshParameters_SHA1Double(double t, double default_value)
 {
-  memset(this,0,sizeof(*this));
-
-  m_bCustomSettings = false;
-  m_bComputeCurvature = false;
-  m_bSimplePlanes = false;
-  m_bRefine = true;
-  m_bJaggedSeams = false;
-  m_bDoublePrecision = false;
-  m_bCustomSettingsEnabled = true;
-  m_mesher = 0;
-  m_texture_range = 2; // packed normalized textures
-  m_reserved2 = 0;
-  m_tolerance = 0.0;
-  m_relative_tolerance = 0.0;
-  m_min_tolerance = 0.0;
-  m_min_edge_length = 0.0001;
-  m_max_edge_length = 0.0;
-  m_grid_aspect_ratio = 6.0;
-  m_grid_min_count = 0;
-  m_grid_max_count = 0;
-  m_grid_angle = 20.0*ON_PI/180.0;
-  m_grid_amplification = 1.0;
-  m_refine_angle = 20.0*ON_PI/180.0;
-  m_face_type = 0;
-  m_reserved3 = 0;
+  return (ON_IsValid(t) && t > 0.0) ? t : default_value;
 }
 
-void ON_MeshParameters::Set( double density, double min_edge_length )
+int ON_MeshParameters::Compare(
+  const ON_MeshParameters& a,
+  const ON_MeshParameters& b
+  )
 {
-  bool bRelTolTest = true;
+  return ON_SHA1_Hash::Compare(a.ContentHash(), b.ContentHash());
+}
 
-  Default();
+int ON_MeshParameters::CompareGeometrySettings(
+  const ON_MeshParameters& a,
+  const ON_MeshParameters& b
+  )
+{
+  return ON_SHA1_Hash::Compare(a.GeometrySettingsHash(), b.GeometrySettingsHash());
+}
 
-  // These 4 settings should not be changed
-  m_bComputeCurvature = false;
-  m_min_edge_length = min_edge_length;
-  m_texture_range = 0;
-  m_tolerance = 0.0;
+ON_SHA1_Hash ON_MeshParameters::ContentHash() const
+{
+  // Discuss any changes with Dale Lear
+  // Use ON_MeshParameters::GeometrySettingsHash() if you want to ignore any of these values, like m_bComputeCurvature.
+  ON_SHA1 sha1;
+  sha1.AccumulateBool(m_bCustomSettings);
+  sha1.AccumulateBool(m_bComputeCurvature); 
+  sha1.AccumulateUnsigned32(m_texture_range);
+  const ON_SHA1_Hash geometry_settings_hash = GeometrySettingsHash();
+  sha1.AccumulateSubHash(geometry_settings_hash);
+  return sha1.Hash();
+}
 
-  if ( bRelTolTest )
+void ON_MeshParameters::Internal_AccumulatePangolinParameters(
+  const ON_MeshParameters & pangolin_defaults,
+  ON_SHA1& sha1
+) const
+{
+  // Pangolin parameters
+  if (pangolin_defaults.m_bEvaluatorBasedTessellation != m_bEvaluatorBasedTessellation)
+    sha1.AccumulateBool(m_bEvaluatorBasedTessellation);
+  if (pangolin_defaults.m_curve_tess_min_num_segments != m_curve_tess_min_num_segments)
+    sha1.AccumulateInteger32(m_curve_tess_min_num_segments);
+  if (pangolin_defaults.m_curve_tess_angle_tol_in_degrees != m_curve_tess_angle_tol_in_degrees)
+    sha1.AccumulateDouble(m_curve_tess_angle_tol_in_degrees);
+  if (pangolin_defaults.m_curve_tess_max_dist_between_points != m_curve_tess_max_dist_between_points)
+    sha1.AccumulateDouble(m_curve_tess_max_dist_between_points);
+  if (pangolin_defaults.m_curve_tess_min_parametric_ratio != m_curve_tess_min_parametric_ratio)
+    sha1.AccumulateDouble(m_curve_tess_min_parametric_ratio);
+  if (pangolin_defaults.m_surface_tess_angle_tol_in_degrees != m_surface_tess_angle_tol_in_degrees)
+    sha1.AccumulateDouble(m_surface_tess_angle_tol_in_degrees);
+  if (pangolin_defaults.m_surface_tess_max_edge_length != m_surface_tess_max_edge_length)
+    sha1.AccumulateDouble(m_surface_tess_max_edge_length);
+  if (pangolin_defaults.m_surface_tess_min_edge_length != m_surface_tess_min_edge_length)
+    sha1.AccumulateDouble(m_surface_tess_min_edge_length);
+  if (pangolin_defaults.m_surface_tess_min_edge_length_ratio_uv != m_surface_tess_min_edge_length_ratio_uv)
+    sha1.AccumulateDouble(m_surface_tess_min_edge_length_ratio_uv);
+  if (pangolin_defaults.m_surface_tess_max_aspect_ratio != m_surface_tess_max_aspect_ratio)
+    sha1.AccumulateDouble(m_surface_tess_max_aspect_ratio);
+  if (pangolin_defaults.m_smoothing_passes != m_smoothing_passes)
+    sha1.AccumulateInteger32(m_smoothing_passes);
+}
+
+ON_SHA1_Hash ON_MeshParameters::GeometrySettingsHash() const
+{
+  // Discuss any changes with Dale Lear
+  if (m_geometry_settings_hash.IsZeroDigest())
   {
-    // Added 27 April 2005
-    m_relative_tolerance = density;
+    ON_SHA1 sha1;
+    sha1.AccumulateBool(m_bSimplePlanes);
+    sha1.AccumulateBool(m_bRefine);
+    sha1.AccumulateBool(m_bJaggedSeams);
+    sha1.AccumulateUnsigned32(m_mesher);
+    sha1.AccumulateDouble(ON_MeshParameters_SHA1Double(m_tolerance,0.0));
+    sha1.AccumulateDouble(ON_MeshParameters_SHA1Double(m_relative_tolerance,0.0));
 
-    // The other meshing parameters are disabled.
-    //
-    //   Dale Lear's remark:
-    //     I think it is a mistake to leave m_grid_aspect_ratio = 0
-    //     at all settings.  This will result in long skinny triangles
-    //     in areas where the principal curvatures are dramatically
-    //     different.  
-    //
-    m_bRefine = (density < 0.65);
-    m_bSimplePlanes = (density <= 0.0);
-    m_bJaggedSeams  = false;
-    m_max_edge_length = 0.0;
-    m_grid_aspect_ratio = 0.0;
-    m_grid_min_count = 0;
-    m_grid_max_count = 0;
-    m_grid_angle = 0.0;
-    m_grid_amplification = 0.0;
-    m_refine_angle = 0.0;
+    // Do not include m_min_tolerance as a geometry setting.
+    // It is a runtime lower bound clamp.
+    // If it is included here, Rhino will remesh everytime model tolerance changes.
+    sha1.AccumulateDouble(ON_MeshParameters_SHA1Double(m_min_edge_length,0.0));
+    sha1.AccumulateDouble(ON_MeshParameters_SHA1Double(m_max_edge_length,0.0));
+    sha1.AccumulateDouble(ON_MeshParameters_SHA1Double(m_grid_aspect_ratio,0.0));
+    sha1.AccumulateInteger32(m_grid_min_count);
+    sha1.AccumulateInteger32(m_grid_max_count);
+    sha1.AccumulateDouble(ON_MeshParameters_SHA1Double(m_grid_angle_radians,ON_PI));
+    sha1.AccumulateDouble(ON_MeshParameters_SHA1Double(m_refine_angle_radians,0.0));
+    sha1.AccumulateDouble(ON_MeshParameters_SHA1Double(m_grid_amplification,1.0));
+    sha1.AccumulateUnsigned32(m_face_type);
+    sha1.AccumulateBool(m_bClosedObjectPostProcess);
+
+    // The Pangolin parameters and any other, parameters we add in the future,
+    // contribute to the SHA1 only when they differ from default values.
+    // This keeps old SHA-1 values correct and prevents remeshing when openning
+    // old files.
+    sha1.AccumulateId(m_mesher_id);
+
+    // Pangolin parameters
+    Internal_AccumulatePangolinParameters(ON_MeshParameters::DefaultMesh,sha1);
+    
+    m_geometry_settings_hash = sha1.Hash();
   }
-  else
+  return m_geometry_settings_hash;
+}
+
+ON_UUID ON_MeshParameters::MesherId() const
+{
+  return m_mesher_id;
+}
+
+void ON_MeshParameters::SetMesherId(
+  ON_UUID id
+)
+{
+  if (id != m_mesher_id)
   {
-    // Used in V3 and prior to 27 April 2005
-    double t0, t1;
-
-    m_bRefine = true;
-    m_bSimplePlanes = false;
-    m_bJaggedSeams  = false;
-    m_max_edge_length = 0.0;
-    m_grid_aspect_ratio = 0.0;
-    m_grid_min_count = 16;
-    m_grid_max_count = 0;
-    m_grid_angle = 20.0*ON_PI/180.0;
-    m_grid_amplification = 1.0;
-    m_refine_angle = 20.0*ON_PI/180.0;
- 
-    if ( density <= 0.0) 
-    {
-      m_bSimplePlanes = true;
-      m_bRefine       = false;
-
-      m_grid_min_count     = 0;
-      m_grid_aspect_ratio  = 0.0;
-      m_grid_angle         = 0.0;
-      m_grid_amplification = 1.0;
-
-      m_refine_angle       = m_grid_angle;
-    }
-    else if ( density < 0.5)
-    {
-      t1 = 2.0*density;
-      t0 = 1.0-t1;
-      
-      m_bRefine = density < 0.10 ? false : true;
-
-      m_grid_min_count = 0;
-      m_grid_aspect_ratio  = 6.0;
-      m_grid_angle         = 20.0*ON_PI/180.0;
-      m_grid_amplification = (t1 > 0.0 ) ? t1 : 1.0;
-
-      m_refine_angle = (t0*65.0 + t1*20.0)*ON_PI/180.0;
-    }
-    else if ( density == 0.5 ) 
-    {
-      m_bRefine       = true;
-
-      m_grid_min_count     = 0;
-      m_grid_aspect_ratio  = 6.0;
-      m_grid_angle         = 20.0*ON_PI/180.0;
-      m_grid_amplification = 1.0;
-
-      m_refine_angle        = m_grid_angle;
-    }
-    else
-    {
-      t1 = 2.0*(density - 0.5);
-      if ( t1 > 1.0 )
-        t1 = 1.0;
-      t0 = 1.0-t1;
-      
-      m_bRefine = true;
-
-      m_grid_min_count     = 0;
-      m_grid_aspect_ratio  = t0*6.0 + t1;
-      m_grid_angle         = (t0*20.0 + t1*5.0)*ON_PI/180.0;
-      m_grid_amplification = 1.0 + t1;
-
-      m_refine_angle       = m_grid_angle;
-    }
+    m_geometry_settings_hash = ON_SHA1_Hash::ZeroDigest;
+    m_mesher_id = id;
   }
 }
 
 
-int ON_MeshParameters::Compare( const ON_MeshParameters& src ) const
+const ON_MeshParameters::MESH_STYLE ON_MeshParameters::GeometrySettingsRenderMeshStyle(
+  const ON_MeshParameters* custom_mp,
+  MESH_STYLE no_match_found_result
+  ) const
 {
-  // Discuss any changes with Dale Lear.
-  if ( !m_bCustomSettings && src.m_bCustomSettings )
-    return -1;
-  if ( m_bCustomSettings && !src.m_bCustomSettings )
-    return 1;
-  if ( m_texture_range < src.m_texture_range )
-    return -1;
-  if ( m_texture_range > src.m_texture_range )
-    return 1;
-  return CompareGeometrySettings(src);
+  if ( 0 == ON_MeshParameters::CompareGeometrySettings(ON_MeshParameters::FastRenderMesh,*this))
+    return ON_MeshParameters::MESH_STYLE::render_mesh_fast;
+
+  if ( 0 == ON_MeshParameters::CompareGeometrySettings(ON_MeshParameters::QualityRenderMesh,*this))
+    return ON_MeshParameters::MESH_STYLE::render_mesh_quality;
+
+  if ( 0 != custom_mp && 0 == ON_MeshParameters::CompareGeometrySettings(*custom_mp,*this))
+    return ON_MeshParameters::MESH_STYLE::render_mesh_custom;
+
+  return no_match_found_result;
 }
 
-static int ON_MeshParameters_CompareDouble(double t0, double t1, double default_value)
+const int ON_MeshParameters::GeometrySettingsDensityPercentage(
+  int no_match_found_result
+  ) const
 {
-  if ( !ON_IsValid(t0) || t0 <= 0.0 )
-    t0 = default_value;
-  if ( !ON_IsValid(t1) || t1 <= 0.0 )
-    t1 = default_value;
-  if ( t0 < t1 )
-    return 1;
-  if ( t1 < t0 )
-    return -1;
-  return 0;
-}
+  for ( int n = 0; n <= 100; n++ )
+  {
+    double density = (50 == n) ? 0.5 : (n/100.0);
+    ON_MeshParameters mp_at_n(density);
+    
+    mp_at_n.m_bDoublePrecision = m_bDoublePrecision;
+    mp_at_n.m_texture_range = m_texture_range;
 
-static int ON_MeshParameters_CompareInt(int i0, int i1)
-{
-  if ( i0 <= 0 )
-    i0 = 0;
-  if ( i1 <= 0 )
-    i1 = 0;
-  return i1-i0;
-}
-
-static int ON_MeshParameters_CompareBool(bool b0, bool b1)
-{
-  const int i0 = b0 ? 1 : 0; 
-  const int i1 = b1 ? 1 : 0;
-  return i1-i0;
-}
-
-int ON_MeshParameters::CompareGeometrySettings( const ON_MeshParameters& src ) const
-{
-  int rc;
-
-  // Discuss any changes with Dale Lear.
-  rc = ON_MeshParameters_CompareBool(m_bSimplePlanes,src.m_bSimplePlanes);
-  if (rc)
-    return rc;
-  rc = ON_MeshParameters_CompareBool(m_bRefine,src.m_bRefine);
-  if (rc)
-    return rc;
-  rc = ON_MeshParameters_CompareBool(m_bJaggedSeams,src.m_bJaggedSeams);
-  if (rc)
-    return rc;
-  if ( m_mesher < src.m_mesher )
-    return -1;
-  if ( m_mesher > src.m_mesher )
-    return 1;
-
-  rc = ON_MeshParameters_CompareDouble(m_tolerance,src.m_tolerance,0.0);
-  if (rc)
-    return rc;
-
-  rc = ON_MeshParameters_CompareDouble(m_relative_tolerance,src.m_relative_tolerance,0.0);
-  if (rc)
-    return rc;
-
-  // DO NOT COMPARE m_min_tolerance - it is a runtime lower bound clamp.
-  //                If it is included here, Rhino will remesh everytime
-  //                model tolerance changes.
-
-  rc = ON_MeshParameters_CompareDouble(m_min_edge_length,src.m_min_edge_length,0.0);
-  if (rc)
-    return rc;
-
-  rc = ON_MeshParameters_CompareDouble(m_max_edge_length,src.m_max_edge_length,0.0);
-  if (rc)
-    return rc;
-
-  rc = ON_MeshParameters_CompareDouble(m_grid_aspect_ratio,src.m_grid_aspect_ratio,0.0);
-  if (rc)
-    return rc;
-
-  rc = ON_MeshParameters_CompareInt(m_grid_min_count,src.m_grid_min_count);
-  if (rc)
-    return rc;
-
-  rc = ON_MeshParameters_CompareInt(m_grid_max_count,src.m_grid_max_count);
-  if (rc)
-    return rc;
-
-  rc = ON_MeshParameters_CompareDouble(m_grid_angle,src.m_grid_angle,ON_PI);
-  if (rc)
-    return rc;
-
-  rc = ON_MeshParameters_CompareDouble(m_refine_angle,src.m_refine_angle,0.0);
-  if (rc)
-    return rc;
-
-  rc = ON_MeshParameters_CompareDouble(m_grid_amplification,src.m_grid_amplification,1.0);
-  if (rc)
-    return rc;
-
-  if ( m_face_type < src.m_face_type )
-    return -1;
-  if ( m_face_type > src.m_face_type )
-    return 1;
-
-  return 0;
+    if ( 0 == ON_MeshParameters::CompareGeometrySettings(mp_at_n,*this) )
+      return n;
+  }
+  return no_match_found_result;
 }
 
 ON__UINT32 ON_MeshParameters::DataCRC(ON__UINT32 current_remainder) const
 {
-  ON__UINT32 crc = ON_CRC32(current_remainder,sizeof(m_bComputeCurvature),&m_bComputeCurvature);
-  crc = ON_CRC32(crc,sizeof(m_bSimplePlanes),&m_bSimplePlanes);
-  crc = ON_CRC32(crc,sizeof(m_bRefine),&m_bRefine);
-  crc = ON_CRC32(crc,sizeof(m_bJaggedSeams),&m_bJaggedSeams);
-  crc = ON_CRC32(crc,sizeof(m_tolerance),&m_tolerance);
-  crc = ON_CRC32(crc,sizeof(m_min_edge_length),&m_min_edge_length);
-  crc = ON_CRC32(crc,sizeof(m_max_edge_length),&m_max_edge_length);
-  crc = ON_CRC32(crc,sizeof(m_grid_aspect_ratio),&m_grid_aspect_ratio);
-  crc = ON_CRC32(crc,sizeof(m_grid_min_count),&m_grid_min_count);
-  crc = ON_CRC32(crc,sizeof(m_grid_max_count),&m_grid_max_count);
-  crc = ON_CRC32(crc,sizeof(m_grid_angle),&m_grid_angle);
-  crc = ON_CRC32(crc,sizeof(m_grid_amplification),&m_grid_amplification);
-  crc = ON_CRC32(crc,sizeof(m_refine_angle),&m_refine_angle);
-  crc = ON_CRC32(crc,sizeof(m_face_type),&m_face_type);
-  crc = ON_CRC32(crc,sizeof(m_texture_range),&m_texture_range);
-  crc = ON_CRC32(crc,sizeof(m_bCustomSettings),&m_bCustomSettings);
-  crc = ON_CRC32(crc,sizeof(m_relative_tolerance),&m_relative_tolerance);
-  crc = ON_CRC32(crc,sizeof(m_mesher),&m_mesher);
+  const ON_SHA1_Hash content_hash = ContentHash();
+  const ON__UINT32 crc = ON_CRC32(current_remainder,sizeof(content_hash),&content_hash);  
   return crc;
 }
 
 bool ON_MeshParameters::Write( ON_BinaryArchive& file ) const
 {
-  bool rc = file.Write3dmChunkVersion(1,4);
-  if (rc) {
+  int minor_version = 4;
+  bool rc = file.Write3dmChunkVersion(1,minor_version);
+  if (rc) 
+  {
     if (rc) rc = file.WriteInt(m_bComputeCurvature);
     if (rc) rc = file.WriteInt(m_bSimplePlanes);
     if (rc) rc = file.WriteInt(m_bRefine);
@@ -4718,9 +6161,9 @@ bool ON_MeshParameters::Write( ON_BinaryArchive& file ) const
     if (rc) rc = file.WriteDouble(m_grid_aspect_ratio);
     if (rc) rc = file.WriteInt(m_grid_min_count);
     if (rc) rc = file.WriteInt(m_grid_max_count);
-    if (rc) rc = file.WriteDouble(m_grid_angle);
+    if (rc) rc = file.WriteDouble(m_grid_angle_radians);
     if (rc) rc = file.WriteDouble(m_grid_amplification);
-    if (rc) rc = file.WriteDouble(m_refine_angle);
+    if (rc) rc = file.WriteDouble(m_refine_angle_radians);
     if (rc) rc = file.WriteDouble(5.0*ON_PI/180.0); // obsolete m_combine_angle field
     int mft = m_face_type;
     if ( mft < 0 || mft > 2 ) 
@@ -4749,7 +6192,9 @@ bool ON_MeshParameters::Write( ON_BinaryArchive& file ) const
 
 bool ON_MeshParameters::Read( ON_BinaryArchive& file )
 {
-  Default();
+  *this = ON_MeshParameters::DefaultMesh;
+  m_geometry_settings_hash = ON_SHA1_Hash::ZeroDigest;
+
   int major_version = 0;
   int minor_version = 0;
   bool rc = file.Read3dmChunkVersion(&major_version,&minor_version);
@@ -4782,28 +6227,32 @@ bool ON_MeshParameters::Read( ON_BinaryArchive& file )
     if (rc) rc = file.ReadDouble(&m_grid_aspect_ratio);
     if (rc) rc = file.ReadInt(&m_grid_min_count);
     if (rc) rc = file.ReadInt(&m_grid_max_count);
-    if (rc) rc = file.ReadDouble(&m_grid_angle);
+    if (rc) rc = file.ReadDouble(&m_grid_angle_radians);
     if (rc) rc = file.ReadDouble(&m_grid_amplification);
-    if (rc) rc = file.ReadDouble(&m_refine_angle);
+    if (rc) rc = file.ReadDouble(&m_refine_angle_radians);
     double obsolete_m_combine_angle;
     if (rc) rc = file.ReadDouble(&obsolete_m_combine_angle);
-    if (rc) rc = file.ReadInt(&m_face_type);
-    if ( m_face_type < 0 || m_face_type > 2 ) 
-    {
-      ON_ERROR("ON_MeshParameters::Read() - m_face_type out of bounds.");
-      m_face_type = 0;
-    }
+    unsigned int face_type = FaceType();
+    if (rc) rc = file.ReadInt(&face_type);
+    if (rc) 
+      SetFaceType(face_type);
 
     if ( rc && minor_version >= 1 ) 
     {
-      rc = file.ReadInt( &m_texture_range );
+      unsigned int texture_range = TextureRange();
+      rc = file.ReadInt( &texture_range );
+      if (rc)
+        SetTextureRange(texture_range);
       if ( rc && minor_version >= 2 )
       {
         rc = file.ReadBool(&m_bCustomSettings);
         if (rc) rc = file.ReadDouble(&m_relative_tolerance);
         if ( rc && minor_version >= 3 )
         {
-          rc = file.ReadChar(&m_mesher);
+          unsigned char mesher = (unsigned char)Mesher();
+          rc = file.ReadChar(&mesher);
+          if (rc)
+            SetMesher(mesher);
           if ( rc && minor_version >= 4 )
           {
             rc = file.ReadBool(&m_bCustomSettingsEnabled);
@@ -4909,7 +6358,7 @@ bool ON_MeshCurvatureStats::Set( ON::curvature_style kappa_style,
                                  double infinity
                                  )
 {
-  bool rc = (Kcount > 0 && K != NULL);
+  bool rc = (Kcount > 0 && K != nullptr);
 
   Destroy();
 
@@ -5023,7 +6472,7 @@ bool ON_MeshCurvatureStats::Set( ON::curvature_style kappa_style,
       rc = false;
     else {
       // sum curvatures
-      ON_SortDoubleArray( ON::quick_sort, kappa, m_count );
+      ON_SortDoubleArray( ON::sort_algorithm::quick_sort, kappa, m_count );
 
       // mode
       m_mode = kappa[m_count/2];
@@ -5060,7 +6509,9 @@ struct EDGEINFO
             // 4 = edge is not longest side of triangle
             // 5 = edge length is zero
             // 6 = edge would be a boundary if mesh were exploded
-            // 16 = edge will be removed to make a quad
+            // 7 = quad would not be convex
+            // 8 = if the edge were removed, the quad would not pass the min_diagonal_length_ratio test (not "square" enough)
+            // 16 = tha diagnoal is too short to remove in the first pass that makes the "obvious" quads.
   double length;
 };
 
@@ -5070,6 +6521,11 @@ bool ON_Mesh::ConvertTrianglesToQuads(
               )
 {
   ON_Workspace ws;
+
+  ON_3dPoint QCornerPoints[4];
+  ON_3dVector QuadSides[4];
+  ON_3dVector QuadCornerNormals[4];
+  double QuadCornerDots[4];
 
   double d;
 
@@ -5081,7 +6537,9 @@ bool ON_Mesh::ConvertTrianglesToQuads(
 
   diagonal_count = 0;
 
-  if ( angle_tol_radians < 0.0 || !ON_IsValid(angle_tol_radians) )
+  if ( angle_tol_radians < 0.0
+    || !ON_IsValid(angle_tol_radians)
+    || angle_tol_radians > 0.5*ON_PI )
   {
     // 2.5 degrees
     angle_tol_radians = 0.043633231299858239423092269212215;
@@ -5132,6 +6590,7 @@ bool ON_Mesh::ConvertTrianglesToQuads(
 
   const int edge_count = top.m_tope.Count();
   struct EDGEINFO* EI = (struct EDGEINFO*)ws.GetMemory(edge_count*sizeof(*EI));
+
   for ( i = 0; i < edge_count; i++ )
   {
     struct EDGEINFO& ei = EI[i];
@@ -5140,8 +6599,9 @@ bool ON_Mesh::ConvertTrianglesToQuads(
     ei.vi[0] = top.m_topv[tope.m_topvi[0]].m_vi[0];
     ei.vi[2] = top.m_topv[tope.m_topvi[1]].m_vi[0];
     ei.length = m_V[ei.vi[0]].DistanceTo(m_V[ei.vi[2]]);
-    if ( ei.length <= 0.0 || !ON_IsValid(ei.length) )
+    if ( !(ei.length > 0.0) || !ON_IsValid(ei.length) )
     {
+      // ei.length is a nan or worse
       ei.flag = 5;
     }
     else if ( tope.m_topf_count != 2 )
@@ -5165,7 +6625,7 @@ bool ON_Mesh::ConvertTrianglesToQuads(
         f0vi = m_F[ei.fi[0]].vi;
         f1vi = m_F[ei.fi[1]].vi;
         ei.flag = 6;
-        for ( ii = 0; ii < 3 && ei.flag; ii++ )
+        for ( ii = 0; ii < 3 && 0 != ei.flag; ii++ )
         {
           for (jj = 0; jj < 3; jj++)
           {
@@ -5181,7 +6641,50 @@ bool ON_Mesh::ConvertTrianglesToQuads(
               ei.vi[1] = f1vi[(jj+1)%3];
               ei.vi[2] = f0vi[(ii+1)%3];
               ei.vi[3] = f0vi[(ii+2)%3];
-              ei.flag = 0;
+
+              // convexity test
+              QCornerPoints[0] = m_V[ei.vi[0]];
+              QCornerPoints[1] = m_V[ei.vi[1]];
+              QCornerPoints[2] = m_V[ei.vi[2]];
+              QCornerPoints[3] = m_V[ei.vi[3]];
+              QuadSides[0] = QCornerPoints[1] - QCornerPoints[0];
+              QuadSides[1] = QCornerPoints[2] - QCornerPoints[1];
+              QuadSides[2] = QCornerPoints[3] - QCornerPoints[2];
+              QuadSides[3] = QCornerPoints[0] - QCornerPoints[3];
+              // Actually, opposite normal but
+              QuadCornerNormals[0] = ON_CrossProduct(QuadSides[0], QuadSides[3]);
+              QuadCornerNormals[1] = ON_CrossProduct(QuadSides[1], QuadSides[0]);
+              QuadCornerNormals[2] = ON_CrossProduct(QuadSides[2], QuadSides[1]);
+              QuadCornerNormals[3] = ON_CrossProduct(QuadSides[3], QuadSides[2]);
+              QuadCornerDots[0] = QuadCornerNormals[0] * QuadCornerNormals[1];
+              QuadCornerDots[1] = QuadCornerNormals[1] * QuadCornerNormals[2];
+              QuadCornerDots[2] = QuadCornerNormals[2] * QuadCornerNormals[3];
+              QuadCornerDots[3] = QuadCornerNormals[3] * QuadCornerNormals[0];
+              if (QuadCornerDots[0] > 0.0)
+              {
+                if (QuadCornerDots[1] > 0.0 && QuadCornerDots[2] > 0.0 && QuadCornerDots[3] > 0.0)
+                {
+                  // If the diagonal were removed, the resulting quad would be convex
+                  // so this edge is a candidate for being removed.
+                  ei.flag = 0; 
+                  break;
+                }
+              }              
+              else if (QuadCornerDots[0] < 0.0)
+              {
+                if (QuadCornerDots[1] < 0.0 && QuadCornerDots[2] < 0.0 && QuadCornerDots[3] < 0.0)
+                {
+                  // If the diagonal were removed, the resulting quad would be convex
+                  // so this edge is a candidate for being removed.
+                  ei.flag = 0;
+                  break;
+                }
+              }
+
+              // If the diagonal were removed, the resulting quad would not be convex
+              // or one of the QuadCornerDots[] values is a nan.
+              // In either case, this edge will not be removed.
+              ei.flag = 7; 
               break;
             }
           }
@@ -5193,43 +6696,59 @@ bool ON_Mesh::ConvertTrianglesToQuads(
   for ( i = 0; i < edge_count; i++ )
   {
     struct EDGEINFO& ei = EI[i];
-    if ( ei.flag )
+    if ( 0 != ei.flag )
       continue;
-
-    ei.flag = 16;
-
-    // It is CRITICAL that the length compare use >=.
-    // Otherwise tesselations of equailateral triangles
-    // will not work right in this fuction.
-    fei = top.m_topf[ei.fi[0]].m_topei;
-    if (    ( i != fei[0] && EI[fei[0]].length >= ei.length )
-         || ( i != fei[1] && EI[fei[1]].length >= ei.length )
-         || ( i != fei[2] && EI[fei[2]].length >= ei.length )
-         )
-    {
-      // diagonal is not strictly longest in this triangle
-      continue;
-    }
-
-    // It is CRITICAL that the length compare use >=.
-    // Otherwise tesselations of equailateral triangles
-    // will not work right in this fuction.
-    fei = top.m_topf[ei.fi[1]].m_topei;
-    if (    ( i != fei[0] && EI[fei[0]].length >= ei.length )
-         || ( i != fei[1] && EI[fei[1]].length >= ei.length )
-         || ( i != fei[2] && EI[fei[2]].length >= ei.length )
-         )
-    {
-      // diagonal is not strictly longest in this triangle
-      continue;
-    }
 
     d = m_V[ei.vi[1]].DistanceTo(m_V[ei.vi[3]]);
     d /= ei.length;
-    if ( d < min_diagonal_length_ratio || d > max_diagonal_length_ratio )
+    if (d < min_diagonal_length_ratio || d > max_diagonal_length_ratio)
     {
       // quad wouldn't be square enough
+      ei.flag = 8;
       continue;
+    }
+      
+    if (face_count > 2)
+    {
+      // It is CRITICAL that the length compare use >=.
+      // Otherwise tesselations of equailateral triangles
+      // will not work right in this fuction.
+      fei = top.m_topf[ei.fi[0]].m_topei;
+      if ((i != fei[0] && EI[fei[0]].length >= ei.length)
+        || (i != fei[1] && EI[fei[1]].length >= ei.length)
+        || (i != fei[2] && EI[fei[2]].length >= ei.length)
+        )
+      {
+        // diagonal is not strictly longest in this triangle.
+        // A 2nd pass would be required to determine which
+        // diagonals could be removed. 
+        // See the file "RH-5481 IssueClarified.3dm" in
+        // http://mcneel.myjetbrains.com/youtrack/issue/RH-5481
+        // for an example.
+        ei.flag = 16;
+        continue;
+      }
+
+      // It is CRITICAL that the length compare use >=.
+      // Otherwise tesselations of equailateral triangles
+      // will not work right in this fuction.
+      fei = top.m_topf[ei.fi[1]].m_topei;
+      if ((i != fei[0] && EI[fei[0]].length >= ei.length)
+        || (i != fei[1] && EI[fei[1]].length >= ei.length)
+        || (i != fei[2] && EI[fei[2]].length >= ei.length)
+        )
+      {
+        // diagonal is not strictly longest in this triangle
+        // A 2nd pass would be required to determine which
+        // diagonals could be removed. 
+        // See the file "RH-5481 IssueClarified.3dm" in
+        // http://mcneel.myjetbrains.com/youtrack/issue/RH-5481
+        // for an example.
+        ei.flag = 16;
+        continue;
+      }
+
+
     }
 
     ei.flag = 0;
@@ -5237,20 +6756,32 @@ bool ON_Mesh::ConvertTrianglesToQuads(
     diagonal_count++;
   }
 
+  
+  // Dale Lear 2016-March-28
+  // If we are going to fix bugs like the issue raised in 
+  //  http://mcneel.myjetbrains.com/youtrack/issue/RH-5481
+  // Additional passes need to be made here that decide which diagonals to 
+  // remove hen the diagonal is shorter than a resulting quad side.
+  // See the file "RH-5481 IssueClarified.3dm" in
+  // http://mcneel.myjetbrains.com/youtrack/issue/RH-5481
+  // for an example.
+
+  
   if ( diagonal_count > 0 )
   {
     DestroyTree();
     DestroyPartition();
     m_top.Destroy();
-    for ( i = 0; i < edge_count; i++ )
+    m_invalid_count = 0;
+    m_triangle_count = 0;
+    m_quad_count = 0;
+    for (i = 0; i < edge_count; i++)
     {
       struct EDGEINFO& ei = EI[i];
       if ( ei.flag )
         continue;
       memcpy( m_F[ei.fi[0]].vi, ei.vi, 4*sizeof(ei.vi[0]) );
       memset( m_F[ei.fi[1]].vi, 0xFF,  4*sizeof(ei.vi[0]) );
-      m_triangle_count--;
-      m_quad_count++;
     }    
     CullDegenerateFaces();
   }
@@ -5260,202 +6791,466 @@ bool ON_Mesh::ConvertTrianglesToQuads(
 
 bool ON_Mesh::ConvertQuadsToTriangles()
 {
+  double planar_tolerance = ON_UNSET_VALUE;
+  double angle_tolerance_radians = ON_UNSET_VALUE;
+  unsigned int split_method = 1;
+
+  ConvertNonPlanarQuadsToTriangles(
+    planar_tolerance, 
+    angle_tolerance_radians,
+    split_method
+  );
+
+  return ( QuadCount() == 0 && TriangleCount() == FaceCount() ) ? true : false;
+}
+
+double ON_TriangleArea3d(ON_3dPoint A, ON_3dPoint B, ON_3dPoint C)
+{
+  // speed this up if needed
+  return 0.5*ON_CrossProduct(B-A,C-A).Length();
+}
+
+double ON_TriangleArea2d(ON_2dPoint A, ON_2dPoint B, ON_2dPoint C)
+{
+  const double ABx = B.x-A.x;
+  const double ABy = B.y-A.y;
+  const double CAx = C.x-A.x;
+  const double CAy = C.y-A.y;
+  return 0.5*fabs((ABx*CAy) - (ABy*CAx));
+}
+
+unsigned int ON_Mesh::ConvertNonPlanarQuadsToTriangles(
+  double planar_tolerance,
+  double angle_tolerance_radians,
+  unsigned int split_method
+)
+{
+  bool bDeleteNgonsContainingSplitQuads = false;
+  return ConvertNonPlanarQuadsToTriangles(
+    planar_tolerance,
+    angle_tolerance_radians,
+    split_method,
+    bDeleteNgonsContainingSplitQuads
+    );
+}
+
+static int ON_CompareUnsignedInt(const unsigned int* i0, const unsigned int* i1)
+{
+  if ( i0 < i1 )
+    return -1;
+  if ( i0 > i1 )
+    return 1;
+  return 0;
+}
+
+unsigned int ON_Mesh::ConvertNonPlanarQuadsToTriangles(
+  double planar_tolerance,
+  double angle_tolerance_radians,
+  unsigned int split_method,
+  bool bDeleteNgonsContainingSplitQuads
+  )
+{
+  const unsigned int face_count0 = FaceUnsignedCount();
+  if ( face_count0 <= 0 )
+    return 0;
+
+  const ON_3dPointListRef vertex_list(this);
+  const unsigned int vertex_count = vertex_list.PointCount();
+  if ( vertex_count <= 0 )
+    return 0;
+
+  const unsigned int quad_count0 = (unsigned int)QuadCount();
+
+  if ( quad_count0 <= 0 )
+    return 0;
+
+  const bool bSplitAllQuads = (ON_UNSET_VALUE == planar_tolerance && ON_UNSET_VALUE == angle_tolerance_radians);
+
+  if (false == bSplitAllQuads && !(planar_tolerance >= 0.0) && !(angle_tolerance_radians >= 0.0))
+    return 0;
+  
+  if ( 0 == split_method )
+    split_method = 1;
+  
+  if ( split_method < 1 || split_method > 6 )
+    return 0;
+
   const bool bHasFaceNormals = HasFaceNormals();
-  const int fcount = FaceCount();
-  const int vcount = VertexCount();
-  int fi, idmin;;
+
+  unsigned int ngon_count = HasNgons() ? NgonUnsignedCount() : 0;
+  unsigned int ngon_index = ON_UNSET_UINT_INDEX;
+
+  unsigned int fi;
+  int idmin;
   double d0, d1, dmin, d;
-  if ( fcount > 0 && QuadCount() > 0 ) 
+  ON_3dPoint P[4];
+
+  // use SetCapacity() instead of Reserve() because it's unlikely
+  // this mesh will have anything else added and we don't want to
+  // waste memory.
+  if ( ((unsigned int)m_F.Capacity()) < face_count0 + quad_count0 )
+    m_F.SetCapacity( face_count0 + quad_count0 );
+  if ( bHasFaceNormals && ((unsigned int)m_FN.Capacity()) < face_count0 + quad_count0 )
+    m_FN.SetCapacity( face_count0 + quad_count0 );
+
+  const double rel_tol = 8.0*( vertex_list.DoublePrecision() ? ON_EPSILON : ON_FLOAT_EPSILON );
+
+  ON_3dVector FN;
+
+  // If bDeleteNgonsContainingSplitQuads = true, then uint_buffer[] is a list
+  // of ngons to delete.
+  //
+  // if bDeleteNgonsContainingSplitQuads = false, then ...  // 
+  // If the mesh has n-gons, then ngon_new_face_count[ngon_index]
+  // is the number of new faces to add to an existing ngon.
+  // This happens when an n-gon contains a quad that is divided
+  // into two triangles.
+  ON_SimpleArray<unsigned int> uint_buffer;
+
+
+  unsigned int* ngon_new_face_count = nullptr;
+  bool bUpdateNgons = false;
+  bool bDeleteNgonMap = false;
+  if ( ngon_count > 0 )
   {
-    // use SetCapacity() instead of Reserve() because it's unlikely
-    // this mesh will have anything else added and we don't want to
-    // waste memory.
-    if ( m_F.Capacity() < fcount + m_quad_count )
-      m_F.SetCapacity( fcount + m_quad_count );
-    if ( bHasFaceNormals && m_FN.Capacity() < fcount + m_quad_count )
-      m_FN.SetCapacity( fcount + m_quad_count );
-
-    const ON_3dPoint* dV = ( vcount > 0 && HasDoublePrecisionVertices() 
-                             && ( HasSynchronizedDoubleAndSinglePrecisionVertices() || DoublePrecisionVerticesAreValid() ) 
-                           )
-                   ? DoublePrecisionVertices().Array()
-                   : 0;
-
-    const ON_3fPoint* fV = m_V.Array();
-
-    const double rel_tol = 8.0*( (0 != dV) ? ON_EPSILON : ON_FLOAT_EPSILON );
-
-    ON_3dVector FN;
-
-    for ( fi = 0; fi < fcount; fi++ ) 
+    if (bDeleteNgonsContainingSplitQuads)
     {
-      ON_MeshFace& f0 = m_F[fi];
-      if ( f0.IsValid(vcount) && f0.IsQuad() )
+      uint_buffer.Reserve(64);
+    }
+    else
+    {
+      bDeleteNgonMap = (0 == NgonMap());
+      if (0 == CreateNgonMap())
       {
-        if ( 0 != dV )
-        {
-          d0 = dV[f0.vi[0]].DistanceTo(dV[f0.vi[2]]);
-          d1 = dV[f0.vi[1]].DistanceTo(dV[f0.vi[3]]);
+        ngon_count = 0;
+        bDeleteNgonMap = true;
+        bDeleteNgonsContainingSplitQuads = true;
+      }
+      else
+      {
+        uint_buffer.Reserve(ngon_count);
+        uint_buffer.SetCount(ngon_count);
+        uint_buffer.Zero();
+        ngon_new_face_count = uint_buffer.Array();
+      }
+    }
+  }
 
-          // if quad is degenerate, just turn it into a triangle
-          idmin = -1;
-          dmin = ((d0<=d1)?d0:d1)*rel_tol;
-          if ( dmin > ON_ZERO_TOLERANCE )
-            dmin = ON_ZERO_TOLERANCE;
-          d = dV[f0.vi[0]].DistanceTo(dV[f0.vi[1]]);
-          if ( d < dmin )
+
+  for ( fi = 0; fi < face_count0; fi++ ) 
+  {
+    ON_MeshFace& f0 = m_F[fi];
+    if ( ngon_count > 0 )
+    {            
+      ngon_index = m_NgonMap[fi];
+      if ( ngon_index >= ngon_count )
+      {
+        ngon_index = ON_UNSET_UINT_INDEX;
+        m_NgonMap[fi] = ngon_index;
+      }
+    }
+
+    if ( false == f0.IsValid(vertex_count) )
+      continue;
+
+    if ( false == f0.IsQuad() )
+      continue;
+
+    if (planar_tolerance >= 0.0 || angle_tolerance_radians >= 0.0)
+    {
+      if (true == f0.IsPlanar(planar_tolerance, angle_tolerance_radians, vertex_list, 0))
+        continue;
+    }
+ 
+    P[0] = vertex_list[f0.vi[0]];
+    P[1] = vertex_list[f0.vi[1]];
+    P[2] = vertex_list[f0.vi[2]];
+    P[3] = vertex_list[f0.vi[3]];
+    d0 = P[0].DistanceTo(P[2]);
+    d1 = P[1].DistanceTo(P[3]);
+
+    // if quad is degenerate, just turn it into a triangle
+    idmin = -1;
+    dmin = ((d0<=d1)?d0:d1)*rel_tol;
+    if ( dmin > ON_ZERO_TOLERANCE )
+      dmin = ON_ZERO_TOLERANCE;
+    d = P[0].DistanceTo(P[1]);
+    if ( d < dmin )
+    {
+      idmin = 0;
+      dmin = d;
+    }
+    d = P[1].DistanceTo(P[2]);
+    if ( d < dmin )
+    {
+      idmin = 1;
+      dmin = d;
+    }
+    d = P[2].DistanceTo(P[3]);
+    if ( d < dmin )
+    {
+      idmin = 2;
+      dmin = d;
+    }
+    d = P[3].DistanceTo(P[0]);
+    if ( d < dmin )
+    {
+      idmin = 3;
+      dmin = d;
+    }
+    
+
+    if ( !(d0 > 0.0) )
+    {
+      if ( !(d1 > 0.0) )
+        continue;
+      // d0 = 0 or is invalid and d1 > 0
+      // force split along v[1],v[3]
+      idmin = -1;
+      d0 = 1.0;
+      d1 = 0.0;
+    }
+    else if ( !(d1 > 0.0) )
+    {
+      // d1 = 0 or is invalid and d0 > 0
+      // force split along v[0],v[1]
+      idmin = -1;
+      d1 = 1.0;
+      d0 = 0.0;
+    }
+
+    m_quad_count--;
+    m_triangle_count++;
+    if ( 0 == idmin ) // m_V[f0.vi[0]] == m_V[f0.vi[1]] (nearly)
+    {
+      // degenerate quad - remove duplicate vertex
+      f0.vi[0] = f0.vi[1];
+      f0.vi[1] = f0.vi[2];
+      f0.vi[2] = f0.vi[3];
+    }
+    else if ( 1 == idmin ) // m_V[f0.vi[1]] == m_V[f0.vi[2]] (nearly)
+    {
+      // degenerate quad - remove duplicate vertex
+      int vi0 = f0.vi[0]; 
+      f0.vi[0] = f0.vi[2];
+      f0.vi[1] = f0.vi[3];
+      f0.vi[2] = vi0;
+      f0.vi[3] = vi0;
+    }
+    else if ( 2 == idmin ) // m_V[f0.vi[2]] == m_V[f0.vi[3]] (nearly)
+    {
+      // degenerate quad - remove duplicate vertex
+      f0.vi[2] = f0.vi[1];
+      f0.vi[1] = f0.vi[0];
+      f0.vi[0] = f0.vi[3];
+      f0.vi[3] = f0.vi[2];
+    }
+    else if ( 3 == idmin ) // m_V[f0.vi[3]] == m_V[f0.vi[0]] (nearly)
+    {
+      // degenerate quad - remove duplicate vertex
+      f0.vi[3] = f0.vi[2];
+    }
+    else
+    {
+      // split non-degenerate quad into two triangles
+
+      if ( ngon_count > 0 )
+      {            
+        if (bDeleteNgonsContainingSplitQuads)
+        {
+          if (ON_UNSET_INT_INDEX != ngon_index)
           {
-            idmin = 0;
-            dmin = d;
-          }
-          d = dV[f0.vi[1]].DistanceTo(dV[f0.vi[2]]);
-          if ( d < dmin )
-          {
-            idmin = 1;
-            dmin = d;
-          }
-          d = dV[f0.vi[2]].DistanceTo(dV[f0.vi[3]]);
-          if ( d < dmin )
-          {
-            idmin = 2;
-            dmin = d;
-          }
-          d = dV[f0.vi[3]].DistanceTo(dV[f0.vi[0]]);
-          if ( d < dmin )
-          {
-            idmin = 3;
-            dmin = d;
+            uint_buffer.Append(ngon_index);
+            bUpdateNgons = true;
           }
         }
         else
         {
-          d0 = m_V[f0.vi[0]].DistanceTo(m_V[f0.vi[2]]);
-          d1 = m_V[f0.vi[1]].DistanceTo(m_V[f0.vi[3]]);
-
-          // if quad is degenerate, just turn it into a triangle
-          idmin = -1;
-          dmin = ((d0<=d1)?d0:d1)*rel_tol;
-          if ( dmin > ON_ZERO_TOLERANCE )
-            dmin = ON_ZERO_TOLERANCE;
-          d = m_V[f0.vi[0]].DistanceTo(m_V[f0.vi[1]]);
-          if ( d < dmin )
+          // update n-gon map
+          m_NgonMap.Append(ngon_index);
+          if (ngon_index < ngon_count)
           {
-            idmin = 0;
-            dmin = d;
-          }
-          d = m_V[f0.vi[1]].DistanceTo(m_V[f0.vi[2]]);
-          if ( d < dmin )
-          {
-            idmin = 1;
-            dmin = d;
-          }
-          d = m_V[f0.vi[2]].DistanceTo(m_V[f0.vi[3]]);
-          if ( d < dmin )
-          {
-            idmin = 2;
-            dmin = d;
-          }
-          d = m_V[f0.vi[3]].DistanceTo(m_V[f0.vi[0]]);
-          if ( d < dmin )
-          {
-            idmin = 3;
-            dmin = d;
-          }
-        }
-
-        if ( !(d0 > 0.0) )
-        {
-          if ( !(d1 > 0.0) )
-            continue;
-          // d0 = 0 or is invalid and d1 > 0
-          // force split along v[1],v[3]
-          idmin = -1;
-          d0 = 1.0;
-          d1 = 0.0;
-        }
-        else if ( !(d1 > 0.0) )
-        {
-          // d1 = 0 or is invalid and d0 > 0
-          // force split along v[0],v[1]
-          idmin = -1;
-          d1 = 1.0;
-          d0 = 0.0;
-        }
-
-        m_quad_count--;
-        m_triangle_count++;
-        if ( 0 == idmin ) // m_V[f0.vi[0]] == m_V[f0.vi[1]] (nearly)
-        {
-          // degenerate quad - remove duplicate vertex
-          f0.vi[0] = f0.vi[1];
-          f0.vi[1] = f0.vi[2];
-          f0.vi[2] = f0.vi[3];
-        }
-        else if ( 1 == idmin ) // m_V[f0.vi[1]] == m_V[f0.vi[2]] (nearly)
-        {
-          // degenerate quad - remove duplicate vertex
-          int vi0 = f0.vi[0]; 
-          f0.vi[0] = f0.vi[2];
-          f0.vi[1] = f0.vi[3];
-          f0.vi[2] = vi0;
-          f0.vi[3] = vi0;
-        }
-        else if ( 2 == idmin ) // m_V[f0.vi[2]] == m_V[f0.vi[3]] (nearly)
-        {
-          // degenerate quad - remove duplicate vertex
-          f0.vi[2] = f0.vi[1];
-          f0.vi[1] = f0.vi[0];
-          f0.vi[0] = f0.vi[3];
-          f0.vi[3] = f0.vi[2];
-        }
-        else if ( 3 == idmin ) // m_V[f0.vi[3]] == m_V[f0.vi[0]] (nearly)
-        {
-          // degenerate quad - remove duplicate vertex
-          f0.vi[3] = f0.vi[2];
-        }
-        else
-        {
-          // split non-degenerate quad into two triangles
-          ON_MeshFace& f1 = m_F.AppendNew();
-          if  ( d0 <= d1 ) 
-          {
-            f1.vi[0] = f0.vi[0];
-            f1.vi[1] = f0.vi[2];
-            f1.vi[2] = f0.vi[3];
-            f1.vi[3] = f1.vi[2];
-            f0.vi[3] = f0.vi[2];
-          }
-          else 
-          {
-            f1.vi[0] = f0.vi[1];
-            f1.vi[1] = f0.vi[2];
-            f1.vi[2] = f0.vi[3];
-            f1.vi[3] = f1.vi[2];
-            f0.vi[2] = f0.vi[3];
-          }
-          if ( bHasFaceNormals ) 
-          {
-            if ( 0 != dV )
-            {
-              m_F[fi].ComputeFaceNormal(dV,FN);
-              m_FN[fi] = FN;
-              m_F[m_F.Count()-1].ComputeFaceNormal(dV,FN);
-            }
-            else
-            {
-              m_F[fi].ComputeFaceNormal(fV,FN);
-              m_FN[fi] = FN;
-              m_F[m_F.Count()-1].ComputeFaceNormal(fV,FN);
-            }
-            m_FN.AppendNew() = FN;
+            // The quad was in an n-gon and the new face index
+            // will be appended to the n-gons m_fi[] list.
+            ngon_new_face_count[ngon_index]++;
+            bUpdateNgons = true;
           }
         }
       }
+
+      ON_MeshFace& f1 = m_F.AppendNew();
+      bool bSplitAlongDiagonal02 = true;
+      switch(split_method)
+      {
+      case 1:
+        if ( d1 < d0 )
+          bSplitAlongDiagonal02 = false;
+        break;
+
+      case 2:
+        if ( d1 > d0 )
+          bSplitAlongDiagonal02 = false;
+        break;
+
+      case 3:
+      case 4:
+        {
+          double a0 = ON_TriangleArea3d(P[0],P[1],P[2]) + ON_TriangleArea3d(P[0],P[2],P[3]);
+          double a1 = ON_TriangleArea3d(P[0],P[1],P[3]) + ON_TriangleArea3d(P[1],P[2],P[3]);
+          if (a0 == a1)
+          {
+            if (d1 < d0)
+              bSplitAlongDiagonal02 = false;
+          }
+          else if ( 3 == split_method )
+          {
+            // minimize area
+            if (a1 < a0)
+              bSplitAlongDiagonal02 = false;
+          }
+          else
+          {
+            // maximize area
+            if (a1 > a0)
+              bSplitAlongDiagonal02 = false;
+          }
+        }
+        break;
+
+      case 5:
+      case 6:
+        {
+          ON_3dVector corner_normals[4];
+          if (f0.GetCornerNormals(vertex_list, corner_normals))
+          {
+            double a[2];
+            for (unsigned int i = 0; i < 2; i++)
+            {
+              a[i]
+                = (ON_UNSET_VALUE != corner_normals[i].x && ON_UNSET_VALUE != corner_normals[i + 2].x)
+                ? corner_normals[i] * corner_normals[i + 2]
+                : 2.0; // some valid number bigger than 1.0
+            }
+
+            if (a[0] == a[1])
+            {
+              if (d1 < d)
+                bSplitAlongDiagonal02 = false;
+            }
+            else if (5 == split_method)
+            {
+              // minimize angle
+              if (a[0] > a[1])
+                bSplitAlongDiagonal02 = false;
+            }
+            else
+            {
+              // maximize angle
+              if (a[0] < a[1])
+                bSplitAlongDiagonal02 = false;
+            }
+          }
+        }
+        break;
+      }
+
+      if  ( bSplitAlongDiagonal02 ) 
+      {
+        f1.vi[0] = f0.vi[0];
+        f1.vi[1] = f0.vi[2];
+        f1.vi[2] = f0.vi[3];
+        f1.vi[3] = f1.vi[2];
+        f0.vi[3] = f0.vi[2];
+      }
+      else 
+      {
+        f1.vi[0] = f0.vi[1];
+        f1.vi[1] = f0.vi[2];
+        f1.vi[2] = f0.vi[3];
+        f1.vi[3] = f1.vi[2];
+        f0.vi[2] = f0.vi[3];
+      }
+
+      if ( bHasFaceNormals ) 
+      {
+        m_F[fi].ComputeFaceNormal(vertex_list,FN);
+        m_FN[fi] = FN;
+        m_F[m_F.Count()-1].ComputeFaceNormal(vertex_list,FN);
+        m_FN.AppendNew() = FN;
+      }
     }
-    if ( fcount != m_F.Count() )
-      DestroyTopology(); // we added some triangles
   }
-  return ( QuadCount() == 0 && TriangleCount() == FaceCount() ) ? true : false;
+
+  if ( face_count0 != m_F.UnsignedCount() )
+  {
+    // we added some triangles which means cached topology
+    // and partition information is no longer valid.
+    DestroyTopology(); 
+    DestroyPartition();
+  }
+
+  if ( bUpdateNgons )
+  {
+    if (bDeleteNgonsContainingSplitQuads)
+    {
+      const unsigned int uint_buffer_count = uint_buffer.UnsignedCount();
+      if (uint_buffer_count > 0)
+      {
+        uint_buffer.QuickSort(ON_CompareUnsignedInt);
+        unsigned int ngon_index_count = 0;
+        unsigned int* ngon_index_list = uint_buffer.Array();
+        ngon_index = ON_UNSET_UINT_INDEX;
+        for (unsigned int i = 0; i < uint_buffer_count; i++ )
+        {
+          if (ngon_index == uint_buffer[i])
+            continue;
+          ngon_index = uint_buffer[i];
+          ngon_index_list[ngon_index_count++] = ngon_index;
+        }
+        RemoveNgons(ngon_index_count, ngon_index_list);
+      }
+    }
+    else
+    {
+      if (m_NgonMap.UnsignedCount() == m_F.UnsignedCount())
+      {
+        // allocate room for new face indices
+        for (ngon_index = 0; ngon_index < ngon_count; ngon_index++)
+        {
+          if (ngon_new_face_count[ngon_index] <= 0)
+            continue;
+          ON_MeshNgon* ngon = this->m_Ngon[ngon_index];
+          if (0 == ngon)
+            continue;
+          unsigned int Fcount0 = ngon->m_Fcount;
+          ngon = m_NgonAllocator.ReallocateNgon(ngon, ngon->m_Vcount, ngon->m_Fcount + ngon_new_face_count[ngon_index]);
+          ngon->m_Fcount = Fcount0;
+          m_Ngon[ngon_index] = ngon;
+        }
+
+        // Add new faces to appropriate ngon face index lists
+        for (fi = face_count0; fi < m_F.UnsignedCount(); fi++)
+        {
+          ngon_index = m_NgonMap[fi];
+          if (ngon_index < ngon_count)
+          {
+            ON_MeshNgon* ngon = m_Ngon[ngon_index];
+            if (ngon)
+              ngon->m_fi[ngon->m_Fcount++] = fi;
+          }
+        }
+      }
+      else
+      {
+        bDeleteNgonMap = true;
+      }
+    }
+  }
+
+  if ( bDeleteNgonMap )
+    m_NgonMap.Destroy();
+
+  return quad_count0 - QuadCount();
 }
 
 bool ON_Mesh::CountQuads()
@@ -5541,9 +7336,11 @@ bool ON_Mesh::ComputeVertexNormals()
       // average face normals to get an estimate for a vertex normal
       m_N.SetCapacity(vcount);
       m_N.SetCount(0);
-      for ( vi = 0; vi < vcount; vi++ ) {
-        n.Zero();
-        for ( j = vfcount[vi]-1; j >= 0; j-- ) {
+      for ( vi = 0; vi < vcount; vi++ )
+      {
+        n = ON_3fVector::ZeroVector;
+        for ( j = vfcount[vi]-1; j >= 0; j-- ) 
+        {
           n += m_FN[vfi[vi][j]];
         }
         if ( !n.Unitize() )
@@ -5600,7 +7397,7 @@ bool ON_Mesh::NormalizeTextureCoordinates()
       m_packed_tex_rotate = false;
       m_Ttag.SetDefaultSurfaceParameterMappingTag();
       if ( m_mesh_parameters )
-        m_mesh_parameters->m_texture_range = 1;
+        m_mesh_parameters->SetTextureRange(1);
     }
   }
 
@@ -5901,31 +7698,34 @@ static int compare3dPoint( const ON_3dPoint* a, const ON_3dPoint* b )
 typedef int (*ON_COMPAR_LPVOID_LPVOID)(const void*,const void*);
 
 static 
-int GetPointMap( int pt_count, const ON_3fPoint* fV, const ON_3dPoint* dV, ON_SimpleArray<int>& pt_map )
+unsigned int GetPointMap(unsigned int pt_count, const ON_3fPoint* fV, const ON_3dPoint* dV, ON_SimpleArray<unsigned int>& pt_map)
 {
+  // Faster than ON_Mesh::GetVertexLocationIds()
+  //  This static is used only in CullDegenerateFaces().
+  //
   // Builds a mapping array, pt_map[], such that the length of pt_map[] 
   // is pt_count and pt_map[i] == pt_map[j] if and only if pt[i] == pt[j]
   // as 3d points.  The values in map[] run from 0 to max_pt_index.
-  int vt0, vt1;
+  unsigned int vt0, vt1;
   ON_3fPoint fp0;
   ON_3dPoint dp0;
-  int* map;
-  int* index;
-  int max_pt_index = 0;
-  if ( pt_count > 0 && (dV || fV) )
+  unsigned int* map;
+  unsigned int* index;
+  unsigned int max_pt_index = 0;
+  if (pt_count > 0 && (nullptr != dV || nullptr != fV))
   {
-    index = (int*)onmalloc(pt_count*sizeof(*index));
+    index = (unsigned int*)onmalloc(pt_count*sizeof(*index));
     
     if ( dV )
-      ON_Sort( ON::quick_sort, index, dV, pt_count, sizeof(*dV), (ON_COMPAR_LPVOID_LPVOID)compare3dPoint );
+      ON_Sort( ON::sort_algorithm::quick_sort, index, dV, pt_count, sizeof(*dV), (ON_COMPAR_LPVOID_LPVOID)compare3dPoint );
     else
-      ON_Sort( ON::quick_sort, index, fV, pt_count, sizeof(*fV), (ON_COMPAR_LPVOID_LPVOID)compare3fPoint );
+      ON_Sort( ON::sort_algorithm::quick_sort, index, fV, pt_count, sizeof(*fV), (ON_COMPAR_LPVOID_LPVOID)compare3fPoint );
     
     pt_map.SetCapacity( pt_count );
     pt_map.SetCount( pt_count );
     map = pt_map.Array();
-    for ( vt0 = 0; vt0 < pt_count; vt0++ )
-      map[vt0] = -1;
+    for (vt0 = 0; vt0 < pt_count; vt0++)
+      map[vt0] = ON_UNSET_UINT_INDEX;
 
     if ( dV )
     {
@@ -5957,295 +7757,75 @@ int GetPointMap( int pt_count, const ON_3fPoint* fV, const ON_3dPoint* dV, ON_Si
   }
   if ( max_pt_index == 0 )
     pt_map.Destroy();
+
   return max_pt_index;
 }
 
-int ON_Mesh::CullDegenerateFaces()
+unsigned int ON_Mesh::CullDegenerateFaces()
 {
-  // 30 December 2003 Dale Lear - fixed bug that was not culling
-  //     topologically degenerate faces.
+  const unsigned int face_count0 = m_F.UnsignedCount();
+  
+  DeleteComponents(
+    nullptr,
+    0,
+    true,  // bIgnoreInvalidComponents
+    true,  // bRemoveDegenerateFaces
+    false, // bRemoveUnusedVertices
+    true   // bRemoveEmptyNgons
+    );
 
-  int bad_count = 0;
-  int degenerate_count = 0;
-  const int fcount = m_F.Count();
-  const int vcount = m_V.Count();
-  ON_MeshFace f;
-  int fi;
+  const unsigned int face_count1 = m_F.UnsignedCount();
 
-  if ( fcount > 0 ) 
-  {
-    // use GetTopologyVertexMap() instead of calling Topology() because this mesh
-    // may have lots of bogus faces that need to be culled.
-    ON_SimpleArray<int> topv_map;
-    const ON_3dPoint* dV = Mesh_dV(*this);
-    const ON_3fPoint* fV = (0 == dV) ? m_V.Array() : 0;
-    const int topv_count = GetPointMap( m_V.Count(), fV, dV, topv_map );
-    if ( topv_count > 0 && topv_map.Count() == m_V.Count() ) 
-    {
-      ON_Workspace ws;
-      const int* vtop = topv_map.Array();
-      unsigned char* bBadFace = (unsigned char*)ws.GetMemory(fcount*sizeof(*bBadFace));
-      memset( bBadFace, 0, fcount*sizeof(*bBadFace) );
-      for ( fi = 0; fi < fcount; fi++ ) 
-      {
-        ON_MeshFace& f0 = m_F[fi];
-        // set f.vi[] to values of topoligical indices
-        {
-          int f0vi = f0.vi[0];
-          f.vi[0] = (f0vi < 0 || f0vi >= vcount) ? -1 : vtop[f0vi];
-
-          f0vi = f0.vi[1];
-          f.vi[1] = (f0vi < 0 || f0vi >= vcount) ? -1 : vtop[f0vi];
-
-          f0vi = f0.vi[2];
-          f.vi[2] = (f0vi < 0 || f0vi >= vcount) ? -1 : vtop[f0vi];
-
-          f0vi = f0.vi[3];
-          f.vi[3] = (f0vi < 0 || f0vi >= vcount) ? -1 : vtop[f0vi];
-        }
-
-        if ( !f.IsValid(topv_count) ) 
-        {
-          degenerate_count++;
-          //f = m_F[fi];
-          if ( f.vi[0] == f.vi[1] || f.vi[0] < 0 || f.vi[0] >= topv_count )
-          {
-            f0.vi[0] = f0.vi[1];
-            f0.vi[1] = f0.vi[2];
-            f0.vi[2] = f0.vi[3];
-            f.vi[0] = f.vi[1];
-            f.vi[1] = f.vi[2];
-            f.vi[2] = f.vi[3];
-          }
-
-          if ( f.vi[1] == f.vi[2] || f.vi[1] < 0 || f.vi[1] >= topv_count )
-          {
-            f0.vi[1] = f0.vi[2];
-            f0.vi[2] = f0.vi[3];
-            f.vi[1] = f.vi[2];
-            f.vi[2] = f.vi[3];
-          }
-
-          if ( f.vi[2] < 0 || f.vi[2] >= topv_count )
-          {
-            f0.vi[2] = f0.vi[3];
-            f.vi[2] = f.vi[3];
-          }
-
-          if ( f.vi[3] < 0 || f.vi[3] >= topv_count )
-          {
-            f0.vi[3] = f0.vi[2];
-            f.vi[3] = f.vi[2];
-          }
-          else if ( f.vi[0] == f.vi[3] && f.vi[2] != f.vi[3] )
-          {
-            f0.vi[0] = f0.vi[1];
-            f0.vi[1] = f0.vi[2];
-            f0.vi[2] = f0.vi[3];
-            f.vi[0] = f.vi[1];
-            f.vi[1] = f.vi[2];
-            f.vi[2] = f.vi[3];
-          }
-
-          if ( !f0.IsValid(vcount) || !f.IsValid(topv_count) ) 
-          {
-            // face cannot be repaired by juggling vertex indices
-            bBadFace[fi] = 1;
-            bad_count++;
-          }
-        }
-      }
-
-      if ( bad_count > 0 ) 
-      {
-        //  remove bad faces.
-        bool bHasFN = (m_FN.Count() == m_F.Count());
-        if ( !bHasFN )
-          m_FN.SetCount(0);
-
-        int fcnt = 0;
-        for ( fi = fcnt = 0; fi < fcount; fi++ )
-        {
-          if ( !bBadFace[fi] )
-          {
-            if ( fcnt < fi )
-            {
-              m_F[fcnt] = m_F[fi];
-              if ( bHasFN )
-                m_FN[fcnt] = m_FN[fi];
-            }
-            fcnt++;
-          }
-        }
-
-        m_F.SetCount(fcnt);
-        if ( bHasFN )
-          m_FN.SetCount(fcnt);
-      }
-
-      if ( degenerate_count > 0 )
-      {
-        // mesh was modified - destroy information that was
-        // calculated using the old mesh
-        DestroyTree();
-        DestroyPartition();
-        DestroyTopology();
-        m_invalid_count = 0;
-        m_quad_count = 0;
-        m_triangle_count = 0;
-      }
-    }
-  }
-  return degenerate_count;
+  return (face_count0 > face_count1) ? face_count0 - face_count1 : 0;
 }
 
 int ON_Mesh::CullUnusedVertices()
 {
-  //int cullcount = 0;
-  int vi, fi;
-  ON_Workspace ws;
-  CullDegenerateFaces();
-  int fcnt = m_F.Count();
-  int vcnt = m_V.Count();
-  int * vmap = ws.GetIntMemory( vcnt );
-  memset ( vmap, 0, vcnt*sizeof(vmap[0]) );
-  for ( fi = 0; fi < fcnt; fi++ )
-  {
-    const ON_MeshFace& f = m_F[fi];
-    vmap[f.vi[0]] = 1;
-    vmap[f.vi[1]] = 1;
-    vmap[f.vi[2]] = 1;
-    vmap[f.vi[3]] = 1;
-  }
+  const unsigned int vcount0 = m_V.UnsignedCount();
 
-  int newvcnt = 0;
-  for ( vi = 0; vi < vcnt; vi++ )
-  {
-    if ( vmap[vi] )
-      vmap[vi] = newvcnt++;
-    else {
-      vmap[vi] = -1;
-    }
-  }
+  DeleteComponents(
+    nullptr, // ci_list
+    0,       // ci_count
+    true,    // bIgnoreInvalidComponents
+    false,   // bRemoveDegenerateFaces
+    true,    // bRemoveUnusedVertices
+    false    // bRemoveEmptyNgons
+    );
 
-  if ( newvcnt == 0 )
+  if ( 0 == m_V.UnsignedCount() )
     Destroy();
-  else if ( newvcnt < vcnt )
-  {
-    DestroyTopology();
 
-    // buffer will hold up to vcnt 3d points
-    void* buffer = ws.GetMemory(vcnt*9*sizeof(double));
-
-    if ( HasSurfaceParameters() ) {
-      ON_2dPoint* s = (ON_2dPoint*)buffer;
-      for ( vi = 0; vi < vcnt; vi++ )
-      {
-        if ( vmap[vi]>=0 )
-          s[vmap[vi]] = m_S[vi];
-      }
-      memcpy( m_S.Array(), s, newvcnt*sizeof(s[0]) );
-      m_S.SetCount(newvcnt);
-    }
-
-    if ( HasDoublePrecisionVertices() )
-    {
-      ON_3dPointArray& D = DoublePrecisionVertices();
-      if ( vcnt == D.Count() )
-      {
-        bool bValidDoubles = DoublePrecisionVerticesAreValid();
-        ON_3dPoint* s = (ON_3dPoint*)buffer;
-        for ( vi = 0; vi < vcnt; vi++ )
-        {
-          if ( vmap[vi]>=0 )
-            s[vmap[vi]] = D[vi];
-        }
-        memcpy( D.Array(), s, newvcnt*sizeof(s[0]) );
-        D.SetCount(newvcnt);
-        if ( bValidDoubles )
-          SetDoublePrecisionVerticesAsValid();
-      }
-      else
-      {
-        DestroyDoublePrecisionVertices();
-      }
-    }
-
-    if ( HasVertexNormals() ) {
-      ON_3fVector* v = (ON_3fVector*)buffer;
-      for ( vi = 0; vi < vcnt; vi++ )
-      {
-        if ( vmap[vi]>=0 )
-          v[vmap[vi]] = m_N[vi];
-      }
-      memcpy( m_N.Array(), v, newvcnt*sizeof(v[0]) );
-      m_N.SetCount(newvcnt);
-    }
-
-    if ( HasTextureCoordinates() ) {
-      ON_2fPoint* t = (ON_2fPoint*)buffer;
-      for ( vi = 0; vi < vcnt; vi++ )
-      {
-        if ( vmap[vi]>=0 )
-          t[vmap[vi]] = m_T[vi];
-      }
-      memcpy( m_T.Array(), t, newvcnt*sizeof(t[0]) );
-      m_T.SetCount(newvcnt);
-    }
-
-    if ( HasPrincipalCurvatures() ) {
-      ON_SurfaceCurvature* k = (ON_SurfaceCurvature*)buffer;
-      for ( vi = 0; vi < vcnt; vi++ )
-      {
-        if ( vmap[vi]>=0 )
-          k[vmap[vi]] = m_K[vi];
-      }
-      memcpy( m_K.Array(), k, newvcnt*sizeof(k[0]) );
-      m_K.SetCount(newvcnt);
-    }
-
-    if ( HasVertexColors() ) {
-      ON_Color* c = (ON_Color*)buffer;
-      for ( vi = 0; vi < vcnt; vi++ )
-      {
-        if ( vmap[vi]>=0 )
-          c[vmap[vi]] = m_C[vi];
-      }
-      memcpy( m_C.Array(), c, newvcnt*sizeof(c[0]) );
-      m_C.SetCount(newvcnt);
-    }
-
-    {
-      bool bValidSingles = SinglePrecisionVerticesAreValid();
-      ON_3fPoint* p = (ON_3fPoint*)buffer;
-      for ( vi = 0; vi < vcnt; vi++ )
-      {
-        if ( vmap[vi]>=0 )
-          p[vmap[vi]] = m_V[vi];
-      }
-      memcpy( m_V.Array(), p, newvcnt*sizeof(p[0]) );
-      m_V.SetCount(newvcnt);
-      if ( bValidSingles )
-        SetSinglePrecisionVerticesAsValid();
-    }
-
-    for ( fi = 0; fi < fcnt; fi++ )
-    {
-      ON_MeshFace& f = m_F[fi];
-      f.vi[0] = vmap[f.vi[0]];
-      f.vi[1] = vmap[f.vi[1]];
-      f.vi[2] = vmap[f.vi[2]];
-      f.vi[3] = vmap[f.vi[3]];
-    }
-
-  }
-  return vcnt - newvcnt;
+  return ((int)(vcount0 - m_V.UnsignedCount()));
 }
 
 bool ON_Mesh::Compact()
 {
-  // CullDegenerateFaces(); // CullUnusedVertices() does this
+  unsigned int meshVcount = m_V.UnsignedCount();
+  unsigned int meshFcount = m_F.UnsignedCount();
+
+  if (m_FN.UnsignedCount() != meshFcount)
+    m_FN.Destroy();
+
+  if (m_N.UnsignedCount() != meshVcount)
+    m_N.Destroy();
+
+  if (m_T.UnsignedCount() != meshVcount)
+    m_T.Destroy();
+
+  if (m_S.UnsignedCount() != meshVcount)
+    m_S.Destroy();
+
+  if (m_K.UnsignedCount() != meshVcount)
+    m_K.Destroy();
+
+  if (m_C.UnsignedCount() != meshVcount)
+    m_C.Destroy();
+
+  if (m_H.UnsignedCount() != meshVcount)
+    m_H.Destroy();
+
   CullUnusedVertices();
+
   m_V.Shrink();
   m_F.Shrink();
   m_N.Shrink();
@@ -6254,7 +7834,39 @@ bool ON_Mesh::Compact()
   m_C.Shrink();
   m_S.Shrink();
   m_T.Shrink();
+
   return true;
+}
+
+void ON_Mesh::Cleanup(
+  bool bRemoveNgons, 
+  bool bRemoveDegenerateFaces, 
+  bool bCompact
+  )
+{
+  V4V5_DestroyNgonList(); // old junk
+  
+  if ( bRemoveNgons )
+    SetNgonCount(0);
+  
+  if (bRemoveDegenerateFaces)
+    CullDegenerateFaces();
+
+  DestroyRuntimeCache(true);  
+  
+  if ( bCompact )
+    Compact();
+}
+
+void ON_Mesh::Cleanup(bool bRemoveNgons)
+{
+  const bool bRemoveDegenerateFaces = true;
+  const bool bCompact = true;
+  Cleanup(
+    bRemoveNgons,
+    bRemoveDegenerateFaces,
+    bCompact
+    );
 }
 
 ////////////////////////////////////////////////////////////////
@@ -6373,14 +7985,28 @@ int ON_MeshTopology::TopFaceCount() const
   return m_topf.Count();
 }
 
-ON_3fPoint ON_MeshTopology::TopVertexPoint( int vtopi ) const
+ON_3dPoint ON_MeshTopology::TopVertexPoint(int vtopi) const
 {
-  return m_mesh->m_V[m_topv[vtopi].m_vi[0]];
+
+  const int mesh_vertex_index = m_topv[vtopi].m_vi[0];
+  if (mesh_vertex_index >= 0)
+  {
+    const unsigned int vertex_count = m_mesh->VertexUnsignedCount();
+    if ((unsigned int)mesh_vertex_index < vertex_count)
+    {
+      if (vertex_count == m_mesh->m_dV.UnsignedCount())
+        return m_mesh->m_dV[mesh_vertex_index];
+      if (vertex_count == m_mesh->m_V.UnsignedCount())
+        return m_mesh->m_V[mesh_vertex_index];
+    }
+  }
+  ON_ERROR("Invalid topology");
+  return  ON_3dPoint::NanPoint;
 }
 
 ON_Line ON_MeshTopology::TopEdgeLine( int tope_index ) const
 {
-  ON_Line L(ON_UNSET_POINT,ON_UNSET_POINT);
+  ON_Line L(ON_3dPoint::UnsetPoint,ON_3dPoint::UnsetPoint);
   if ( m_mesh && tope_index >= 0 && tope_index < m_tope.Count() )
   {
     const int* topvi = m_tope[tope_index].m_topvi;
@@ -6396,8 +8022,9 @@ ON_Line ON_MeshTopology::TopEdgeLine( int tope_index ) const
         int vcount = m_mesh->m_V.Count();
         if ( vi0 >= 0 && vi0 < vcount && vi1 >= 0 && vi1 < vcount )
         {
-          L.from = m_mesh->m_V[vi0];
-          L.to   = m_mesh->m_V[vi1];
+          const ON_3dPointListRef vertex_list(m_mesh);
+          L.from = vertex_list[vi0];
+          L.to   = vertex_list[vi1];
         }
       }
     }
@@ -6843,9 +8470,9 @@ bool ON_MeshTopology::IsValid() const
     if ( topv.m_tope_count < 0 )
       return false;
     if ( topv.m_tope_count == 0 && topv.m_topei )
-      return false; // array should be NULL
+      return false; // array should be nullptr
     if ( topv.m_tope_count > 0 && !topv.m_topei )
-      return false; // array should not be NULL
+      return false; // array should not be nullptr
     for ( j = 0; j < topv.m_tope_count; j++ ) {
       topei = topv.m_topei[j];
       if ( topei < 0 )
@@ -6909,9 +8536,9 @@ bool ON_MeshTopology::IsValid() const
     if ( tope.m_topf_count < 0 )
       return false;
     if ( tope.m_topf_count == 0 && tope.m_topfi )
-      return false; // array should be NULL
+      return false; // array should be nullptr
     if ( tope.m_topf_count > 0 && !tope.m_topfi )
-      return false; // array should not be NULL
+      return false; // array should not be nullptr
     for ( j = 0; j < tope.m_topf_count; j++ ) {
       fi = tope.m_topfi[j];
       if ( fi < 0 || fi >= f_count )
@@ -7096,10 +8723,14 @@ bool ON_MeshTopology::Create()
     if ( 0 == vcount )
       break;
 
-    int* vindex = GetIntArray(vcount);
+    unsigned int* vindex = (unsigned int*)GetIntArray(vcount);
     m_topv_map.SetCapacity( vcount );
     m_topv_map.SetCount( vcount );
-    if (  0 == m_mesh->GetVertexLocationIds( 0, m_topv_map.Array(), vindex ) )
+    if (  0 == m_mesh->GetVertexLocationIds( 
+      0, // first id
+      (unsigned int*)m_topv_map.Array(), // vertex ids returned here
+      vindex
+      ) )
     {
       Destroy();
       break;
@@ -7111,7 +8742,6 @@ bool ON_MeshTopology::Create()
       m_topv_map.SetCount( vcount );
       m_topv.SetCapacity( topv_count );
       int vt0, vt1, topvi;
-      ON_3fPoint p0;
       for (vt0 = 0; vt0 < vcount; vt0 = vt1)
       {
         topvi = m_topv.Count();
@@ -7124,7 +8754,7 @@ bool ON_MeshTopology::Create()
         }
 #endif
         ON_MeshTopologyVertex& topv = m_topv.AppendNew();
-        topv.m_vi = vindex+vt0;
+        topv.m_vi = (const int*)(vindex+vt0);
         for ( vt1=vt0+1; vt1<vcount && topvi == m_topv_map[vindex[vt1]]; vt1++ ) {
           // empty
         }
@@ -7137,30 +8767,30 @@ bool ON_MeshTopology::Create()
     if ( topv_count >= 2 ) 
     {
       bool rc = false;
-      int ei, ecnt, fi, vi0, vi1, efi, topfvi[4];
+      int ei, ecnt, vi0, vi1, fi, efi, topfvi[4];
       ON_MeshFace f;
 
       if ( fcount > 0 && vcount > 0 ) 
       {
         // When working on this code be sure to test bug# 9271 and 9254 and file fsv_r4.3dm
         ON_Workspace ws;
-        struct ON_MeshFaceSide* e = (struct ON_MeshFaceSide*)ws.GetMemory( 4*fcount*sizeof(*e) );
-        ecnt = m_mesh->GetMeshFaceSideList( m_topv_map.Array(), e );
+        ON_MeshFaceSide* e = (ON_MeshFaceSide*)ws.GetMemory( 4*fcount*sizeof(*e) );
+        ecnt = m_mesh->GetMeshFaceSideList( (const unsigned int*)m_topv_map.Array(), e );
         
         if ( ecnt > 0 ) 
         {
           rc = true;
-          ON_SortMeshFaceSidesByVertexIndex( ecnt, e );
+          ON_MeshFaceSide::SortByVertexIndex( e, ecnt );
 
           // count number of topological edges and allocate storage
           int etop_count = 0;
           ei = 0;
           while( ei < ecnt ) 
           {
-            vi0 = e[ei].vi[0];
-            vi1 = e[ei].vi[1];
+            vi0 = e[ei].m_vi[0];
+            vi1 = e[ei].m_vi[1];
             ei++;
-            while (ei < ecnt && e[ei].vi[0] == vi0 && e[ei].vi[1] == vi1 )
+            while (ei < ecnt && e[ei].m_vi[0] == (unsigned int)vi0 && e[ei].m_vi[1] == (unsigned int)vi1 )
               ei++;
             etop_count++;
           }
@@ -7171,16 +8801,16 @@ bool ON_MeshTopology::Create()
           for ( ei = 0; ei < ecnt; /*empty*/ )
           {
             ON_MeshTopologyEdge& tope = m_tope.AppendNew();
-            tope.m_topvi[0] = vi0 = e[ei].vi[0];
-            tope.m_topvi[1] = vi1 = e[ei].vi[1];
+            tope.m_topvi[0] = (int)(vi0 = e[ei].m_vi[0]);
+            tope.m_topvi[1] = (int)(vi1 = e[ei].m_vi[1]);
             tope.m_topfi = efindex;
             tope.m_topf_count = 0;
-            *efindex++ = e[ei].fi;
+            *efindex++ = (int)e[ei].m_fi;
             tope.m_topf_count++;
             ei++;
-            while( ei < ecnt && e[ei].vi[0] == vi0 && e[ei].vi[1] == vi1 ) 
+            while( ei < ecnt && e[ei].m_vi[0] == (unsigned int)vi0 && e[ei].m_vi[1] == (unsigned int)vi1 ) 
             {
-              *efindex++ = e[ei].fi;
+              *efindex++ = (int)e[ei].m_fi;
               tope.m_topf_count++;
               ei++;
             }
@@ -7225,11 +8855,11 @@ bool ON_MeshTopology::Create()
           m_topf.SetCount(fcount);
           memset( m_topf.Array(), 0, fcount*sizeof(ON_MeshTopologyFace) );
           for ( fi = 0; fi < fcount; fi++ ) {
-            ON_MeshTopologyFace& f = m_topf[fi];
-            f.m_topei[0] = -1;
-            f.m_topei[1] = -1;
-            f.m_topei[2] = -1;
-            f.m_topei[3] = -1;
+            ON_MeshTopologyFace& f_local = m_topf[fi];
+            f_local.m_topei[0] = -1;
+            f_local.m_topei[1] = -1;
+            f_local.m_topei[2] = -1;
+            f_local.m_topei[3] = -1;
           }
           for ( ei = 0; ei < ecnt; ei++ ) {
             ON_MeshTopologyEdge& tope = m_tope[ei];
@@ -7280,34 +8910,35 @@ bool ON_MeshTopology::Create()
               }
             }
           }
-          for ( fi = 0; fi < fcount; fi++ ) {
-            ON_MeshTopologyFace& f = m_topf[fi];
+          for ( fi = 0; fi < fcount; fi++ ) 
+          {
+            ON_MeshTopologyFace& f_local = m_topf[fi];
             bool bIsGood = false;
-            if (    f.m_topei[0] >= 0 && f.m_topei[1] >= 0 && f.m_topei[2] >=0 
-                 && f.m_topei[0] != f.m_topei[1] 
-                 && f.m_topei[1] != f.m_topei[2] 
-                 && f.m_topei[2] != f.m_topei[0] 
+            if (    f_local.m_topei[0] >= 0 && f_local.m_topei[1] >= 0 && f_local.m_topei[2] >=0 
+                 && f_local.m_topei[0] != f_local.m_topei[1] 
+                 && f_local.m_topei[1] != f_local.m_topei[2] 
+                 && f_local.m_topei[2] != f_local.m_topei[0] 
                  ) {
               if ( m_mesh->m_F[fi].IsTriangle() ) {
                 bIsGood = true;
-                f.m_topei[3] = f.m_topei[2];
+                f_local.m_topei[3] = f_local.m_topei[2];
               }
-              else if (   f.m_topei[3] >= 0 
-                       && f.m_topei[0] != f.m_topei[3] 
-                       && f.m_topei[1] != f.m_topei[3] 
-                       && f.m_topei[2] != f.m_topei[3] ) {
+              else if (   f_local.m_topei[3] >= 0 
+                       && f_local.m_topei[0] != f_local.m_topei[3] 
+                       && f_local.m_topei[1] != f_local.m_topei[3] 
+                       && f_local.m_topei[2] != f_local.m_topei[3] ) {
                 bIsGood = true;
               }
             }
             if ( !bIsGood ) {
-              f.m_topei[0] = 0;
-              f.m_topei[1] = 0;
-              f.m_topei[2] = 0;
-              f.m_topei[3] = 0;
-              f.m_reve[0] = 0;
-              f.m_reve[1] = 0;
-              f.m_reve[2] = 0;
-              f.m_reve[3] = 0;
+              f_local.m_topei[0] = 0;
+              f_local.m_topei[1] = 0;
+              f_local.m_topei[2] = 0;
+              f_local.m_topei[3] = 0;
+              f_local.m_reve[0] = 0;
+              f_local.m_reve[1] = 0;
+              f_local.m_reve[2] = 0;
+              f_local.m_reve[3] = 0;
             }
           }
 
@@ -7612,7 +9243,7 @@ const ON_MeshPartition* ON_Mesh::CreatePartition(
       //    fpt[fi].z = (int)floor(vzdom.NormalizedParameterAt(fcenter.z)*100);
       //  }
       //}
-      //fpt.Sort( ON::quick_sort, fmap, compare_fpt ); 
+      //fpt.Sort( ON::sort_algorithm::quick_sort, fmap, compare_fpt ); 
       m_F.Permute( fmap );
       if ( m_FN.Count() == face_count )
         m_FN.Permute( fmap );
@@ -7649,13 +9280,13 @@ const ON_MeshPartition* ON_Mesh::CreatePartition(
           }
         }
         if ( fi0 < fi1 ) {
-          struct ON_MeshPart p;
-          memset(&p,0,sizeof(p));
-          p.fi[0] = fi0;
-          p.fi[1] = fi1;
-          p.vertex_count = partition_vertex_count;
-          p.triangle_count = partition_triangle_count;
-          m_partition->m_part.Append(p);
+          struct ON_MeshPart p_local;
+          memset(&p_local,0,sizeof(p_local));
+          p_local.fi[0] = fi0;
+          p_local.fi[1] = fi1;
+          p_local.vertex_count = partition_vertex_count;
+          p_local.triangle_count = partition_triangle_count;
+          m_partition->m_part.Append(p_local);
         }
         if ( partition_triangle_count > m_partition->m_partition_max_triangle_count )
           m_partition->m_partition_max_triangle_count = partition_triangle_count;
@@ -7668,7 +9299,7 @@ const ON_MeshPartition* ON_Mesh::CreatePartition(
 
       // sort vertices
       int* vmap = (int*)ws.GetMemory( vertex_count*sizeof(vmap[0]) );
-      pmark.Sort( ON::quick_sort, vmap, compare_pmark );
+      pmark.Sort( ON::sort_algorithm::quick_sort, vmap, compare_pmark );
       m_V.Permute( vmap );
       if ( m_N.Count() == vertex_count )
         m_N.Permute( vmap );
@@ -7681,7 +9312,7 @@ const ON_MeshPartition* ON_Mesh::CreatePartition(
       pmark.Permute( vmap );
       // pamv[] = inverse of mapv permutation
       int* pamv = (int*)ws.GetMemory( vertex_count*sizeof(pamv[0]) );
-      ON_Sort( ON::quick_sort, pamv, vmap, vertex_count, sizeof(vmap[0]), compare_vmap );
+      ON_Sort( ON::sort_algorithm::quick_sort, pamv, vmap, vertex_count, sizeof(vmap[0]), compare_vmap );
       for ( fi = 0; fi < face_count; fi++ ) {
         fvi = m_F[fi].vi;
         fvi[0] = pamv[fvi[0]];
@@ -7878,19 +9509,17 @@ ON_Mesh* ON_Mesh::MeshPart(
 ON_Mesh* ON_Mesh::DuplicateFace( int face_index, ON_Mesh* mesh ) const
 {
   if ( mesh == this )
-    return 0;
+    return nullptr;
   if ( 0 != mesh )
     mesh->Destroy();
   if ( face_index < 0 || face_index >= m_F.Count() )
-    return 0;
-  const int vcnt = m_V.Count();
+    return nullptr;
+  const unsigned int vcnt = VertexUnsignedCount();
   if ( vcnt < 3 )
-    return 0;
+    return nullptr;
 
-  const ON_3dPoint* dV = ( HasDoublePrecisionVertices() && DoublePrecisionVerticesAreValid() )
-                        ? DoublePrecisionVertices().Array()
-                        : 0;
-  const ON_3fPoint* fV = (0 == dV) ? m_V.Array() : 0;
+  const ON_3dPoint* dV = ( vcnt == m_dV.UnsignedCount() ) ? m_dV.Array() : nullptr;
+  const ON_3fPoint* fV = (nullptr == dV && vcnt == m_V.UnsignedCount() ) ? m_V.Array() : nullptr;
   bool bHasFaceNormals = HasFaceNormals();
   bool bHasVertexNormals = HasVertexNormals();
   bool bHasVertexColors = HasVertexColors();
@@ -7899,31 +9528,34 @@ ON_Mesh* ON_Mesh::DuplicateFace( int face_index, ON_Mesh* mesh ) const
   bool bHasPrincipalCurvatures = HasPrincipalCurvatures();
 
   ON_MeshFace f = m_F[face_index];
-  if ( dV )
+  if ( nullptr != dV )
   {
     if ( !f.IsValid(vcnt,dV) )
     {
       // invalid vertex indices - see if it can be fixed
       if ( !f.Repair(vcnt,dV) )
-        return 0;
+        return nullptr;
+    }
+  }
+  else if (nullptr != fV)
+  {
+    if (!f.IsValid(vcnt, fV))
+    {
+      // invalid vertex indices - see if it can be fixed
+      if (!f.Repair(vcnt, fV))
+        return nullptr;
     }
   }
   else
-  {
-    if ( !f.IsValid(vcnt,fV) )
-    {
-      // invalid vertex indices - see if it can be fixed
-      if ( !f.Repair(vcnt,fV) )
-        return 0;
-    }
-  }
+    return nullptr;
+
   const int newvcnt = f.IsTriangle() ? 3 : 4;
   if ( 0 == mesh )
     mesh = new ON_Mesh();
   ON_3dPointArray* newdV = 0;
   if ( dV )
   {
-    newdV = &mesh->DoublePrecisionVertices();
+    newdV = &mesh->m_dV;
     newdV->Reserve(newvcnt);
   }
   mesh->m_V.Reserve(newvcnt);
@@ -7967,798 +9599,673 @@ ON_Mesh* ON_Mesh::DuplicateFace( int face_index, ON_Mesh* mesh ) const
     if ( bHasPrincipalCurvatures )
       mesh->m_K.Append(m_K[f.vi[vi]]);
   }
-  if ( dV )
-  {
-    mesh->SetDoublePrecisionVerticesAsValid();
+  if ( nullptr != dV )
     mesh->UpdateSinglePrecisionVertices();
-  }
 
   return mesh;
 }
 
 
-ON_OBJECT_IMPLEMENT(ON_MeshVertexRef,ON_Geometry,"C547B4BD-BDCD-49b6-A983-0C4A7F02E31A");
+//ON_OBJECT_IMPLEMENT(ON_MeshVertexRef,ON_Geometry,"C547B4BD-BDCD-49b6-A983-0C4A7F02E31A");
+//
+//ON_OBJECT_IMPLEMENT(ON_MeshEdgeRef,ON_Geometry,"ED727872-463A-4424-851F-9EC02CB0F155");
+//
+//ON_OBJECT_IMPLEMENT(ON_MeshFaceRef,ON_Geometry,"4F529AA5-EF8D-4c25-BCBB-162D510AA280");
 
-ON_OBJECT_IMPLEMENT(ON_MeshEdgeRef,ON_Geometry,"ED727872-463A-4424-851F-9EC02CB0F155");
+ON_OBJECT_IMPLEMENT(ON_MeshComponentRef,ON_Geometry,"1FD2F2BE-3346-4D7A-AE94-73C0B326D8F4");
 
-ON_OBJECT_IMPLEMENT(ON_MeshFaceRef,ON_Geometry,"4F529AA5-EF8D-4c25-BCBB-162D510AA280");
 
-ON_MeshVertexRef::ON_MeshVertexRef()
+const ON_MeshComponentRef ON_MeshComponentRef::Unset;
+
+
+ON_MeshComponentRef::ON_MeshComponentRef()
+  : m_mesh(0)
+  , m_mesh_ci(ON_COMPONENT_INDEX::invalid_type,-1)
 {
-  m_mesh = 0;
-  m_mesh_vi = -1;
-  m_top_vi = -1;
 }
 
-ON_MeshVertexRef::~ON_MeshVertexRef()
+ON_MeshComponentRef::ON_MeshComponentRef(
+  const class ON_Mesh* mesh,
+  ON_COMPONENT_INDEX ci 
+  )
+  : m_mesh(mesh)
+  , m_mesh_ci(ci)
 {
-  m_mesh = 0;
-  m_mesh_vi = -1;
-  m_top_vi = -1;
 }
 
-ON_MeshVertexRef& ON_MeshVertexRef::operator=(const ON_MeshVertexRef& src)
+ON_MeshComponentRef::~ON_MeshComponentRef()
+{
+  m_mesh = 0;
+  m_mesh_ci.Set(ON_COMPONENT_INDEX::invalid_type,-1);
+}
+
+ON_MeshComponentRef& ON_MeshComponentRef::operator=(const ON_MeshComponentRef& src)
 {
   if ( this != &src )
   {
     ON_Geometry::operator=(src);
     m_mesh = src.m_mesh;
-    m_mesh_vi = src.m_mesh_vi;
-    m_top_vi = src.m_top_vi;
+    m_mesh_ci = src.m_mesh_ci;
   }
   return *this;
 }
 
-
-ON_BOOL32 ON_MeshVertexRef::IsValid( ON_TextLog* text_log ) const
+void ON_MeshComponentRef::Set(
+  const class ON_Mesh* mesh,
+  ON_COMPONENT_INDEX ci 
+  )
 {
-  if ( 0 == m_mesh )
+  m_mesh = mesh;
+  m_mesh_ci = ci;
+}
+
+
+bool ON_MeshComponentRef::IsValid( ON_TextLog* text_log ) const
+{
+  if ( 0 == m_mesh)
   {
     if ( 0 != text_log )
     {
-      text_log->Print("m_mesh = NULL\n");
+      text_log->Print("m_mesh = nullptr.\n");
     }
     return false;
   }
 
-  if ( -1 != m_mesh_vi )
-  {
-    if ( m_mesh_vi < 0 || m_mesh_vi >= m_mesh->m_V.Count() )
-    {
-      if ( 0 != text_log )
-      {
-        text_log->Print("m_mesh_vi = %d (should have 0 <= m_mesh_vi < %d)\n",m_mesh_vi,m_mesh->m_V.Count());
-      }
-      return false;
-    }
-  }
-  else if ( -1 == m_top_vi )
+  if ( false == m_mesh_ci.IsMeshComponentIndex() )
   {
     if ( 0 != text_log )
     {
-      text_log->Print("m_mesh_vi = -1 and m_top_vi = -1\n");
+      text_log->Print("m_mesh_ci = ");
+      m_mesh_ci.Dump(*text_log);
+      text_log->Print(" has an invalid m_type.\n");
     }
     return false;
   }
 
-  if ( -1 != m_top_vi )
+  if ( false == m_mesh->IsValidMeshComponentIndex(m_mesh_ci) )
   {
-    const ON_MeshTopology* top = MeshTopology();
-    if ( 0 == top )
+    if ( 0 != text_log )
     {
-      if ( 0 != text_log )
-      {
-        text_log->Print("m_top_vi = %d and MeshTopology()=NULL\n",m_top_vi);
-      }
-      return false;
+      text_log->Print("m_mesh_ci = ");
+      m_mesh_ci.Dump(*text_log);
+      text_log->Print(" has an invalid m_index.\n");
     }
-    if ( m_top_vi < 0 || m_top_vi >= top->m_tope.Count() )
-    {
-      if ( 0 != text_log )
-      {
-        text_log->Print("m_top_vi = %d (should have 0 <= m_top_vi < %d)\n",m_top_vi,top->m_topv.Count());
-      }
-      return false;
-    }
-
-    if ( -1 != m_mesh_vi )
-    {
-      const ON_MeshTopologyVertex& topv = top->m_topv[m_top_vi];
-      int i;
-      for ( i = 0; i < topv.m_v_count; i++ )
-      {
-        if ( topv.m_vi[i] == m_mesh_vi )
-          break;
-      }
-      if ( i >= topv.m_v_count )
-      {
-        if ( 0 != text_log )
-        {
-          text_log->Print("m_mesh_vi=%d is not in m_top->m_topv[m_top_vi=%d].m_vi[] array.\n",
-                          m_mesh_vi,m_top_vi);
-          
-        }
-        return false;
-      }
-    }
+    return false;
   }
 
   return true;
 }
 
-void ON_MeshVertexRef::Dump( ON_TextLog& text_log ) const
+void ON_MeshComponentRef::Dump( ON_TextLog& text_log ) const
 {
-  text_log.Print("m_mesh=%08x m_mesh_vi=%d m_top_vi=%d\n",
-                  m_mesh,m_mesh_vi,m_top_vi);
-  ON_3dPoint v = Point();
-  if ( v.IsValid() )
-  {
-    text_log.PushIndent();
-    text_log.Print("Location: ");
-    text_log.Print(v);
-    text_log.Print("\n");
-    text_log.PopIndent();
-  }
-
+  text_log.Print("m_mesh=%p, m_mesh_ci: ",m_mesh);
+  m_mesh_ci.Dump(text_log);
+  text_log.Print("\n");
 }
-unsigned int ON_MeshVertexRef::SizeOf() const
+
+unsigned int ON_MeshComponentRef::SizeOf() const
 {
   unsigned int sz = sizeof(*this) - sizeof(ON_Geometry);
   sz += ON_Geometry::SizeOf();
   return sz;
 }
 
-ON::object_type ON_MeshVertexRef::ObjectType() const
+ON::object_type ON_MeshComponentRef::ObjectType() const
 {
-  return ON::meshvertex_object;
+  return ON::meshcomponent_reference;
 }
 
 // overrides of virtual ON_Geometry functions
-int ON_MeshVertexRef::Dimension() const
+int ON_MeshComponentRef::Dimension() const
 {
   return 3;
 }
 
-ON_BOOL32 ON_MeshVertexRef::GetBBox(
+bool ON_MeshComponentRef::GetBBox(
        double* boxmin,
        double* boxmax,
-       ON_BOOL32 bGrowBox
+       bool bGrowBox
        ) const
 {
-  bool rc = false;
-  ON_3dPoint v = Point();
-  if ( v.IsValid() )
+  const unsigned int* vdex_list = 0;
+  unsigned int vdex_count = 0;
+  unsigned int vdex_buffer[2];
+
+  if ( 0 == m_mesh )
+    return false;
+
+  switch(m_mesh_ci.m_type)
   {
-    rc = ON_GetPointListBoundingBox( 3, 0, 1, 3, &v.x, boxmin, boxmax, bGrowBox?true:false );
+  case ON_COMPONENT_INDEX::mesh_vertex:
+    if (m_mesh_ci.m_index >= 0)
+      vdex_buffer[vdex_count++] = (unsigned int)m_mesh_ci.m_index;
+    break;
+
+  case ON_COMPONENT_INDEX::meshtop_vertex:
+    if ( m_mesh_ci.m_index >= 0 )
+    {
+      const ON_MeshTopology* top = MeshTopology();
+      if ( 0 != top && m_mesh_ci.m_index < top->m_topv.Count())
+      {
+        const ON_MeshTopologyVertex& v = top->m_topv[m_mesh_ci.m_index];
+        if ( v.m_v_count > 0 && 0 != v.m_vi && v.m_vi[0] >= 0 )
+          vdex_buffer[vdex_count++] = (unsigned int)v.m_vi[0];
+      }
+    }
+    break;
+
+  case ON_COMPONENT_INDEX::meshtop_edge:
+    if ( m_mesh_ci.m_index >= 0 )
+    {
+      const ON_MeshTopology* top = MeshTopology();
+      if ( 0 != top && m_mesh_ci.m_index < top->m_tope.Count())
+      {
+        const ON_MeshTopologyEdge& e = top->m_tope[m_mesh_ci.m_index];
+        for ( unsigned int j = 0; j < 2; j++ )
+        {
+          if ( e.m_topvi[j] >= 0 && e.m_topvi[j] < top->m_topv.Count() )
+          {
+            const ON_MeshTopologyVertex& v = top->m_topv[e.m_topvi[j]];
+            if ( v.m_v_count > 0 && 0 != v.m_vi && v.m_vi[0] >= 0 )
+            {
+              vdex_buffer[vdex_count++] = (unsigned int)v.m_vi[0];
+            }
+          }
+        }
+      }
+    }
+    break;
+
+  case ON_COMPONENT_INDEX::mesh_face:
+    if (m_mesh_ci.m_index >= 0 && m_mesh_ci.m_index < m_mesh->m_F.Count())
+    {
+      vdex_list = (const unsigned int*)(m_mesh->m_F[m_mesh_ci.m_index].vi);
+      vdex_count = (vdex_list[2] == vdex_list[3]) ? 3 : 4;
+    }
+    break;
+
+  case ON_COMPONENT_INDEX::mesh_ngon:
+    {
+      const ON_MeshNgon* ngon = m_mesh->Ngon(m_mesh_ci.m_index);
+      if ( ngon && ngon->m_Vcount > 0 && 0 != ngon->m_vi )
+      {
+        vdex_list = ngon->m_vi;
+        vdex_count = ngon->m_Vcount;
+      }
+    }
+    break;
+
+  default:
+    break;
   }
+
+  if ( 0 == vdex_list )
+  {
+    if ( 0 == vdex_count )
+      return 0;
+    vdex_list = vdex_buffer;
+  }
+
+  bool rc = false;
+  const ON_3dPointListRef vertex_list(m_mesh);
+  const unsigned int vertex_count = vertex_list.PointCount();
+  ON_3dPoint v[16];
+  const unsigned int v_capacity = (unsigned int)(sizeof(v)/sizeof(v[0]));
+  unsigned int v_count = 0;
+  for ( unsigned int i = 0; i < vdex_count; i++ )
+  {
+    if ( vdex_list[i] < vertex_count )
+    {
+      vertex_list.GetPoint(vdex_list[i],&v[v_count].x);
+      if ( v[v_count].IsValid() )
+      {
+        v_count++;
+        if ( v_capacity == v_count )
+        {
+          if ( ON_GetPointListBoundingBox( 3, 0, v_count, 3, &v[0].x, boxmin, boxmax, bGrowBox?true:false ) )
+          {
+            bGrowBox = true;
+            rc = true;
+          }
+          v_count = 0;
+        }
+      }
+    }
+  }
+
+  if ( v_count > 0 )
+  {
+    if ( ON_GetPointListBoundingBox( 3, 0, v_count, 3, &v[0].x, boxmin, boxmax, bGrowBox?true:false ) )
+      rc = true;
+    v_count = 0;
+  }
+
   return rc;
 }
 
-ON_BOOL32 ON_MeshVertexRef::Transform( 
+bool ON_MeshComponentRef::Transform( 
        const ON_Xform& xform
        )
 {
   return false;
 }
 
-const ON_MeshTopology* ON_MeshVertexRef::MeshTopology() const
+const ON_MeshTopology* ON_MeshComponentRef::MeshTopology() const
 {
-  return (0 != m_mesh) ? &m_mesh->m_top : 0;
-}
+  const ON_MeshTopology* top = 0;
 
-ON_3dPoint ON_MeshVertexRef::Point() const
-{
-  ON_3dPoint v = ON_UNSET_POINT;
   if ( 0 != m_mesh )
   {
-    int vi = m_mesh_vi;
-    if ( -1 == vi && m_top_vi >= 0 && m_top_vi < m_mesh->m_top.m_topv.Count() )
+    if (m_mesh && m_mesh->HasMeshTopology()) 
     {
-      const ON_MeshTopologyVertex& topv = m_mesh->m_top.m_topv[m_top_vi];
-      if ( topv.m_v_count > 0 )
-        vi = topv.m_vi[0];
+      top = &m_mesh->Topology();
     }
-    if ( vi >= 0 && vi < m_mesh->m_V.Count() )
-      v = m_mesh->m_V[vi];
+    else if ( m_mesh->m_V.UnsignedCount() >= 3 && m_mesh->m_F.UnsignedCount() > 0 )
+    {
+      if (    ON_COMPONENT_INDEX::meshtop_vertex == m_mesh_ci.m_type 
+           || ON_COMPONENT_INDEX::meshtop_edge == m_mesh_ci.m_type 
+         )
+      {
+        // create missing topology
+        top = &m_mesh->Topology();
+      }
+    }
   }
-  return v;
+
+  return top;
 }
 
-const ON_MeshTopologyVertex* ON_MeshVertexRef::MeshTopologyVertex() const
+unsigned int ON_MeshComponentRef::VertexIndex() const
 {
-  const ON_MeshTopologyVertex* topv = 0;
-  if ( 0 != m_mesh && m_top_vi >= 0 && m_top_vi < m_mesh->m_top.m_topv.Count() )
+  unsigned int vi = ON_UNSET_UINT_INDEX;
+  if ( 0 != m_mesh && m_mesh_ci.m_index >= 0 )
   {
-    topv = &m_mesh->m_top.m_topv[m_top_vi];
+    switch(m_mesh_ci.m_type)
+    {
+    case ON_COMPONENT_INDEX::meshtop_vertex:
+      {
+        const struct ON_MeshTopologyVertex* v = MeshTopologyVertex();
+        if ( 0 != v && 1 == v->m_v_count && 0 != v->m_vi 
+             && ((unsigned int)v->m_vi[0]) < m_mesh->m_V.UnsignedCount()
+           )
+        {
+          vi = (unsigned int)v->m_vi[0];
+        }
+      }
+      break;
+
+    case ON_COMPONENT_INDEX::mesh_vertex:
+      if ( ((unsigned int)m_mesh_ci.m_index) < m_mesh->m_V.UnsignedCount() )
+        vi = (unsigned int)m_mesh_ci.m_index;
+      break;
+    }
   }
+  return vi;
+}
+
+ON_3dPoint ON_MeshComponentRef::VertexPoint() const
+{
+  double buffer[3];
+  ON_3dPointListRef(m_mesh).GetPoint(VertexIndex(),buffer);
+  return *((const ON_3dPoint*)buffer);
+}
+
+
+unsigned int ON_MeshComponentRef::GetVertexPoint(class ON_3dPoint& point) const
+{
+  const unsigned int vi = VertexIndex();
+  if ( ON_UNSET_UINT_INDEX != vi )
+  {
+    const ON_3dPointListRef vertex_list(m_mesh);
+    vertex_list.GetPoint(vi,&point.x);
+  }
+  else
+  {
+    point = ON_3dPoint::UnsetPoint;
+  }
+  return vi;
+}
+
+const struct ON_MeshTopologyVertex* ON_MeshComponentRef::MeshTopologyVertex() const
+{
+  const struct ON_MeshTopologyVertex* topv;
+  ON_3dPoint point;
+  GetMeshTopologyVertexAndPoint(topv,point);
   return topv;
 }
 
-ON_MeshEdgeRef::ON_MeshEdgeRef()
+unsigned int ON_MeshComponentRef::MeshTopologyVertexIndex() const
 {
-  m_mesh = 0;
-  m_top_ei = -1;
+  const struct ON_MeshTopologyVertex* topv;
+  ON_3dPoint point;
+  return GetMeshTopologyVertexAndPoint(topv,point);
 }
 
-ON_MeshEdgeRef::~ON_MeshEdgeRef()
+unsigned int ON_MeshComponentRef::GetMeshTopologyVertexPoint(
+  class ON_3dPoint& point
+  ) const
 {
-  m_mesh = 0;
-  m_top_ei = -1;
+  const struct ON_MeshTopologyVertex* topv;
+  return GetMeshTopologyVertexAndPoint(topv,point);
+}
+  
+unsigned int ON_MeshComponentRef::GetMeshTopologyVertex(
+  const struct ON_MeshTopologyVertex*& topv
+  ) const
+{
+  ON_3dPoint point;
+  return GetMeshTopologyVertexAndPoint(topv,point);
 }
 
-ON_MeshEdgeRef& ON_MeshEdgeRef::operator=(const ON_MeshEdgeRef& src)
+unsigned int ON_MeshComponentRef::GetMeshTopologyVertexAndPoint(
+  const struct ON_MeshTopologyVertex*& topv,
+  class ON_3dPoint& point
+  ) const
 {
-  if ( this != &src )
-  {
-    ON_Geometry::operator=(src);
-    m_mesh = src.m_mesh;
-    m_top_ei = src.m_top_ei;
-  }
-  return *this;
-}
-
-
-ON_BOOL32 ON_MeshEdgeRef::IsValid( ON_TextLog* text_log ) const
-{
-  if ( 0 == m_mesh)
-  {
-    if ( 0 != text_log )
-    {
-      text_log->Print("m_mesh = NULL\n");
-    }
-    return false;
-  }
-
-  if ( m_top_ei < 0 || m_top_ei >= m_mesh->m_top.m_tope.Count() )
-  {
-    if ( 0 != text_log )
-    {
-      text_log->Print("m_top_ei = %d (should have 0 <= m_top_ei < %d)\n",m_top_ei,m_mesh->m_top.m_tope.Count());
-    }
-    return false;
-  }
-
-  return true;
-}
-
-void ON_MeshEdgeRef::Dump( ON_TextLog& text_log ) const
-{
-  text_log.Print("m_mesh=%08x, m_top_ei=%d\n",m_mesh,m_top_ei);
-  ON_Line line = Line();
-  if ( line.from.IsValid() )
-  {
-    text_log.PushIndent();
-    text_log.Print("Location: ");
-    text_log.Print(line.from);
-    text_log.Print(" to ");
-    text_log.Print(line.to);
-    text_log.Print("\n");
-    text_log.PopIndent();
-  }
-
-}
-unsigned int ON_MeshEdgeRef::SizeOf() const
-{
-  unsigned int sz = sizeof(*this) - sizeof(ON_Geometry);
-  sz += ON_Geometry::SizeOf();
-  return sz;
-}
-
-ON::object_type ON_MeshEdgeRef::ObjectType() const
-{
-  return ON::meshedge_object;
-}
-
-// overrides of virtual ON_Geometry functions
-int ON_MeshEdgeRef::Dimension() const
-{
-  return 3;
-}
-
-ON_BOOL32 ON_MeshEdgeRef::GetBBox(
-       double* boxmin,
-       double* boxmax,
-       ON_BOOL32 bGrowBox
-       ) const
-{
-  bool rc = false;
-  ON_Line line = Line();
-  if ( line.from.IsValid() && line.to.IsValid() )
-  {
-    rc = ON_GetPointListBoundingBox( 3, 0, 2, 3, &line.from.x, boxmin, boxmax, bGrowBox?true:false );
-  }
-  return rc;
-}
-
-ON_BOOL32 ON_MeshEdgeRef::Transform( 
-       const ON_Xform& xform
-       )
-{
-  return false;
-}
-
-const ON_MeshTopology* ON_MeshEdgeRef::MeshTopology() const
-{
-  return (0 != m_mesh) ? &m_mesh->m_top : 0;
-}
-
-ON_Line ON_MeshEdgeRef::Line() const
-{
-  ON_Line line(ON_UNSET_POINT,ON_UNSET_POINT);
-  const ON_MeshTopologyEdge* tope = MeshTopologyEdge();
-  if ( 0 != tope )
-  {
-    ON_MeshVertexRef vr;
-    vr.m_mesh = m_mesh;
-    vr.m_top_vi = tope->m_topvi[0];
-    line.from = vr.Point();
-    if ( line.from.IsValid() )
-    {
-      vr.m_top_vi = tope->m_topvi[1];
-      line.to = vr.Point();
-      if ( !line.to.IsValid() )
-        line.from = ON_UNSET_POINT;
-    }
-  }
-  return line;
-}
-
-const ON_MeshTopologyEdge* ON_MeshEdgeRef::MeshTopologyEdge() const
-{
-  const ON_MeshTopologyEdge* tope = 0;
-  if ( m_top_ei >= 0 )
+  if ( m_mesh && m_mesh_ci.m_index >= 0 )
   {
     const ON_MeshTopology* top = MeshTopology();
-    if ( 0 != top && m_top_ei < top->m_tope.Count() )
-      tope = &top->m_tope[m_top_ei];
+    if ( 0 != top )
+    {
+      const ON_3dPointListRef vertex_list(m_mesh);
+      if ( top->m_topv_map.UnsignedCount() == vertex_list.PointCount() )
+      {
+        switch(m_mesh_ci.m_type)
+        {
+        case ON_COMPONENT_INDEX::mesh_vertex:
+          if ( (unsigned int)m_mesh_ci.m_index < vertex_list.PointCount() )
+          {
+            int tvi = top->m_topv_map[m_mesh_ci.m_index];
+            if ( tvi >= 0 && tvi < top->m_topv.Count() )
+            {
+              topv = &top->m_topv[tvi];
+              vertex_list.GetPoint(m_mesh_ci.m_index,&point.x);
+              return (unsigned int)tvi;
+            }
+          }
+          break;
+
+        case ON_COMPONENT_INDEX::meshtop_vertex:
+          if ( (unsigned int)m_mesh_ci.m_index < top->m_topv.UnsignedCount() )
+          {
+            const ON_MeshTopologyVertex& v = top->m_topv[m_mesh_ci.m_index];
+            topv = &v;
+            if ( v.m_v_count > 0 && 0 != v.m_vi && v.m_vi[0] >= 0 && (unsigned int)v.m_vi[0] < vertex_list.PointCount() )
+              vertex_list.GetPoint(v.m_vi[0],&point.x);
+            else
+              point = ON_3dPoint::UnsetPoint;
+            return (unsigned int)m_mesh_ci.m_index;
+          }
+          break;
+        }
+      }
+    }
   }
+
+  topv = 0;
+  point = ON_3dPoint::UnsetPoint;
+  return ON_UNSET_UINT_INDEX;
+}
+
+unsigned int ON_MeshComponentRef::MeshTopologyEdgeIndex() const
+{
+  const struct ON_MeshTopologyEdge* tope;
+  return GetMeshTopologyEdge(tope);
+}
+
+
+const struct ON_MeshTopologyEdge* ON_MeshComponentRef::MeshTopologyEdge() const
+{
+  const struct ON_MeshTopologyEdge* tope;
+  GetMeshTopologyEdge(tope);
   return tope;
 }
 
-/////////////////////////////////////////////////
-
-
-ON_MeshFaceRef::ON_MeshFaceRef()
+unsigned int ON_MeshComponentRef::GetMeshTopologyEdge(
+  const struct ON_MeshTopologyEdge*& tope
+  ) const
 {
-  m_mesh = 0;
-  m_mesh_fi = -1;
-}
-
-ON_MeshFaceRef::~ON_MeshFaceRef()
-{
-  m_mesh = 0;
-  m_mesh_fi = -1;
-}
-
-ON_MeshFaceRef& ON_MeshFaceRef::operator=(const ON_MeshFaceRef& src)
-{
-  if ( this != &src )
-  {
-    ON_Geometry::operator=(src);
-    m_mesh = src.m_mesh;
-    m_mesh_fi = src.m_mesh_fi;
-  }
-  return *this;
-}
-
-
-ON_BOOL32 ON_MeshFaceRef::IsValid( ON_TextLog* text_log ) const
-{
-  if ( 0 == m_mesh)
-  {
-    if ( 0 != text_log )
-    {
-      text_log->Print("m_mesh = NULL\n");
-    }
-    return false;
-  }
-
-  if ( m_mesh_fi < 0 || m_mesh_fi >= m_mesh->m_F.Count() )
-  {
-    if ( 0 != text_log )
-    {
-      text_log->Print("m_mesh_fi = %d (should have 0 <= m_mesh_fi < %d)\n",m_mesh_fi,m_mesh->m_F.Count());
-    }
-    return false;
-  }
-
-  return true;
-}
-
-void ON_MeshFaceRef::Dump( ON_TextLog& text_log ) const
-{
-  text_log.Print("m_mesh=%08x, m_mesh_fi=%d\n",m_mesh,m_mesh_fi);
-}
-
-unsigned int ON_MeshFaceRef::SizeOf() const
-{
-  unsigned int sz = sizeof(*this) - sizeof(ON_Geometry);
-  sz += ON_Geometry::SizeOf();
-  return sz;
-}
-
-ON::object_type ON_MeshFaceRef::ObjectType() const
-{
-  return ON::meshface_object;
-}
-
-// overrides of virtual ON_Geometry functions
-int ON_MeshFaceRef::Dimension() const
-{
-  return 3;
-}
-
-ON_BOOL32 ON_MeshFaceRef::GetBBox(
-       double* boxmin,
-       double* boxmax,
-       ON_BOOL32 bGrowBox
-       ) const
-{
-  bool rc = false;
-  if ( 0 != m_mesh && m_mesh_fi >= 0 && m_mesh_fi < m_mesh->m_F.Count() )
-  {
-    const int vcnt = m_mesh->m_V.Count();
-    const int* Fvi = m_mesh->m_F[m_mesh_fi].vi;
-    ON_3dPoint v[4];
-    //int count = 0;
-    int i;
-    for ( i = 0; i < 4; i++ )
-    {
-      if ( Fvi[i] >= 0 && Fvi[i] < vcnt )
-      {
-        v[i] = m_mesh->m_V[Fvi[i]];
-      }
-      else
-        return false;
-    }
-    rc = ON_GetPointListBoundingBox( 3, 0, 4, 3, &v[0].x, boxmin, boxmax, bGrowBox?true:false );
-  }
-  return rc;
-}
-
-ON_BOOL32 ON_MeshFaceRef::Transform( 
-       const ON_Xform& xform
-       )
-{
-  return false;
-}
-
-const ON_MeshTopology* ON_MeshFaceRef::MeshTopology() const
-{
-  return (0 != m_mesh) ? &m_mesh->m_top : 0;
-}
-
-
-
-const ON_MeshFace* ON_MeshFaceRef::MeshFace() const
-{
-  const ON_MeshFace* f = 0;
-  if ( 0 != m_mesh && m_mesh_fi >= 0 && m_mesh_fi < m_mesh->m_F.Count() )
-  {
-    f = &m_mesh->m_F[m_mesh_fi];
-  }
-  return f;
-}
-
-
-const ON_MeshTopologyFace* ON_MeshFaceRef::MeshTopologyFace() const
-{
-  const ON_MeshTopologyFace* topf = 0;
-  if ( m_mesh_fi >= 0 )
+  if ( ON_COMPONENT_INDEX::meshtop_edge == m_mesh_ci.m_type && m_mesh_ci.m_index >= 0 )
   {
     const ON_MeshTopology* top = MeshTopology();
-    if ( 0 != top && m_mesh_fi < top->m_topf.Count() )
-      topf = &top->m_topf[m_mesh_fi];
-  }
-  return topf;
-}
-
-ON_MeshVertexRef ON_Mesh::VertexRef(int mesh_V_index) const
-{
-  ON_MeshVertexRef vr;
-  if ( mesh_V_index >= 0 && mesh_V_index < m_V.Count() )
-  {
-    vr.m_mesh = this;
-    vr.m_mesh_vi = mesh_V_index;
-    if ( m_top.m_topv_map.Count() == m_V.Count() )
+    if ( top && m_mesh_ci.m_index < top->m_tope.Count() )
     {
-      vr.m_top_vi = m_top.m_topv_map[mesh_V_index];
+      tope = &top->m_tope[m_mesh_ci.m_index];
+      return (unsigned int)m_mesh_ci.m_index;
     }
   }
-
-  return vr;
+  tope = 0;
+  return ON_UNSET_UINT_INDEX;
 }
 
-ON_MeshVertexRef ON_Mesh::VertexRef(ON_COMPONENT_INDEX ci) const
+unsigned int ON_MeshComponentRef::GetMeshTopologyEdgeLine(
+  class ON_Line& line
+  ) const
 {
-  ON_MeshVertexRef vr;
+  const struct ON_MeshTopologyEdge* tope;
+  return GetMeshTopologyEdgeAndLine(tope,line);
+}
 
-  //int vertex_index = -1;
-  switch (ci.m_type)
+unsigned int ON_MeshComponentRef::GetMeshTopologyEdgeAndLine(
+  const struct ON_MeshTopologyEdge*& tope,
+  ON_Line& line 
+  ) const
+{
+  tope = 0;
+  unsigned int topei = GetMeshTopologyEdge(tope);
+  if ( ON_UNSET_UINT_INDEX != topei && 0 != tope && tope->m_topvi[0] >= 0 && tope->m_topvi[1] >= 0 )
   {
-  case ON_COMPONENT_INDEX::meshtop_vertex:
-    vr = m_top.VertexRef(ci);
-    break;
-  case ON_COMPONENT_INDEX::mesh_vertex:
-    if ( ci.m_index >= 0 && ci.m_index < m_V.Count() )
+    const ON_MeshTopology* top = MeshTopology();
+    if ( 0 != top )
     {
-      vr.m_mesh = this;
-      vr.m_mesh_vi = ci.m_index;
-      if ( m_top.m_topv_map.Count() == m_V.Count() )
+      int topv_count = top->m_topv.Count();
+      if ( tope->m_topvi[0] < topv_count && tope->m_topvi[1] < topv_count )
       {
-        vr.m_top_vi = m_top.m_topv_map[vr.m_mesh_vi];
+        const ON_MeshTopologyVertex& v0 = top->m_topv[tope->m_topvi[0]];
+        const ON_MeshTopologyVertex& v1 = top->m_topv[tope->m_topvi[1]];
+        if ( v0.m_v_count > 0 && v1.m_v_count > 0 && 0 != v0.m_vi && 0 != v1.m_vi )
+        {
+          if ( v0.m_vi[0] >= 0 && v1.m_vi[0] >= 0 && v0.m_vi[0] < m_mesh->m_V.Count() && v1.m_vi[0] < m_mesh->m_V.Count() )
+          {
+            ON_3dPointListRef vlist(m_mesh);
+            vlist.GetPoint(v0.m_vi[0],&line.from.x);
+            vlist.GetPoint(v1.m_vi[0],&line.to.x);
+            return topei;
+          }
+        }
       }
     }
-    break;
-  default:
-    // intentionally skipping other enum values (also quiets gcc warnings)
-    break;
   }
 
-  return vr;
+  line = ON_Line::UnsetLine;
+  return topei;
 }
 
-
-ON_MeshEdgeRef ON_Mesh::EdgeRef(int tope_index) const
+unsigned int ON_MeshComponentRef::MeshFaceIndex() const
 {
-  return m_top.EdgeRef(tope_index);
+  const ON_MeshFace* mesh_face;
+  return GetMeshFace(mesh_face);
 }
 
-ON_MeshEdgeRef ON_Mesh::EdgeRef(ON_COMPONENT_INDEX ci) const
+const class ON_MeshFace* ON_MeshComponentRef::MeshFace() const
 {
-  return m_top.EdgeRef(ci);
+  const ON_MeshFace* mesh_face = 0;
+  GetMeshFace(mesh_face);
+  return mesh_face;
 }
 
-ON_MeshFaceRef ON_Mesh::FaceRef(int mesh_F_index) const
+unsigned int ON_MeshComponentRef::GetMeshFace(
+  const ON_MeshFace*& mesh_face
+  ) const
 {
-  ON_MeshFaceRef fr;
-
-  if ( mesh_F_index >= 0 && mesh_F_index < m_F.Count() )
+  if ( 0 != m_mesh && m_mesh_ci.m_index >= 0 )
   {
-    fr.m_mesh = this;
-    fr.m_mesh_fi = mesh_F_index;
-  }
+    switch(m_mesh_ci.m_type)
+    {     
+    case ON_COMPONENT_INDEX::mesh_face:
+      if ( m_mesh_ci.m_index < m_mesh->m_F.Count() )
+      {
+        mesh_face = &m_mesh->m_F[m_mesh_ci.m_index];
+        return (unsigned int)m_mesh_ci.m_index;
+      }
+      break;
 
-  return fr;
-}
-
-ON_MeshFaceRef ON_Mesh::FaceRef(ON_COMPONENT_INDEX ci) const
-{
-  ON_MeshFaceRef fr;
-
-  if ( ci.m_type == ON_COMPONENT_INDEX::mesh_face )
-  {
-    if ( ci.m_index >= 0 && ci.m_index < m_F.Count() )
-    {
-      fr.m_mesh = this;
-      fr.m_mesh_fi = ci.m_index;
+    case ON_COMPONENT_INDEX::mesh_ngon:
+      {
+        const ON_MeshNgon* ngon = m_mesh->Ngon(m_mesh_ci.m_index);
+        if ( 0 != ngon && 1 == ngon->m_Fcount && 0 != ngon->m_fi )
+        {
+          if ( ngon->m_fi[0] < m_mesh->m_F.UnsignedCount() )
+          {
+            mesh_face = &m_mesh->m_F[ngon->m_fi[0]];
+            return ngon->m_fi[0];
+          }
+        }
+      }
+      break;
     }
   }
 
-  return fr;
+  mesh_face = 0;
+  return ON_UNSET_UINT_INDEX;
 }
 
-ON_MeshVertexRef ON_MeshTopology::VertexRef(ON_COMPONENT_INDEX ci) const
+unsigned int ON_MeshComponentRef::MeshNgonIndex() const
 {
-  ON_MeshVertexRef vr;
-  if ( ci.m_index >= 0 )
+  unsigned int ngon_index = ON_UNSET_UINT_INDEX;
+  if ( 0 != m_mesh && m_mesh_ci.m_index >= 0 )
+  {
+    switch( m_mesh_ci.m_type)
+    {
+    case ON_COMPONENT_INDEX::mesh_face:
+      if ( m_mesh_ci.m_index < m_mesh->m_F.Count() )
+      {
+        ngon_index = m_mesh->NgonIndexFromFaceIndex(m_mesh_ci.m_index);
+        if ( ngon_index < ON_UNSET_UINT_INDEX && 0 == m_mesh->Ngon(ngon_index) )
+          ngon_index = ON_UNSET_UINT_INDEX;
+      }
+      break;
+    case ON_COMPONENT_INDEX::mesh_ngon:
+      if ( 0 != m_mesh->Ngon(m_mesh_ci.m_index) )
+        ngon_index = (unsigned int)m_mesh_ci.m_index;
+      break;
+    }
+  }
+  return ngon_index;
+}
+
+const class ON_MeshNgon* ON_MeshComponentRef::MeshNgon(
+    class ON_MeshNgonBuffer& ngon_buffer
+    ) const
+{
+  const class ON_MeshNgon* ngon = 0;
+  if ( 0 != m_mesh && m_mesh_ci.m_index >= 0 )
+  {
+    if ( ON_COMPONENT_INDEX::mesh_ngon == m_mesh_ci.m_type )
+    {
+      ngon = m_mesh->Ngon(m_mesh_ci.m_index);
+    }
+    else if ( ON_COMPONENT_INDEX::mesh_face == m_mesh_ci.m_type && m_mesh_ci.m_index < m_mesh->m_F.Count() )
+    {
+      ngon = ON_MeshNgon::NgonFromMeshFace(ngon_buffer,(unsigned int)m_mesh_ci.m_index,(const unsigned int*)m_mesh->m_F[m_mesh_ci.m_index].vi);
+    }
+  }
+  return ngon;
+}
+
+const class ON_MeshNgon* ON_MeshComponentRef::MeshNgon() const
+{
+  unsigned int ngon_index = MeshNgonIndex();
+  return ( ON_UNSET_UINT_INDEX != ngon_index ) ? m_mesh->Ngon(ngon_index) : 0;
+}
+
+ON_MeshComponentRef ON_Mesh::MeshComponentRef(
+  ON_COMPONENT_INDEX ci
+  ) const
+{
+  ON_MeshComponentRef cr;
+  if ( ci.IsMeshComponentIndex() && ci.m_index >= 0 )
+  {
+    cr.Set( this, ci );
+  }
+  return cr;
+}
+
+ON_MeshComponentRef ON_MeshTopology::MeshComponentRef(ON_COMPONENT_INDEX ci) const
+{
+  ON_MeshComponentRef cr;
+  if ( 0 != m_mesh )
+    cr = m_mesh->MeshComponentRef(ci);
+  return cr;
+}
+
+const ON_Mesh* ON_MeshComponentRef::Mesh() const
+{
+  return m_mesh;
+}
+
+ON_COMPONENT_INDEX ON_MeshComponentRef::ComponentIndex() const
+{
+  ON_COMPONENT_INDEX ci;
+  if ( m_mesh && m_mesh->IsValidMeshComponentIndex(m_mesh_ci) )
+    ci = m_mesh_ci;
+  return ci;
+}
+
+bool ON_Mesh::IsValidMeshComponentIndex(
+  ON_COMPONENT_INDEX ci
+  ) const
+{
+  bool rc = ci.m_index >= 0;
+  if (rc)
   {
     switch(ci.m_type)
     {
     case ON_COMPONENT_INDEX::mesh_vertex:
-      if (m_mesh)
-      {
-        vr = m_mesh->VertexRef(ci);
-      }
-      break;
-    case ON_COMPONENT_INDEX::meshtop_vertex:
-      if ( ci.m_index < m_topv.Count() )
-      {
-        vr.m_mesh = m_mesh;
-        vr.m_top_vi = ci.m_index;
-        if ( m_topv[ci.m_index].m_vi && 1 == m_topv[ci.m_index].m_v_count )
-        {
-          vr.m_mesh_vi = m_topv[ci.m_index].m_vi[0];
-        }
-      }
-      break;
-    default:
-      // intentionally skip other ON_COMPONENT_INDEX::TYPE
-      // enum values.
-      break;
-    }
-  }
-  return vr;  
-}
-
-ON_MeshVertexRef ON_MeshTopology::VertexRef(int topv_index) const
-{
-  ON_MeshVertexRef vr;
-
-  if ( topv_index >= 0 && topv_index < m_topv.Count() )
-  {
-    vr.m_mesh = m_mesh;
-    vr.m_top_vi = topv_index;
-    if ( 1 == m_topv[topv_index].m_v_count )
-    {
-      vr.m_mesh_vi = m_topv[topv_index].m_vi[0];
-    }
-  }
-
-  return vr;
-}
-
-ON_MeshEdgeRef ON_MeshTopology::EdgeRef(ON_COMPONENT_INDEX ci) const
-{
-  ON_MeshEdgeRef er;
-  if ( ON_COMPONENT_INDEX::meshtop_edge == ci.m_type && ci.m_index >= 0 && ci.m_index < m_tope.Count() )
-  {
-    er.m_mesh = m_mesh;
-    er.m_top_ei = ci.m_index;
-  }
-  return er;
-}
-
-ON_MeshEdgeRef ON_MeshTopology::EdgeRef(int tope_index) const
-{
-  ON_MeshEdgeRef er;
-
-  if ( tope_index >= 0 && tope_index < m_tope.Count() )
-  {
-    er.m_mesh = m_mesh;
-    er.m_top_ei = tope_index;
-  }
-
-  return er;
-}
-
-ON_MeshFaceRef ON_MeshTopology::FaceRef(ON_COMPONENT_INDEX ci) const
-{
-  ON_MeshFaceRef fr;
-  if ( m_mesh )
-  {
-    fr = m_mesh->FaceRef(ci.m_index);
-  }
-  return fr;
-}
-
-ON_MeshFaceRef ON_MeshTopology::FaceRef(int topf_index) const
-{
-  return ( 0 != m_mesh ) ? m_mesh->FaceRef(topf_index) : ON_MeshFaceRef();
-}
-
-
-/*
-ON_Mesh::COMPONENT_TYPE ON_Mesh::ComponentIndexType( int component_index )
-{
-  switch( (mesh_component_mask & component_index) )
-  {
-  case mesh_vertex:    return mesh_vertex;
-  case meshtop_vertex: return meshtop_vertex;
-  case meshtop_edge:   return meshtop_edge;
-  case mesh_face:      return mesh_face;
-  }
-  return mesh_component_unset;
-}
-*/
-
-ON_COMPONENT_INDEX ON_MeshVertexRef::ComponentIndex() const
-{
-  ON_COMPONENT_INDEX ci(ON_COMPONENT_INDEX::invalid_type,-1);
-  if ( m_mesh_vi >= 0 )
-  {
-    if ( 0 == m_mesh || m_mesh_vi < m_mesh->m_V.Count() )
-    {
-      ci.Set(ON_COMPONENT_INDEX::mesh_vertex,m_mesh_vi);
-    }
-  }
-  else if ( m_top_vi >= 0 )
-  {
-    if ( 0 == m_mesh )
-    {
-      // not enough information to perform validation check
-      // assume this is a persistent index to be resolved
-      // later and press on
-      ci.Set(ON_COMPONENT_INDEX::meshtop_vertex,m_top_vi);
-    }
-    else if (m_top_vi < m_mesh->m_V.Count())
-    {
-      if ( 0 == m_mesh->m_top.m_topv.Count() )
-      {
-        // not enough information to perform validation check
-        // assume this is a persistent index to be resolved
-        // later and press on
-        ci.Set(ON_COMPONENT_INDEX::meshtop_vertex,m_top_vi);
-      }
-      else if ( m_top_vi < m_mesh->m_top.m_topv.Count() )
-      {
-        // m_top is constructed and m_top_vi is valid
-        ci.Set(ON_COMPONENT_INDEX::meshtop_vertex,m_top_vi);
-      }
-    }
-  }
-  return ci;
-}
-
-ON_COMPONENT_INDEX ON_MeshEdgeRef::ComponentIndex() const
-{
-  ON_COMPONENT_INDEX ci(ON_COMPONENT_INDEX::invalid_type,-1);
-  if ( m_top_ei >= 0 )
-  {
-    if ( 0 == m_mesh || 0 == m_mesh->m_top.m_tope.Count() )
-    {
-      // not enough information to perform validation check
-      // assume this is a persistent index to be resolved
-      // later and press on
-      ci.Set(ON_COMPONENT_INDEX::meshtop_edge,m_top_ei);
-    }
-    else if ( m_top_ei < m_mesh->m_top.m_tope.Count() )
-    {
-      // valid index
-      ci.Set(ON_COMPONENT_INDEX::meshtop_edge,m_top_ei);
-    }
-  }
-  return ci;
-}
-
-ON_COMPONENT_INDEX ON_MeshFaceRef::ComponentIndex() const
-{
-  ON_COMPONENT_INDEX ci(ON_COMPONENT_INDEX::invalid_type,-1);
-  if ( m_mesh_fi >= 0 )
-  {
-    if ( 0 == m_mesh || m_mesh_fi < m_mesh->m_F.Count() )
-    {
-      ci.Set(ON_COMPONENT_INDEX::mesh_face,m_mesh_fi);
-    }
-  }
-  return ci;
-}
-
-ON_Geometry* ON_Mesh::MeshComponent( 
-  ON_COMPONENT_INDEX ci
-  ) const
-{
-  ON_Geometry* component = 0;
-  if ( ci.m_index >= 0 )
-  {
-    switch( ci.m_type )
-    {
-    case ON_COMPONENT_INDEX::mesh_vertex: 
-      {
-        ON_MeshVertexRef r = VertexRef(ci);
-        component = new ON_MeshVertexRef(r);
-      }
+      if (ci.m_index >= m_V.Count())
+        rc = false;
       break;
 
     case ON_COMPONENT_INDEX::meshtop_vertex:
-      {
-        ON_MeshVertexRef r = Topology().VertexRef(ci);
-        component = new ON_MeshVertexRef(r);
-      }
+      if ( false == TopologyExists() || ci.m_index >= m_top.m_topv.Count() )
+        rc = false;
       break;
 
     case ON_COMPONENT_INDEX::meshtop_edge:
-      {
-        ON_MeshEdgeRef r = EdgeRef(ci);
-        component = new ON_MeshEdgeRef(r);
-      }
+      if ( false == TopologyExists() || ci.m_index >= m_top.m_tope.Count() )
+        rc = false;
       break;
 
     case ON_COMPONENT_INDEX::mesh_face:
-      {
-        ON_MeshFaceRef r = FaceRef(ci);
-        component = new ON_MeshFaceRef(r);
-      }
+      if (ci.m_type >= m_F.Count())
+        rc = false;
+      break;
+
+    case ON_COMPONENT_INDEX::mesh_ngon:
+      if ( 0 == Ngon(ci.m_index) )
+        rc = false;
       break;
 
     default:
-      // intentionally skip other ON_COMPONENT_INDEX::TYPE
-      // enum values.
+      rc = false;
       break;
     }
   }
-  return component;
+  return rc;
 }
+
+
+ON_MeshComponentRef* ON_Mesh::MeshComponent( 
+  ON_COMPONENT_INDEX ci
+  ) const
+{
+  ON_MeshComponentRef* cr_ptr = 0;
+  ON_MeshComponentRef cr = MeshComponentRef(ci);
+  if ( this == cr.Mesh() && cr.ComponentIndex() == ci )
+    cr_ptr = new ON_MeshComponentRef(cr);
+  return cr_ptr;
+}
+
 
 ON_3dVector ON_TriangleNormal(
         const ON_3dPoint& A,
@@ -8866,6 +10373,7 @@ bool ON_GetTrianglePlaneEquation(
 
   return (0.0 != N.x || 0.0 != N.y || 0.0 != N.z);
 }
+
 
 const bool* ON_Mesh::HiddenVertexArray() const
 {
@@ -9034,16 +10542,13 @@ void ON_MappingTag::Transform( const ON_Xform& xform )
 
 void ON_MappingTag::SetDefaultSurfaceParameterMappingTag()
 {
-  ON_TextureMapping srfp_mapping;
-  srfp_mapping.m_type = ON_TextureMapping::srfp_mapping;
-  srfp_mapping.m_mapping_id = ON_nil_uuid;
-  Set(srfp_mapping); 
+  Set(ON_TextureMapping::SurfaceParameterTextureMapping); 
 }
 
 void ON_MappingTag::Set(const ON_TextureMapping& mapping)
 {
   Default();
-  m_mapping_id   = mapping.m_mapping_id;
+  m_mapping_id   = mapping.Id();
   m_mapping_type = mapping.m_type;
   m_mapping_crc  = mapping.MappingCRC();
 }
@@ -9055,14 +10560,12 @@ bool ON_MappingTag::IsSet() const
 
 bool ON_MappingTag::IsDefaultSurfaceParameterMapping() const
 {
-  bool rc = (ON_TextureMapping::srfp_mapping == m_mapping_type);
+  bool rc = (ON_TextureMapping::TYPE::srfp_mapping == m_mapping_type);
   if ( rc )
   {
     // The crc needs to be checked to insure that m_uvw
     // was the identity.
-    ON_TextureMapping tmp;
-    tmp.m_type = ON_TextureMapping::srfp_mapping;
-    rc = (m_mapping_crc == tmp.MappingCRC());
+    rc = (m_mapping_crc == ON_TextureMapping::SurfaceParameterTextureMapping.MappingCRC());
   }
   return rc;
 }
@@ -9118,7 +10621,7 @@ bool ON_MappingTag::Write(ON_BinaryArchive& archive) const
     if(!rc) break;
 
     // 1.1 fields
-    rc = archive.WriteInt(m_mapping_type);
+    rc = archive.WriteInt(static_cast<unsigned int>(m_mapping_type));
     if (!rc) break;
 
     break;
@@ -9154,13 +10657,12 @@ bool ON_MappingTag::Read(ON_BinaryArchive& archive)
     if ( mnv >= 1 )
     {
       // 1.1 fields
-      int i = m_mapping_type;
+      unsigned int i = static_cast<unsigned int>(m_mapping_type);
       rc = archive.ReadInt(&i);
       if ( rc )
-        m_mapping_type = ON_TextureMapping::TypeFromInt(i);
+        m_mapping_type = ON_TextureMapping::TypeFromUnsigned(i);
       if (!rc) break;
     }
-
 
     break;
   }
@@ -9182,65 +10684,94 @@ ON_TextureCoordinates::ON_TextureCoordinates()
 // Double precision vertices
 //
 
-ON_OBJECT_IMPLEMENT(ON_MeshDoubleVertices,ON_UserData,"17F24E75-21BE-4a7b-9F3D-7F85225247E3");
+ON_OBJECT_IMPLEMENT(ON_V5_MeshDoubleVertices,ON_UserData,"17F24E75-21BE-4a7b-9F3D-7F85225247E3");
 
-ON_MeshDoubleVertices* ON_MeshDoubleVertices::Get(const ON_Mesh* mesh)
+ON_V5_MeshDoubleVertices* ON_V5_MeshDoubleVertices::GetV5(const ON_Mesh* mesh)
 {
-  return ON_MeshDoubleVertices::Cast(mesh->GetUserData(ON_MeshDoubleVertices::m_ON_MeshDoubleVertices_class_id.Uuid()));
+  return ON_V5_MeshDoubleVertices::Cast(mesh->GetUserData(ON_CLASS_ID(ON_V5_MeshDoubleVertices)));
 }
 
-ON_MeshDoubleVertices* ON_MeshDoubleVertices::Attach(const ON_Mesh* mesh)
+ON_V5_MeshDoubleVertices* ON_V5_MeshDoubleVertices::AttachV5(const ON_Mesh* mesh)
 {
-  ON_MeshDoubleVertices* dv = ON_MeshDoubleVertices::Get(mesh);
+  ON_V5_MeshDoubleVertices* dv = ON_V5_MeshDoubleVertices::GetV5(mesh);
   if ( 0 != dv )
     return 0;
-  dv = new ON_MeshDoubleVertices();
+  dv = new ON_V5_MeshDoubleVertices();
   const_cast<ON_Mesh*>(mesh)->AttachUserData(dv);
   return dv;
 }
 
-ON_MeshDoubleVertices::ON_MeshDoubleVertices()
-: ON_UserData()
-, m_fcount(0)
-, m_dcount(0)
-, m_fCRC(0)
-, m_dCRC(0)
+ON_V5_MeshDoubleVertices::ON_V5_MeshDoubleVertices()
 {
-  m_userdata_uuid = ON_MeshDoubleVertices::m_ON_MeshDoubleVertices_class_id.Uuid();
+  m_userdata_uuid = ON_CLASS_ID(ON_V5_MeshDoubleVertices);
   m_application_uuid = ON_opennurbs5_id;
   m_userdata_copycount = 1;
 }
 
-ON_MeshDoubleVertices::~ON_MeshDoubleVertices()
+ON_V5_MeshDoubleVertices::~ON_V5_MeshDoubleVertices()
 {}
 
-ON_BOOL32 ON_MeshDoubleVertices::IsValid( ON_TextLog* ) const
+bool ON_V5_MeshDoubleVertices::IsValid( ON_TextLog* ) const
 {
   return true;
 }
 
-void ON_MeshDoubleVertices::Dump( ON_TextLog& text_log ) const
+void ON_V5_MeshDoubleVertices::Dump( ON_TextLog& text_log ) const
 {
   // TODO - print some double values
   ON_UserData::Dump(text_log);
 }
 
-unsigned int ON_MeshDoubleVertices::SizeOf() const
+unsigned int ON_V5_MeshDoubleVertices::SizeOf() const
 {
-  return m_dV.SizeOfArray() + ON_UserData::SizeOf();
+  return m_V5_dV.SizeOfArray() + ON_UserData::SizeOf();
 }
 
-ON__UINT32 ON_MeshDoubleVertices::DataCRC(ON__UINT32 current_remainder) const
+ON__UINT32 ON_V5_MeshDoubleVertices::DataCRC(ON__UINT32 current_remainder) const
 {
   current_remainder = ON_CRC32(current_remainder,sizeof(m_fcount),&m_fcount);
   current_remainder = ON_CRC32(current_remainder,sizeof(m_dcount),&m_dcount);
   current_remainder = ON_CRC32(current_remainder,sizeof(m_fCRC),&m_fCRC);
   current_remainder = ON_CRC32(current_remainder,sizeof(m_dCRC),&m_dCRC);
-  current_remainder = m_dV.DataCRC(current_remainder);
+  current_remainder = m_V5_dV.DataCRC(current_remainder);
   return current_remainder;  
 }
 
-ON_BOOL32 ON_MeshDoubleVertices::Write(ON_BinaryArchive& file) const
+bool ON_V5_MeshDoubleVertices::DeleteAfterWrite(
+  const class ON_BinaryArchive& archive,
+  const class ON_Object* parent_object
+  ) const
+{
+  // ON_V5_MeshDoubleVertices is used when saving earlier versions of files and then deleted.
+  return true;
+}
+
+bool ON_V5_MeshDoubleVertices::DeleteAfterRead(
+  const class ON_BinaryArchive& archive,
+  class ON_Object* parent_object
+  ) const
+{
+  ON_Mesh* mesh = ON_Mesh::Cast(parent_object);
+  if (nullptr != mesh && 0 == mesh->m_dV.UnsignedCount() )
+  {
+    const unsigned int vertex_count = mesh->VertexUnsignedCount();
+    if (vertex_count == m_V5_dV.UnsignedCount())
+    {
+      mesh->m_dV = m_V5_dV;
+      if (false == mesh->HasSynchronizedDoubleAndSinglePrecisionVertices())
+        mesh->DestroyDoublePrecisionVertices();
+      else
+      {
+        // update vertex bounding boxes
+        mesh->InvalidateVertexBoundingBox();
+        mesh->BoundingBox();
+      }
+    }
+  }
+  return true;
+}
+
+bool ON_V5_MeshDoubleVertices::Write(ON_BinaryArchive& file) const
 {
   bool rc = file.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,0);
   if (!rc)
@@ -9259,7 +10790,7 @@ ON_BOOL32 ON_MeshDoubleVertices::Write(ON_BinaryArchive& file) const
     rc = file.WriteInt(m_dCRC);
     if (!rc)
       break;
-    rc = file.WriteArray(m_dV);
+    rc = file.WriteArray(m_V5_dV);
     if (!rc)
       break;
     break;
@@ -9269,13 +10800,13 @@ ON_BOOL32 ON_MeshDoubleVertices::Write(ON_BinaryArchive& file) const
   return rc;
 }
 
-ON_BOOL32 ON_MeshDoubleVertices::Read(ON_BinaryArchive& file)
+bool ON_V5_MeshDoubleVertices::Read(ON_BinaryArchive& file)
 {
   m_fcount = 0;
   m_dcount = 0;
   m_fCRC = 0;
   m_dCRC = 0;
-  m_dV.Destroy();
+  m_V5_dV.Destroy();
 
   int major_version = 0;
   int minor_version = 0;
@@ -9296,24 +10827,24 @@ ON_BOOL32 ON_MeshDoubleVertices::Read(ON_BinaryArchive& file)
     rc = file.ReadInt(&m_dCRC);
     if (!rc)
       break;
-    rc = file.ReadArray(m_dV);
+    rc = file.ReadArray(m_V5_dV);
     if (!rc)
       break;
     break;
   }
   if ( !file.EndRead3dmChunk() )
     rc = false;
-  return rc;
+    return rc;
 }
 
 // virtual ON_UserData overrides
-ON_BOOL32 ON_MeshDoubleVertices::GetDescription( ON_wString& description )
+bool ON_V5_MeshDoubleVertices::GetDescription( ON_wString& description )
 {
   description = L"ON_Mesh double precision vertices";
   return true;
 }
 
-ON_BOOL32 ON_MeshDoubleVertices::Archive() const
+bool ON_V5_MeshDoubleVertices::Archive() const
 {
   // refuse to save garbage in files.
 
@@ -9323,7 +10854,7 @@ ON_BOOL32 ON_MeshDoubleVertices::Archive() const
     return false;
   }
 
-  if ( m_dcount != m_dV.Count() )
+  if ( m_dcount != m_V5_dV.Count() )
   {
     ON_ERROR("m_dcount != m_dV.Count()");
     return false;
@@ -9348,23 +10879,23 @@ ON_BOOL32 ON_MeshDoubleVertices::Archive() const
     return false;
   }
 
-  if ( m_fCRC != ON_MeshDoubleVertices::FloatCRC(mesh->m_V) )
+  if ( m_fCRC != ON_V5_MeshDoubleVertices::FloatCRC(mesh->m_V) )
   {
-    ON_ERROR("m_fCRC != ON_MeshDoubleVertices::FloatCRC(mesh->m_V)");
+    ON_ERROR("m_fCRC != ON_V5_MeshDoubleVertices::FloatCRC(mesh->m_V)");
     return false;
   }
 
   return true;
 }
 
-ON_BOOL32 ON_MeshDoubleVertices::Transform( const ON_Xform& xform )
+bool ON_V5_MeshDoubleVertices::Transform( const ON_Xform& xform )
 {
   if ( !xform.IsIdentity() )
   {
     const ON__UINT32 crc0 = DoubleCRC();
-    m_dV.Transform(xform);
+    m_V5_dV.Transform(xform);
     const ON__UINT32 crc1 = DoubleCRC();
-    if ( crc0 == m_dCRC && m_dV.Count() == m_dcount )
+    if ( crc0 == m_dCRC && m_V5_dV.Count() == m_dcount )
       m_dCRC = crc1; // update m_dCRC so it stays valid
     else
       m_dCRC = (0==crc1)?1:0; // make sure m_dCRC is not valid
@@ -9374,16 +10905,19 @@ ON_BOOL32 ON_MeshDoubleVertices::Transform( const ON_Xform& xform )
 
 bool ON_Mesh::HasSynchronizedDoubleAndSinglePrecisionVertices() const
 {
-  ON_3fPoint P;
-  const ON_MeshDoubleVertices* dv = ON_MeshDoubleVertices::Get(this);
-  if ( 0 == dv )
+  const unsigned int vertex_count = VertexUnsignedCount();
+  if (0 == vertex_count)
     return false;
-  int count = m_V.Count();
-  if ( count != dv->m_dV.Count() )
+
+  if (vertex_count != m_V.UnsignedCount())
     return false;
+  if (vertex_count != m_dV.UnsignedCount())
+    return false;
+
+  ON_3dPoint P;
   const ON_3fPoint* FV = m_V.Array();
-  const ON_3dPoint* DV = dv->m_dV.Array();
-  while (count--)
+  const ON_3dPoint* DV = m_dV.Array();
+  for (unsigned int vi = 0; vi < vertex_count; vi++ )
   {
     // Compare float values.
     P.x = (float)DV->x;
@@ -9391,62 +10925,51 @@ bool ON_Mesh::HasSynchronizedDoubleAndSinglePrecisionVertices() const
     P.z = (float)DV->z;
     if ( !(P.x == FV->x && P.y == FV->y && P.z == FV->z) )
       return false;
+    DV++;
+    FV++;
   }
   return true;
 }
 
 bool ON_Mesh::HasDoublePrecisionVertices() const
 {
-  return ( 0 != ON_MeshDoubleVertices::Get(this));
+  const unsigned int vertex_count = VertexUnsignedCount();
+  return ( vertex_count > 0 && vertex_count == m_dV.UnsignedCount() );
+}
+
+bool ON_Mesh::HasSinglePrecisionVertices() const
+{
+  const unsigned int vertex_count = VertexUnsignedCount();
+  return ( vertex_count > 0 && vertex_count == m_V.UnsignedCount() );
 }
 
 void ON_Mesh::DestroyDoublePrecisionVertices()
 {
-  ON_MeshDoubleVertices* dv = ON_MeshDoubleVertices::Get(this);
-  if ( dv )
-    delete dv;
+  m_dV.Destroy();
 }
 
-void ON_Mesh::EnableDoublePrecisionVertices(bool bEnableDoublePrecisionVertices)
-{
-  ON_MeshDoubleVertices* dv = ON_MeshDoubleVertices::Get(this);
-  if ( bEnableDoublePrecisionVertices )
-  {
-    if ( 0 == dv )
-    {
-      dv = ON_MeshDoubleVertices::Attach(this);
-      UpdateDoublePrecisionVertices();
-    }
-  }
-  else
-  {
-    // destroy double precision vertices
-    if ( 0 != dv )
-      delete dv;
-  }
-}
-
-ON__UINT32 ON_MeshDoubleVertices::FloatCRC( const ON_3fPointArray& V )
+ON__UINT32 ON_V5_MeshDoubleVertices::FloatCRC( const ON_3fPointArray& V )
 {
   return V.DataCRC(0);
 }
 
-ON__UINT32 ON_MeshDoubleVertices::DoubleCRC() const
+ON__UINT32 ON_V5_MeshDoubleVertices::DoubleCRC() const
 {
-  return m_dV.DataCRC(0);
+  return m_V5_dV.DataCRC(0);
 }
 
 void ON_Mesh::UpdateSinglePrecisionVertices()
 {
-  ON_MeshDoubleVertices* dv = ON_MeshDoubleVertices::Get(this);
-  if ( 0 == dv )
+  unsigned int vertex_count = m_dV.UnsignedCount();
+  m_V.Reserve(vertex_count);
+  m_V.SetCount(vertex_count);
+  if (0 == vertex_count)
     return;
-  int count = dv->m_dV.Count();
-  m_V.Reserve(count);
-  m_V.SetCount(count);
+
   ON_3fPoint* fV = m_V.Array();
-  const ON_3dPoint* dV = dv->m_dV.Array();
-  while(count--)
+  ON_3fPoint* fVend = fV + vertex_count;
+  const ON_3dPoint* dV = m_dV.Array();
+  while (fV < fVend)
   {
     fV->x = (float)dV->x;
     fV->y = (float)dV->y;
@@ -9454,22 +10977,20 @@ void ON_Mesh::UpdateSinglePrecisionVertices()
     fV++;
     dV++;
   }
-  dv->m_fcount = dv->m_dV.Count();
-  dv->m_dcount = dv->m_dV.Count();
-  dv->m_fCRC = ON_MeshDoubleVertices::FloatCRC(m_V);
-  dv->m_dCRC = dv->DoubleCRC();
 }
 
 void ON_Mesh::UpdateDoublePrecisionVertices()
 {
-  ON_MeshDoubleVertices* dv = ON_MeshDoubleVertices::Get(this);
-  if ( 0 == dv )
+  const unsigned int vertex_count = m_V.UnsignedCount();
+  const bool bSelectiveUpdate = (vertex_count == m_dV.UnsignedCount());
+
+  m_dV.Reserve(vertex_count);
+  m_dV.SetCount(vertex_count);
+  if (0 == vertex_count)
     return;
-  int count = m_V.Count();
-  bool bSelectiveUpdate = (count == dv->m_dV.Count());
-  dv->m_dV.Reserve(count);
-  dv->m_dV.SetCount(count);
-  ON_3dPoint* dV = dv->m_dV.Array();
+
+  ON_3dPoint* dV = m_dV.Array();
+  ON_3dPoint* dVend = dV + vertex_count;
   const ON_3fPoint* fV = m_V.Array();
   if ( bSelectiveUpdate )
   {
@@ -9481,7 +11002,7 @@ void ON_Mesh::UpdateDoublePrecisionVertices()
     // that alread agree with the float vertices
     // in float precision.
     ON_3fPoint P;
-    while(count--)
+    while (dV < dVend)
     {
       P.x = (float)dV->x;
       P.y = (float)dV->y;
@@ -9499,7 +11020,7 @@ void ON_Mesh::UpdateDoublePrecisionVertices()
   }
   else
   {
-    while(count--)
+    while (dV < dVend)
     {
       dV->x = (double)fV->x;
       dV->y = (double)fV->y;
@@ -9508,82 +11029,27 @@ void ON_Mesh::UpdateDoublePrecisionVertices()
       fV++;
     }
   }
-  dv->m_fcount = m_V.Count();
-  dv->m_dcount = m_V.Count();
-  dv->m_fCRC = ON_MeshDoubleVertices::FloatCRC(m_V);
-  dv->m_dCRC = dv->DoubleCRC();
 }
-
-void ON_Mesh::SetSinglePrecisionVerticesAsValid()
-{
-  ON_MeshDoubleVertices* dv = ON_MeshDoubleVertices::Get(this);
-  if ( 0 == dv )
-    return;
-  dv->m_fcount = m_V.Count();
-  dv->m_fCRC   = ON_MeshDoubleVertices::FloatCRC(m_V);
-}
-
-void ON_Mesh::SetDoublePrecisionVerticesAsValid()
-{
-  ON_MeshDoubleVertices* dv = ON_MeshDoubleVertices::Get(this);
-  if ( 0 == dv )
-    return;
-  dv->m_dcount = dv->m_dV.Count();
-  dv->m_dCRC   = dv->DoubleCRC();
-}
-
-bool ON_Mesh::SinglePrecisionVerticesAreValid() const
-{
-  const ON_MeshDoubleVertices* dv = ON_MeshDoubleVertices::Get(this);
-  if ( 0 == dv )
-    return true;
-  return ( dv->m_fcount == m_V.Count() && dv->m_fCRC == ON_MeshDoubleVertices::FloatCRC(m_V) );
-}
-
-bool ON_Mesh::DoublePrecisionVerticesAreValid() const
-{
-  const ON_MeshDoubleVertices* dv = ON_MeshDoubleVertices::Get(this);
-  if ( 0 == dv )
-    return true;
-  // DO NOT COMPARE dv->m_dV.Count() and m_V.Count() because m_V might be 
-  // the bogus set of values.
-  return ( dv->m_dcount == dv->m_dV.Count() && dv->m_dCRC == dv->DoubleCRC() );
-}
-
-
 
 ON_3dPointArray& ON_Mesh::DoublePrecisionVertices()
 {
-  ON_MeshDoubleVertices* dv = ON_MeshDoubleVertices::Get(this);
-
-  bool bUpdate = false;
-  if ( 0 == dv )
-  {
-    dv = ON_MeshDoubleVertices::Attach(this);
-    bUpdate = true;
-  }
-  else if ( dv->m_dcount != dv->m_dV.Count()|| dv->m_dCRC != dv->DoubleCRC() )
-  {
-    if ( dv->m_fcount == m_V.Count() && dv->m_fCRC == ON_MeshDoubleVertices::FloatCRC(m_V) )
-    bUpdate = true;
-  }
-
-  if ( bUpdate )
+  const unsigned int vertex_count = VertexUnsignedCount();
+  if ( vertex_count != m_dV.UnsignedCount() )
     UpdateDoublePrecisionVertices();
 
-  return dv->m_dV;
+  return m_dV;
 }
 
 ON_3dPoint ON_Mesh::Vertex(int vertex_index) const
 {
-  if ( vertex_index < 0 || vertex_index >= m_V.Count() )
+  const unsigned int vertex_count = m_V.UnsignedCount();
+  if ( vertex_index < 0 || ((unsigned int)vertex_index) >= vertex_count )
     return ON_3dPoint::UnsetPoint;
 
   const ON_3fPoint F = m_V[vertex_index];
-  ON_MeshDoubleVertices* dv = ON_MeshDoubleVertices::Get(this);
-  if ( 0 != dv && dv->m_dV.Count() == m_V.Count() )
+  if (vertex_count == m_dV.UnsignedCount())
   {
-    ON_3dPoint D = dv->m_dV[vertex_index];
+    ON_3dPoint D = m_dV[vertex_index];
     if ( F.x == (float)D.x && F.y == (float)D.y && F.z == (float)D.z )
     {
       // double precision vertex is valid
@@ -9600,30 +11066,6 @@ const ON_3dPointArray& ON_Mesh::DoublePrecisionVertices() const
   ON_3dPointArray& a = mesh.DoublePrecisionVertices();
   return a;
 }
-
-ON_3fPointArray& ON_Mesh::SinglePrecisionVertices()
-{
-  ON_MeshDoubleVertices* dv = ON_MeshDoubleVertices::Get(this);
-
-  if ( 0 != dv )
-  {
-    if ( dv->m_fcount != m_V.Count()|| dv->m_fCRC != ON_MeshDoubleVertices::FloatCRC(m_V) )
-    {
-      if ( dv->m_dcount == dv->m_dV.Count() && dv->m_dCRC == dv->DoubleCRC() )
-        UpdateSinglePrecisionVertices();
-    }
-  }
-
-  return m_V;
-}
-
-const ON_3fPointArray& ON_Mesh::SinglePrecisionVertices() const
-{
-  ON_Mesh& mesh = const_cast<ON_Mesh&>(*this);
-  ON_3fPointArray& a = mesh.SinglePrecisionVertices();
-  return a;
-}
-
 
 ////////////////////////////////////////////////////////////////
 //
@@ -9645,19 +11087,19 @@ public:
 
 public:
   // virtual ON_Object override
-  ON_BOOL32 IsValid( ON_TextLog* text_log = NULL ) const;
+  bool IsValid( class ON_TextLog* text_log = nullptr ) const override;
   // virtual ON_Object override
-  unsigned int SizeOf() const;
+  unsigned int SizeOf() const override;
   // virtual ON_Object override
-  ON__UINT32 DataCRC(ON__UINT32 current_remainder) const;
+  ON__UINT32 DataCRC(ON__UINT32 current_remainder) const override;
   // virtual ON_Object override
-  ON_BOOL32 Write(ON_BinaryArchive& binary_archive) const;
+  bool Write(ON_BinaryArchive& binary_archive) const override;
   // virtual ON_Object override
-  ON_BOOL32 Read(ON_BinaryArchive& binary_archive);
+  bool Read(ON_BinaryArchive& binary_archive) override;
   // virtual ON_UserData override
-  ON_BOOL32 Archive() const;
+  bool Archive() const override;
   // virtual ON_UserData override
-  ON_BOOL32 GetDescription( ON_wString& description );
+  bool GetDescription( ON_wString& description ) override;
 
 public:
   static
@@ -9674,7 +11116,7 @@ ON_PerObjectMeshParameters* ON_PerObjectMeshParameters::FindOrCreate(const ON_Ob
 {
   if ( 0 == object )
     return 0;
-  ON_PerObjectMeshParameters* ud = ON_PerObjectMeshParameters::Cast(object->GetUserData(ON_PerObjectMeshParameters::m_ON_PerObjectMeshParameters_class_id.Uuid()));
+  ON_PerObjectMeshParameters* ud = ON_PerObjectMeshParameters::Cast(object->GetUserData(ON_CLASS_ID(ON_PerObjectMeshParameters)));
   if ( !ud && bCreate )
   {
     ud = new ON_PerObjectMeshParameters();
@@ -9686,11 +11128,11 @@ ON_PerObjectMeshParameters* ON_PerObjectMeshParameters::FindOrCreate(const ON_Ob
 ON_PerObjectMeshParameters::ON_PerObjectMeshParameters()
 : m_mp(ON_MeshParameters::FastRenderMesh)
 {
-  m_userdata_uuid = ON_PerObjectMeshParameters::m_ON_PerObjectMeshParameters_class_id.Uuid();
+  m_userdata_uuid = ON_CLASS_ID(ON_PerObjectMeshParameters);
   m_application_uuid = ON_opennurbs5_id;
   m_userdata_copycount = 1;
-  m_mp.m_bCustomSettings = true;
-  m_mp.m_bComputeCurvature = false;
+  m_mp.SetCustomSettings(true);
+  m_mp.SetComputeCurvature(false);
 }
 
 ON_PerObjectMeshParameters::~ON_PerObjectMeshParameters()
@@ -9698,7 +11140,7 @@ ON_PerObjectMeshParameters::~ON_PerObjectMeshParameters()
 }
 
 // virtual ON_Object override
-ON_BOOL32 ON_PerObjectMeshParameters::IsValid( ON_TextLog* text_log ) const
+bool ON_PerObjectMeshParameters::IsValid( ON_TextLog* text_log ) const
 {
   return true;
 }
@@ -9717,7 +11159,7 @@ ON__UINT32 ON_PerObjectMeshParameters::DataCRC(ON__UINT32 current_remainder) con
 }
 
 // virtual ON_Object override
-ON_BOOL32 ON_PerObjectMeshParameters::Write(ON_BinaryArchive& binary_archive) const
+bool ON_PerObjectMeshParameters::Write(ON_BinaryArchive& binary_archive) const
 {
   if ( !binary_archive.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,0) )
     return false;
@@ -9743,11 +11185,11 @@ ON_BOOL32 ON_PerObjectMeshParameters::Write(ON_BinaryArchive& binary_archive) co
 }
 
 // virtual ON_Object override
-ON_BOOL32 ON_PerObjectMeshParameters::Read(ON_BinaryArchive& binary_archive)
+bool ON_PerObjectMeshParameters::Read(ON_BinaryArchive& binary_archive)
 {
   m_mp = ON_MeshParameters::FastRenderMesh;
-  m_mp.m_bCustomSettings = true;
-  m_mp.m_bComputeCurvature = false;
+  m_mp.SetCustomSettings(true);
+  m_mp.SetComputeCurvature(false);
 
   int major_version = 0;
   int minor_version = 0;
@@ -9788,20 +11230,20 @@ ON_BOOL32 ON_PerObjectMeshParameters::Read(ON_BinaryArchive& binary_archive)
   if ( !binary_archive.EndRead3dmChunk() )
     rc = false;
 
-  m_mp.m_bCustomSettings = true;
-  m_mp.m_bComputeCurvature = false;
+  m_mp.SetCustomSettings(true);
+  m_mp.SetComputeCurvature(false);
 
   return rc;
 }
 
 // virtual ON_UserData override
-ON_BOOL32 ON_PerObjectMeshParameters::Archive() const
+bool ON_PerObjectMeshParameters::Archive() const
 {
   return true;
 }
 
 // virtual ON_UserData override
-ON_BOOL32 ON_PerObjectMeshParameters::GetDescription( ON_wString& description )
+bool ON_PerObjectMeshParameters::GetDescription( ON_wString& description )
 {
   description = L"Custom Render Mesh Parameters";
   return true;
@@ -9824,10 +11266,8 @@ bool ON_3dmObjectAttributes::SetCustomRenderMeshParameters( const ON_MeshParamet
   if ( 0 == ud )
     return false;
   ud->m_mp = mp;
-  ud->m_mp.m_bCustomSettings = true;
-  ud->m_mp.m_bComputeCurvature = false;
-  if ( 1 != ud->m_mp.m_texture_range && 2 != ud->m_mp.m_texture_range )
-    ud->m_mp.m_texture_range = 2;
+  ud->m_mp.SetCustomSettings(true);
+  ud->m_mp.SetComputeCurvature(false);
   return true;
 }
 
@@ -9842,8 +11282,8 @@ bool ON_3dmObjectAttributes::EnableCustomRenderMeshParameters(bool bEnable)
 {
   ON_PerObjectMeshParameters* ud = ON_PerObjectMeshParameters::FindOrCreate(this,false);
   if ( 0 != ud )
-    ud->m_mp.m_bCustomSettingsEnabled = bEnable ? true : false;
-  return (!bEnable || 0 != ud);
+    ud->m_mp.SetCustomSettingsEnabled(bEnable);
+  return (!bEnable || nullptr != ud);
 }
 
 void ON_Mesh::DestroyTree( bool bDeleteTree )
@@ -9851,403 +11291,2181 @@ void ON_Mesh::DestroyTree( bool bDeleteTree )
 }
 
 
-int* ON_Mesh_GetVidHelper( const int Vcount, const ON_3fPoint* fV, const ON_3dPoint* dV, int first_vid, int* Vid, int* Vindex );
-static int comparefV( const void* a, const void* b )
+
+
+static int compare2fPoint(const void* a, const void* b)
 {
   const float* af = (const float*)a;
   const float* bf = (const float*)b;
-  if ( af[0] < bf[0] )
+  if (af[0] < bf[0])
     return -1;
-  if ( af[0] > bf[0] )
+  if (af[0] > bf[0])
     return 1;
-  if ( af[1] < bf[1] )
+  if (af[1] < bf[1])
     return -1;
-  if ( af[1] > bf[1] )
-    return 1;
-  if ( af[2] < bf[2] )
-    return -1;
-  if ( af[2] > bf[2] )
+  if (af[1] > bf[1])
     return 1;
   return 0;
 }
 
-static int comparedV( const void* a, const void* b )
+static int compare2dPoint(const void* a, const void* b)
 {
   const double* af = (const double*)a;
   const double* bf = (const double*)b;
-  if ( af[0] < bf[0] )
+  if (af[0] < bf[0])
     return -1;
-  if ( af[0] > bf[0] )
+  if (af[0] > bf[0])
     return 1;
-  if ( af[1] < bf[1] )
+  if (af[1] < bf[1])
     return -1;
-  if ( af[1] > bf[1] )
-    return 1;
-  if ( af[2] < bf[2] )
-    return -1;
-  if ( af[2] > bf[2] )
+  if (af[1] > bf[1])
     return 1;
   return 0;
 }
 
-int* ON_Mesh_GetVidHelper( const int Vcount, const ON_3fPoint* fV, const ON_3dPoint* dV, int first_vid, int* Vid, int* Vindex )
+static int compare3fPoint(const void* a, const void* b)
+{
+  const float* af = (const float*)a;
+  const float* bf = (const float*)b;
+  if (af[0] < bf[0])
+    return -1;
+  if (af[0] > bf[0])
+    return 1;
+  if (af[1] < bf[1])
+    return -1;
+  if (af[1] > bf[1])
+    return 1;
+  if (af[2] < bf[2])
+    return -1;
+  if (af[2] > bf[2])
+    return 1;
+  return 0;
+}
+
+static int compare3dPoint(const void* a, const void* b)
+{
+  const double* af = (const double*)a;
+  const double* bf = (const double*)b;
+  if (af[0] < bf[0])
+    return -1;
+  if (af[0] > bf[0])
+    return 1;
+  if (af[1] < bf[1])
+    return -1;
+  if (af[1] > bf[1])
+    return 1;
+  if (af[2] < bf[2])
+    return -1;
+  if (af[2] > bf[2])
+    return 1;
+  return 0;
+}
+
+
+static int comparedUnsignedPair(const void* a, const void* b)
+{
+  const unsigned int* au = ((const unsigned int*)a);
+  const unsigned int* bu = ((const unsigned int*)b);
+  if (au[0] < bu[0])
+    return -1;
+  if (au[0] > bu[0])
+    return 1;
+  if (au[1] < bu[1])
+    return -1;
+  if (au[1] > bu[1])
+    return 1;
+  return 0;
+}
+
+static unsigned int* ON_GetPointLocationIdsHelper(
+  size_t point_dim,
+  size_t point_count,
+  size_t point_stride,
+  const float* fPoints, 
+  const double* dPoints, 
+  unsigned int first_vid, 
+  unsigned int* Vid, 
+  unsigned int* Vindex
+  )
 {
   // Used here and in opennurbs_plus_xmeshfast.cpp
 
-  if ( Vcount <= 0 || (0 == dV && 0 == fV) )
-    return 0;
+  if (point_count <= 0 || point_dim < 2 || point_dim > 3 || point_stride < point_dim)
+    return nullptr;
 
-  int Vmapbuffer[1024];
-  int* Vmap;
-  int id, i;
-  const ON_3fPoint* fP0;
-  const ON_3fPoint* fP1;
-  const ON_3dPoint* dP0;
-  const ON_3dPoint* dP1;
-  if ( Vindex )
+  if (nullptr == fPoints && nullptr == dPoints)
+    return nullptr;
+
+  const unsigned int Vcount = (unsigned int)point_count;
+  if (0 == Vid)
+    Vid = (unsigned int*)onmalloc(Vcount*sizeof(*Vid));
+
+  if (1 == point_count)
   {
-    Vmap = Vindex;
+    Vid[0] = first_vid;
+    if (nullptr != Vindex)
+      Vindex[0] = 0;
+    return Vid;
+  }
+
+  if (2 == point_dim)
+  {
+    // Dictionary sort the 2d points (sort on x, then y).
+    if (nullptr != dPoints)
+      ON_Sort(ON::sort_algorithm::quick_sort, Vid, dPoints, Vcount, point_stride*sizeof(dPoints[0]), compare2dPoint);
+    else
+      ON_Sort(ON::sort_algorithm::quick_sort, Vid, fPoints, Vcount, point_stride*sizeof(fPoints[0]), compare2fPoint);
   }
   else
   {
-    Vmap = ( Vcount*sizeof(*Vmap) <= sizeof(Vmapbuffer) )
-         ? &Vmapbuffer[0]
-         : (int*)onmalloc( Vcount*sizeof(*Vmap) );
+    // Dictionary sort the 3d points (sort on x, then y, then z).
+    if (nullptr != dPoints)
+      ON_Sort(ON::sort_algorithm::quick_sort, Vid, dPoints, Vcount, point_stride*sizeof(dPoints[0]), compare3dPoint);
+    else
+      ON_Sort(ON::sort_algorithm::quick_sort, Vid, fPoints, Vcount, point_stride*sizeof(fPoints[0]), compare3fPoint);
   }
-  if ( 0 == Vmap )
-    return 0;
-
-  // The call to ON_Sort fills in Vmap[] with a permutation
-  // of (0,1,...,Vcount-1) so that all coincident points
-  // are adjacent in the Vmap[] list.  The vertex locations
-  // are often partially sorted.  In the past, heap sort was
-  // a better choice but the qsort in VC 2010
-  // is now faster than heap sort.
-  if ( 0 != dV )
-    ON_Sort( ON::quick_sort, Vmap, dV, Vcount, sizeof(dV[0]), comparedV );  
-  else
-    ON_Sort( ON::quick_sort, Vmap, fV, Vcount, sizeof(fV[0]), comparefV );  
-
-  // Assign a sequential one based index to each unique point location.
-  if ( 0 == Vid )
-    Vid = (int*)onmalloc(Vcount*sizeof(*Vid));
-
-  if ( 0 != dV )
+    
+  // Assign a unique temporary id to each group of coincident points.
+  // The id is temporary because the order of the above sort will change
+  // if the point set is rotated.
+  struct tagUnsignedPair
   {
-    dP0 = dV + Vmap[0];
-    id = first_vid;
-    Vid[Vmap[0]] = id;
-    for ( i = 1; i < Vcount; i++ )
+    unsigned int m_temporary_id;
+    unsigned int m_vertex_index;
+  } *up = new tagUnsignedPair[Vcount];
+
+  unsigned int temporary_id = Vid[0];
+  unsigned int i0 = 0;
+  if (nullptr != dPoints)
+  {
+    const double* dP0 = dPoints + point_stride*Vid[0];
+    if (3 == point_dim)
     {
-      dP1 = dV + Vmap[i];
-      if ( dP0->x != dP1->x || dP0->y != dP1->y || dP0->z != dP1->z )
+      for (unsigned int i = 1; i < Vcount; i++)
       {
-        dP0 = dP1;
-        id++;
+        const double* dP1 = dPoints + point_stride*Vid[i];
+        if (dP0[0] == dP1[0] && dP0[1] == dP1[1] && dP0[2] == dP1[2])
+        {
+          if (Vid[i] < temporary_id)
+            temporary_id = Vid[i];
+        }
+        else
+        {
+          while (i0 < i)
+          {
+            up[i0].m_temporary_id = temporary_id;
+            up[i0].m_vertex_index = Vid[i0];
+            i0++;
+          }
+          temporary_id = Vid[i0];
+          dP0 = dP1;
+        }
       }
-      Vid[Vmap[i]] = id;
+    }
+    else
+    {
+      for (unsigned int i = 1; i < Vcount; i++)
+      {
+        const double* dP1 = dPoints + point_stride*Vid[i];
+        if (dP0[0] == dP1[0] && dP0[1] == dP1[1])
+        {
+          if (Vid[i] < temporary_id)
+            temporary_id = Vid[i];
+        }
+        else
+        {
+          while (i0 < i)
+          {
+            up[i0].m_temporary_id = temporary_id;
+            up[i0].m_vertex_index = Vid[i0];
+            i0++;
+          }
+          temporary_id = Vid[i0];
+          dP0 = dP1;
+        }
+      }
     }
   }
   else
   {
-    fP0 = fV + Vmap[0];
-    id = first_vid;
-    Vid[Vmap[0]] = id;
-    for ( i = 1; i < Vcount; i++ )
+    const float* fP0 = fPoints + point_stride*Vid[0];
+    if (3 == point_dim)
     {
-      fP1 = fV + Vmap[i];
-      if ( fP0->x != fP1->x || fP0->y != fP1->y || fP0->z != fP1->z )
+      for (unsigned int i = 1; i < Vcount; i++)
       {
-        fP0 = fP1;
-        id++;
+        const float* fP1 = fPoints + point_stride*Vid[i];
+        if (fP0[0] == fP1[0] && fP0[1] == fP1[1] && fP0[2] == fP1[2])
+        {
+          if (Vid[i] < temporary_id)
+            temporary_id = Vid[i];
+        }
+        else
+        {
+          while (i0 < i)
+          {
+            up[i0].m_temporary_id = temporary_id;
+            up[i0].m_vertex_index = Vid[i0];
+            i0++;
+          }
+          temporary_id = Vid[i0];
+          fP0 = fP1;
+        }
       }
-      Vid[Vmap[i]] = id;
+    }
+    else
+    {
+      for (unsigned int i = 1; i < Vcount; i++)
+      {
+        const float* fP1 = fPoints + point_stride*Vid[i];
+        if (fP0[0] == fP1[0] && fP0[1] == fP1[1])
+        {
+          if (Vid[i] < temporary_id)
+            temporary_id = Vid[i];
+        }
+        else
+        {
+          while (i0 < i)
+          {
+            up[i0].m_temporary_id = temporary_id;
+            up[i0].m_vertex_index = Vid[i0];
+            i0++;
+          }
+          temporary_id = Vid[i0];
+          fP0 = fP1;
+        }
+      }
     }
   }
 
-  if ( 0 != Vmap && Vmap != &Vmapbuffer[0] && Vmap != Vindex )
-    onfree(Vmap);
+  while (i0 < Vcount)
+  {
+    up[i0].m_temporary_id = temporary_id;
+    up[i0].m_vertex_index = Vid[i0];
+    i0++;
+  }
+
+  // This sort is necessary to insure the vertex id does not change when 
+  // the point set is transformed. It is important that the id be the
+  // same in these situations so that vertex id groups retain the same 
+  // id when meshes are rotated.
+  ON_qsort(up, Vcount, sizeof(up[0]), comparedUnsignedPair);
+
+  temporary_id = up[0].m_temporary_id;
+  unsigned int id = first_vid;
+  Vid[up[0].m_vertex_index] = id;
+  for (unsigned int i = 1; i < Vcount; i++)
+  {
+    if (temporary_id != up[i].m_temporary_id)
+    {
+      temporary_id = up[i].m_temporary_id;
+      id++;
+    }
+    Vid[up[i].m_vertex_index] = id;
+  }
+
+  if (0 != Vindex)
+  {
+    for (unsigned int i = 0; i < Vcount; i++)
+    {
+      Vindex[i] = up[i].m_vertex_index;
+    }
+  }
+
+  delete[] up;
 
   return Vid;
 }
 
-int* ON_Mesh::GetVertexLocationIds( int first_vid, int* Vid, int* Vindex ) const
+
+unsigned int* ON_GetPointLocationIds(
+  size_t point_dim,
+  size_t point_count,
+  size_t point_stride,
+  const float* points,
+  unsigned int first_point_id,
+  unsigned int* point_ids,
+  unsigned int* point_id_index
+  )
 {
-  const ON_3dPoint* dV = Mesh_dV(*this);
-  const ON_3fPoint* fV = (0 == dV) ? m_V.Array() : 0;
-  return ON_Mesh_GetVidHelper( m_V.Count(), fV, dV, first_vid, Vid, Vindex );
+  return ON_GetPointLocationIdsHelper(
+    point_dim,
+    point_count,
+    point_stride,
+    points,
+    nullptr,
+    first_point_id,
+    point_ids,
+    point_id_index
+    );
 }
 
-/*
-Description:
-  Helper to get edge info array needed by ON_Mesh::GetEdgeList()
-  and ON_Mesh::IsClosed().
-Parameters:
-  Fcount - [in]
-  F - [in]
-  Vid - [in] array from ON_Mesh_GetVidHelper()
-  Eid_list - [out]
-    input array needs to be large enough to hold one element for
-    each face side.  4*Fcount is always large enough.
-*/
 
-int ON_Mesh_GetEidHelper( 
-      const int Vcount, 
-      const int Fcount, 
-      const ON_MeshFace* F, 
-      const int* Vid, 
-      ON_MeshFaceSide* Eid_list
-      )
+unsigned int* ON_GetPointLocationIds(
+  size_t point_dim,
+  size_t point_count,
+  size_t point_stride,
+  const double* points,
+  unsigned int first_point_id,
+  unsigned int* point_ids,
+  unsigned int* point_id_index
+  )
 {
-  // Used here and in opennurbs_plus_xmeshfast.cpp
-  const int* fvi;
-  int i, Vid0;
-  int Eid_count = 0;
-  struct ON_MeshFaceSide Eid;
-  memset(&Eid,0,sizeof(Eid));
+  return ON_GetPointLocationIdsHelper(
+    point_dim,
+    point_count,
+    point_stride,
+    nullptr,
+    points,
+    first_point_id,
+    point_ids,
+    point_id_index
+    );
+}
 
-  if ( 0 == Vid )
+
+unsigned int* ON_GetPointLocationIds(
+  size_t point_count,
+  const class  ON_2fPoint* points,
+  unsigned int first_point_id,
+  unsigned int* point_ids,
+  unsigned int* point_id_map
+  )
+{
+  const unsigned int point_dim = 2;
+  return ON_GetPointLocationIds(point_dim, point_count, point_dim, (const float*)points, first_point_id, point_ids, point_id_map);
+}
+
+
+unsigned int* ON_GetPointLocationIds(
+  size_t point_count,
+  const class ON_3fPoint* points,
+  unsigned int first_point_id,
+  unsigned int* point_ids,
+  unsigned int* point_id_map
+  )
+{
+  const unsigned int point_dim = 3;
+  return ON_GetPointLocationIds(point_dim, point_count, point_dim, (const float*)points, first_point_id, point_ids, point_id_map);
+}
+
+
+unsigned int* ON_GetPointLocationIds(
+  size_t point_count,
+  const class  ON_2dPoint* points,
+  unsigned int first_point_id,
+  unsigned int* point_ids,
+  unsigned int* point_id_map
+  )
+{
+  const unsigned int point_dim = 2;
+  return ON_GetPointLocationIds(point_dim, point_count, point_dim, (const double*)points, first_point_id, point_ids, point_id_map);
+}
+
+
+unsigned int* ON_GetPointLocationIds(
+  size_t point_count,
+  const class ON_3dPoint* points,
+  unsigned int first_point_id,
+  unsigned int* point_ids,
+  unsigned int* point_id_map
+  )
+{
+  const unsigned int point_dim = 3;
+  return ON_GetPointLocationIds(point_dim, point_count, point_dim, (const double*)points, first_point_id, point_ids, point_id_map);
+}
+
+unsigned int* ON_Mesh::GetVertexLocationIds(
+  unsigned int first_vid,
+  unsigned int* Vid,
+  unsigned int* Vindex
+  ) const
+{
+  const unsigned int vertex_count = VertexUnsignedCount();
+  return (HasSynchronizedDoubleAndSinglePrecisionVertices())
+    ? ON_GetPointLocationIds(vertex_count, m_dV.Array(), first_vid, Vid, Vindex)
+    : ON_GetPointLocationIds(vertex_count, m_V.Array(), first_vid, Vid, Vindex);
+}
+
+unsigned int ON_MeshFaceSide::GetFaceSideList(
+  size_t mesh_vertex_count,
+  const class ON_MeshFaceList& mesh_face_list,
+  const unsigned int* fi_list,
+  size_t fi_list_count,
+  const unsigned int* vertex_id_map,
+  ON_MeshFaceSide*& face_side_list
+  )
+{
+  const unsigned int Vcount = (unsigned int)mesh_vertex_count;
+  if ( Vcount <= 0 )
+    return 0;
+
+  const unsigned int mesh_face_count = mesh_face_list.FaceCount();
+  const unsigned int Fcount = (0 == fi_list) ? mesh_face_count : ((unsigned int)fi_list_count);
+
+  if ( Fcount <= 0 )
+    return 0;
+
+  unsigned int fvi[4];
+  int face_side_count = 0;
+  ON_MeshFaceSide face_side = ON_MeshFaceSide::Unset;
+  ON_MeshFaceSide* fs_list = face_side_list;
+
+  if ( 0 == fs_list )
   {
-    // use mesh m_V[] index
-    for ( Eid.fi = 0; Eid.fi < Fcount; Eid.fi++ )
+    fs_list = (ON_MeshFaceSide*)onmalloc(4*Fcount*sizeof(fs_list[0]));
+    if ( 0 == fs_list )
+      return 0;
+  }
+  
+  for ( face_side.m_fi = 0; face_side.m_fi < Fcount; face_side.m_fi++ )
+  {
+    if ( 0 != fi_list )
     {
-      fvi = F[Eid.fi].vi;
-
-      // These checks are necessary to prevent crashes
-      if ( fvi[0] < 0 || fvi[0] >= Vcount )
+      if ( fi_list[face_side.m_fi] >= mesh_face_count )
         continue;
-      if ( fvi[1] < 0 || fvi[1] >= Vcount )
-        continue;
-      if ( fvi[2] < 0 || fvi[2] >= Vcount )
-        continue;
-      if ( fvi[3] < 0 || fvi[3] >= Vcount )
-        continue;
+      mesh_face_list.QuadFvi(fi_list[face_side.m_fi],fvi);
+    }
+    else
+    {
+      mesh_face_list.QuadFvi(face_side.m_fi,fvi);
+    }
 
-      Eid.vi[0] = fvi[0];
-      Vid0 = Eid.vi[1] = fvi[1];
-      Eid.side = 0;
-      if ( Eid.vi[0] < Eid.vi[1] )
-      {
-        Eid.dir = 0;
-        Eid_list[Eid_count++] = Eid;
-      }
-      else if ( Eid.vi[0] > Eid.vi[1] )
-      {
-        i = Eid.vi[0]; Eid.vi[0] = Eid.vi[1]; Eid.vi[1] = i;
-        Eid.dir = 1;
-        Eid_list[Eid_count++] = Eid;
-      }
+    // These checks are necessary to prevent crashes
+    if ( fvi[0] >= Vcount )
+      continue;
+    if ( fvi[1] >= Vcount )
+      continue;
+    if ( fvi[2] >= Vcount )
+      continue;
+    if ( fvi[3] >= Vcount )
+      continue;
 
-      Eid.vi[0] = Vid0;
-      Vid0 = Eid.vi[1] = fvi[2];
-      Eid.side = 1;
-      if ( Eid.vi[0] < Eid.vi[1] )
-      {
-        Eid.dir = 0;
-        Eid_list[Eid_count++] = Eid;
-      }
-      else if ( Eid.vi[0] > Eid.vi[1] )
-      {
-        i = Eid.vi[0]; Eid.vi[0] = Eid.vi[1]; Eid.vi[1] = i;
-        Eid.dir = 1;
-        Eid_list[Eid_count++] = Eid;
-      }
+    if ( 0 != vertex_id_map )
+    {
+      fvi[0] = vertex_id_map[fvi[0]];
+      fvi[1] = vertex_id_map[fvi[1]];
+      fvi[2] = vertex_id_map[fvi[2]];
+      fvi[3] = vertex_id_map[fvi[3]];
+    }
 
-      if ( fvi[2] != fvi[3] )
+    if ( fvi[0] < fvi[1] )
+    {
+      face_side.m_vi[0] = fvi[0];
+      face_side.m_vi[1] = fvi[1];
+      face_side.m_side = 0;
+      face_side.m_dir = 0;
+      fs_list[face_side_count++] = face_side;
+    }
+    else if ( fvi[0] > fvi[1] )
+    {
+      face_side.m_vi[0] = fvi[1];
+      face_side.m_vi[1] = fvi[0];
+      face_side.m_side = 0;
+      face_side.m_dir = 1;
+      fs_list[face_side_count++] = face_side;
+    }
+
+    if ( fvi[1] < fvi[2] )
+    {
+      face_side.m_vi[0] = fvi[1];
+      face_side.m_vi[1] = fvi[2];
+      face_side.m_side = 1;
+      face_side.m_dir = 0;
+      fs_list[face_side_count++] = face_side;
+    }
+    else if ( fvi[1] > fvi[2] )
+    {
+      face_side.m_vi[0] = fvi[2];
+      face_side.m_vi[1] = fvi[1];
+      face_side.m_side = 1;
+      face_side.m_dir = 1;
+      fs_list[face_side_count++] = face_side;
+    }
+
+    if ( fvi[2] < fvi[3] )
+    {
+      face_side.m_vi[0] = fvi[2];
+      face_side.m_vi[1] = fvi[3];
+      face_side.m_side = 2;
+      face_side.m_dir = 0;
+      fs_list[face_side_count++] = face_side;
+    }
+    else if ( fvi[2] > fvi[3] )
+    {
+      face_side.m_vi[0] = fvi[3];
+      face_side.m_vi[1] = fvi[2];
+      face_side.m_side = 2;
+      face_side.m_dir = 1;
+      fs_list[face_side_count++] = face_side;
+    }
+
+    if ( fvi[3] < fvi[0] )
+    {
+      face_side.m_vi[0] = fvi[3];
+      face_side.m_vi[1] = fvi[0];
+      face_side.m_side = 3;
+      face_side.m_dir = 0;
+      fs_list[face_side_count++] = face_side;
+    }
+    else if ( fvi[3] > fvi[0] )
+    {
+      face_side.m_vi[0] = fvi[0];
+      face_side.m_vi[1] = fvi[3];
+      face_side.m_side = 3;
+      face_side.m_dir = 1;
+      fs_list[face_side_count++] = face_side;
+    }
+  }
+
+  if ( 0 == face_side_list )
+  {
+    if ( face_side_count <= 0 )
+      onfree(fs_list);
+    else
+      face_side_list = fs_list;
+  }
+
+  return face_side_count;
+}
+
+unsigned int ON_Mesh::GetMeshFaceSideList( 
+    const unsigned int* Vid,
+    ON_MeshFaceSide*& face_side_list
+    ) const
+{
+  const unsigned int mesh_vertex_count = m_V.UnsignedCount();
+  if ( mesh_vertex_count < 2 )
+    return 0;
+
+  const ON_MeshFaceList mesh_face_list(this);
+  if ( mesh_face_list.FaceCount() < 1 )
+    return 0;
+
+  return (int)ON_MeshFaceSide::GetFaceSideList(
+    mesh_vertex_count,
+    mesh_face_list,
+    0,0,
+    Vid,
+    face_side_list
+    );
+}
+
+
+bool ON_Mesh::DeleteComponents(
+  const ON_SimpleArray<ON_COMPONENT_INDEX>& ci_list
+  )
+{
+  return DeleteComponents(ci_list.Array(), ci_list.UnsignedCount());
+}
+
+bool ON_Mesh::DeleteComponent(
+  ON_COMPONENT_INDEX ci
+  )
+{
+  return DeleteComponents(&ci, 1);
+}
+
+bool ON_Mesh::DeleteComponents(
+  const ON_COMPONENT_INDEX* ci_list,
+  size_t ci_count
+  )
+{
+  if (ci_count <= 0)
+    return true;
+
+  if (nullptr == ci_list)
+    return false;
+
+  bool bIgnoreInvalidComponents = true;
+  bool bRemoveDegenerateFaces = false;
+  bool bRemoveUnusedVertices = true;
+  bool bRemoveEmptyNgons = true;
+
+  return DeleteComponents(
+  ci_list,ci_count,
+  bIgnoreInvalidComponents,
+  bRemoveDegenerateFaces,
+  bRemoveUnusedVertices,
+  bRemoveEmptyNgons
+  );
+}
+
+bool ON_Mesh::DeleteComponents(
+    const ON_COMPONENT_INDEX* ci_list,
+    size_t ci_count,
+    bool bIgnoreInvalidComponents,
+    bool bRemoveDegenerateFaces,
+    bool bRemoveUnusedVertices,
+    bool bRemoveEmptyNgons
+    )
+{
+  if ( ci_count <= 0  && false == bRemoveUnusedVertices && false == bRemoveEmptyNgons )
+    return true;
+  if ( 0 == ci_list && ci_count > 0 )
+    return false;
+
+  const ON_MeshTopology* top = m_top.IsValid() ? &m_top : 0;
+  const unsigned int vertex_count0 = m_V.UnsignedCount();
+  const unsigned int face_count0 = m_F.UnsignedCount();
+  const unsigned int ngon_count0 = NgonUnsignedCount();
+  const unsigned int topvertex_count0 = top ? top->m_topv.UnsignedCount() : 0;
+  const unsigned int topedge_count0 = top ? top->m_tope.UnsignedCount() : 0;
+  unsigned int cdex, fi;
+  ON_SimpleArray< unsigned int > point_id_map_buffer;
+  ON_MeshFace point_id_map_f;
+  unsigned int* point_id_map_fvi = (unsigned int*)point_id_map_f.vi;
+
+
+  if ( false == bIgnoreInvalidComponents )
+  {
+    for ( size_t i = 0; i < ci_count; i++ )
+    {
+      cdex = (unsigned int)(ci_list[i].m_index);
+      switch(ci_list[i].m_type)
       {
-        // quad
-        Eid.vi[0] = Vid0;
-        Vid0 = Eid.vi[1] = fvi[3];
-        Eid.side = 2;
-        if ( Eid.vi[0] < Eid.vi[1] )
+      case ON_COMPONENT_INDEX::mesh_vertex:
+        if ( cdex >= vertex_count0 )
+          return false;
+        break;
+      case ON_COMPONENT_INDEX::meshtop_vertex:
+        if ( cdex >= topvertex_count0 )
+          return false;
+        break;
+      case ON_COMPONENT_INDEX::meshtop_edge:
+        if ( cdex >= topedge_count0 )
+          return false;
+        break;
+      case ON_COMPONENT_INDEX::mesh_face:
+        if ( cdex >= face_count0 )
+          return false;
+        break;
+      case ON_COMPONENT_INDEX::mesh_ngon:
+        if ( cdex >= ngon_count0 )
+          return false;
+        break;
+      }
+    }
+  }
+
+  if ( vertex_count0 <= 0 )
+    return (face_count0 <= 0);
+
+  ON_SimpleArray<unsigned int> vertex_status_buffer(vertex_count0);
+  vertex_status_buffer.SetCount(vertex_count0);
+  vertex_status_buffer.Zero();
+  unsigned int* vertex_status = vertex_status_buffer.Array();
+
+  ON_SimpleArray<unsigned int> face_status_buffer(face_count0);
+  face_status_buffer.SetCount(face_count0);
+  face_status_buffer.Zero();
+  unsigned int* face_status = face_status_buffer.Array();
+
+  bool bDoomedFaces = false;
+  bool bDoomedVertices = false;
+  bool bDoomedNgons = false;
+  bool bModifiedFaces = false;
+
+  const unsigned int* fvi;
+
+  for ( size_t i = 0; i < ci_count; i++ )
+  {
+    cdex = (unsigned int)(ci_list[i].m_index);
+    switch(ci_list[i].m_type)
+    {
+    case ON_COMPONENT_INDEX::mesh_vertex:
+      if ( cdex < vertex_count0 )
+      {
+        bDoomedVertices = true;
+        vertex_status[cdex] = ON_UNSET_UINT_INDEX;
+      }
+      break;
+
+    case ON_COMPONENT_INDEX::meshtop_vertex:
+      if ( cdex < topvertex_count0 )
+      {
+        const ON_MeshTopologyVertex& tv = top->m_topv[cdex];
+        for ( int tvi = 0; tvi < tv.m_v_count; tvi++ )
         {
-          Eid.dir = 0;
-          Eid_list[Eid_count++] = Eid;
-        }
-        else if ( Eid.vi[0] > Eid.vi[1] )
-        {
-          i = Eid.vi[0]; Eid.vi[0] = Eid.vi[1]; Eid.vi[1] = i;
-          Eid.dir = 1;
-          Eid_list[Eid_count++] = Eid;
-        }
+          const unsigned int vi =(unsigned int)(tv.m_vi[tvi]); 
+          if ( vi < vertex_count0 )
+          {
+            bDoomedVertices = true;
+            vertex_status[vi] = ON_UNSET_UINT_INDEX;
+          }
+        }        
       }
+      break;
 
-      Eid.vi[0] = Vid0;
-      Eid.vi[1] = fvi[0];
-      Eid.side = 3;
-      if ( Eid.vi[0] < Eid.vi[1] )
+    case ON_COMPONENT_INDEX::meshtop_edge:
+      if ( cdex < topedge_count0 )
       {
-        Eid.dir = 0;
-        Eid_list[Eid_count++] = Eid;
+        const ON_MeshTopologyEdge& te = top->m_tope[cdex];
+        if ( 0 != te.m_topfi )
+        {
+          for ( int j = 0; j < te.m_topf_count; j++ )
+          {
+            fi =(unsigned int)(te.m_topfi[j]);
+            if ( fi < face_count0 )
+            {
+              bDoomedFaces = true;
+              face_status[fi] = ON_UNSET_UINT_INDEX;
+            }
+          }        
+        }
       }
-      else if ( Eid.vi[0] > Eid.vi[1] )
+      break;
+
+    case ON_COMPONENT_INDEX::mesh_face:
+      if ( cdex < face_count0 )
       {
-        i = Eid.vi[0]; Eid.vi[0] = Eid.vi[1]; Eid.vi[1] = i;
-        Eid.dir = 1;
-        Eid_list[Eid_count++] = Eid;
+        bDoomedFaces = true;
+        face_status[cdex] = ON_UNSET_UINT_INDEX;
       }
+      break;
+
+    case ON_COMPONENT_INDEX::mesh_ngon:
+      if ( cdex < ngon_count0 )
+      {
+        const ON_MeshNgon* ngon = Ngon(cdex);
+        if ( 0 != ngon )
+        {
+          const int ngon_index = cdex;
+          bDoomedNgons = true;
+          m_NgonMap.SetCount(0);
+          if ( 0 != ngon->m_fi )
+          {
+            for ( unsigned int j = 0; j < ngon->m_Fcount; j++ )
+            {
+              fi = ngon->m_fi[j];
+              if ( fi < face_count0 )
+              {
+                bDoomedFaces = true;
+                face_status[fi] = ON_UNSET_UINT_INDEX;
+              }
+            }        
+          }
+          RemoveNgon(ngon_index);
+        }
+      }
+      break;
+    }
+  }
+
+
+  unsigned int point_id_count = 0;
+  const unsigned int* point_id_map = nullptr;
+  if (bRemoveDegenerateFaces)
+  {
+    ON_3fPoint* fV = m_V.Array();
+    ON_3dPoint* dV = HasDoublePrecisionVertices() ? DoublePrecisionVertices().Array() : 0;
+    point_id_count = GetPointMap(m_V.UnsignedCount(), fV, dV, point_id_map_buffer);
+    if (point_id_count > 0
+      && point_id_count <= point_id_map_buffer.UnsignedCount()
+      && m_V.UnsignedCount() == point_id_map_buffer.UnsignedCount()
+      )
+    {
+      point_id_map = point_id_map_buffer.Array();
+    }
+    else
+    {
+      point_id_count = 0;
+    }
+  }
+
+  unsigned int face_count1 = 0;
+  for ( fi = 0; fi < face_count0; fi++ )
+  {
+    if ( 0 == face_status[fi] )
+    {
+      fvi = (const unsigned int*)m_F[fi].vi;
+      for ( unsigned int j = 0; j < 4; j++ )
+      {
+        if ( fvi[j] >= vertex_count0 || ON_UNSET_UINT_INDEX == vertex_status[fvi[j]] )
+        {
+          bDoomedFaces = true;
+          face_status[fi] = ON_UNSET_UINT_INDEX;
+          break;
+        }
+      }
+      if ( 0 == face_status[fi] )
+      {
+        if (point_id_count > 0)
+        {
+          ON_MeshFace& f0 = m_F[fi];
+          // set f.vi[] to values of topological indices
+          {
+            unsigned int f0vi = (unsigned int)f0.vi[0];
+            point_id_map_fvi[0] = (f0vi >= vertex_count0) ? ON_UNSET_UINT_INDEX : point_id_map[f0vi];
+
+            f0vi = (unsigned int)f0.vi[1];
+            point_id_map_fvi[1] = (f0vi >= vertex_count0) ? ON_UNSET_UINT_INDEX : point_id_map[f0vi];
+
+            f0vi = (unsigned int)f0.vi[2];
+            point_id_map_fvi[2] = (f0vi >= vertex_count0) ? ON_UNSET_UINT_INDEX : point_id_map[f0vi];
+
+            f0vi = (unsigned int)f0.vi[3];
+            point_id_map_fvi[3] = (f0vi >= vertex_count0) ? ON_UNSET_UINT_INDEX : point_id_map[f0vi];
+          }
+
+          if (!point_id_map_f.IsValid(point_id_count))
+          {
+            // determine if a degenerate quad can be made into a valid triangle.
+            if (point_id_map_fvi[0] == point_id_map_fvi[1] || point_id_map_fvi[0] >= point_id_count)
+            {
+              f0.vi[0] = f0.vi[1];
+              f0.vi[1] = f0.vi[2];
+              f0.vi[2] = f0.vi[3];
+              point_id_map_fvi[0] = point_id_map_fvi[1];
+              point_id_map_fvi[1] = point_id_map_fvi[2];
+              point_id_map_fvi[2] = point_id_map_fvi[3];
+            }
+
+            if (point_id_map_fvi[1] == point_id_map_fvi[2] || point_id_map_fvi[1] >= point_id_count)
+            {
+              f0.vi[1] = f0.vi[2];
+              f0.vi[2] = f0.vi[3];
+              point_id_map_fvi[1] = point_id_map_fvi[2];
+              point_id_map_fvi[2] = point_id_map_fvi[3];
+            }
+
+            if (point_id_map_fvi[2] >= point_id_count)
+            {
+              f0.vi[2] = f0.vi[3];
+              point_id_map_fvi[2] = point_id_map_fvi[3];
+            }
+
+            if (point_id_map_fvi[3] >= point_id_count)
+            {
+              f0.vi[3] = f0.vi[2];
+              point_id_map_fvi[3] = point_id_map_fvi[2];
+            }
+            else if (point_id_map_fvi[0] == point_id_map_fvi[3] && point_id_map_fvi[2] != point_id_map_fvi[3])
+            {
+              f0.vi[0] = f0.vi[1];
+              f0.vi[1] = f0.vi[2];
+              f0.vi[2] = f0.vi[3];
+              point_id_map_fvi[0] = point_id_map_fvi[1];
+              point_id_map_fvi[1] = point_id_map_fvi[2];
+              point_id_map_fvi[2] = point_id_map_fvi[3];
+            }
+
+            if (!f0.IsValid(vertex_count0) || !point_id_map_f.IsValid(point_id_count))
+            {
+              // face cannot be repaired by juggling vertex indices
+              bDoomedFaces = true;
+              face_status[fi] = ON_UNSET_UINT_INDEX;
+              continue;
+            }
+            else
+            {
+              bModifiedFaces = true;
+            }
+
+          }
+        }
+
+
+        face_status[fi] = face_count1++;
+        for ( unsigned int j = 0; j < 4; j++ )
+        {
+          vertex_status[fvi[j]] = 1; // vertex is referenced by a face
+        }
+      }
+    }
+  }
+
+  unsigned int vertex_count1 = 0;
+  if ( bRemoveUnusedVertices )
+  {
+    for ( unsigned int vi = 0; vi < vertex_count0; vi++ )
+    {
+      if ( 1 == vertex_status[vi] )
+        vertex_status[vi] = vertex_count1++; // vertex referenced by a face
+      else
+        vertex_status[vi] = ON_UNSET_UINT_INDEX; // vertex deleted or not referenced by a face
     }
   }
   else
   {
-    // use Vid[mesh m_V[] index]
-
-    for ( Eid.fi = 0; Eid.fi < Fcount; Eid.fi++ )
+    for ( unsigned int vi = 0; vi < vertex_count0; vi++ )
     {
-      fvi = F[Eid.fi].vi;
+      if ( vertex_status[vi] <= 1 )
+        vertex_status[vi] = vertex_count1++;
+      else
+        vertex_status[vi] = ON_UNSET_UINT_INDEX; // vertex explicitly deleted
+    }
+  }
 
-      // These checks are necessary to prevent crashes
-      if ( fvi[0] < 0 || fvi[0] >= Vcount )
-        continue;
-      if ( fvi[1] < 0 || fvi[1] >= Vcount )
-        continue;
-      if ( fvi[2] < 0 || fvi[2] >= Vcount )
-        continue;
-      if ( fvi[3] < 0 || fvi[3] >= Vcount )
+  if ( 0 == vertex_count1 && 0 == face_count1 )
+  {
+    Destroy();
+    return true;
+  }
+
+  if ( vertex_count1 < vertex_count0 || face_count1 < face_count0 )
+  {
+    DestroyTopology();
+    DestroyPartition();
+    DestroyTree();
+
+    for ( unsigned int ngon_index = 0; ngon_index < ngon_count0; ngon_index ++ )
+    {
+      const ON_MeshNgon* ngon = Ngon(ngon_index);
+      if ( 0 == ngon || 0 == ngon->m_vi )
         continue;
 
-      Eid.vi[0] = Vid[fvi[0]];
-      Vid0 = Eid.vi[1] = Vid[fvi[1]];
-      Eid.side = 0;
-      if ( Eid.vi[0] < Eid.vi[1] )
+      if ( face_count1 < face_count0 )
       {
-        Eid.dir = 0;
-        Eid_list[Eid_count++] = Eid;
-      }
-      else if ( Eid.vi[0] > Eid.vi[1] )
-      {
-        i = Eid.vi[0]; Eid.vi[0] = Eid.vi[1]; Eid.vi[1] = i;
-        Eid.dir = 1;
-        Eid_list[Eid_count++] = Eid;
-      }
-
-      Eid.vi[0] = Vid0;
-      Vid0 = Eid.vi[1] = Vid[fvi[2]];
-      Eid.side = 1;
-      if ( Eid.vi[0] < Eid.vi[1] )
-      {
-        Eid.dir = 0;
-        Eid_list[Eid_count++] = Eid;
-      }
-      else if ( Eid.vi[0] > Eid.vi[1] )
-      {
-        i = Eid.vi[0]; Eid.vi[0] = Eid.vi[1]; Eid.vi[1] = i;
-        Eid.dir = 1;
-        Eid_list[Eid_count++] = Eid;
-      }
-
-      if ( fvi[2] != fvi[3] )
-      {
-        // quad
-        Eid.vi[0] = Vid0;
-        Vid0 = Eid.vi[1] = Vid[fvi[3]];
-        Eid.side = 2;
-        if ( Eid.vi[0] < Eid.vi[1] )
+        for ( unsigned int j = 0; j < ngon->m_Fcount; j++ )
         {
-          Eid.dir = 0;
-          Eid_list[Eid_count++] = Eid;
+          fi = ngon->m_fi[j];
+          if ( fi >= face_count0 || ON_UNSET_UINT_INDEX == face_status[fi] )
+          {
+            bDoomedNgons = true;
+            RemoveNgon(ngon_index);
+            ngon = 0;
+            break;
+          }
+          ngon->m_fi[j] = face_status[fi];
         }
-        else if ( Eid.vi[0] > Eid.vi[1] )
+        if ( 0 == ngon )
+          continue;
+      }
+
+      if ( vertex_count1 < vertex_count0 )
+      {
+        for ( unsigned int j = 0; j < ngon->m_Vcount; j++ )
         {
-          i = Eid.vi[0]; Eid.vi[0] = Eid.vi[1]; Eid.vi[1] = i;
-          Eid.dir = 1;
-          Eid_list[Eid_count++] = Eid;
+          const unsigned int vi = ngon->m_vi[j];
+          if ( vi >= vertex_count0 || ON_UNSET_UINT_INDEX == vertex_status[vi] )
+          {
+            bDoomedNgons = true;
+            RemoveNgon(ngon_index);
+            ngon = 0;
+            break;
+          }
+          ngon->m_vi[j] = vertex_status[vi];
         }
       }
+    }
 
-      Eid.vi[0] = Vid0;
-      Eid.vi[1] = Vid[fvi[0]];
-      Eid.side = 3;
-      if ( Eid.vi[0] < Eid.vi[1] )
+    unsigned int* fvi1;
+    ON_MeshFace* F = m_F.Array();
+    ON_3fVector* FN = HasFaceNormals() ? m_FN.Array() : 0;
+    if ( vertex_count1 == vertex_count0 )
+    {
+      for ( face_count1 = 0; face_count1 < face_count0; face_count1++ )
       {
-        Eid.dir = 0;
-        Eid_list[Eid_count++] = Eid;
+        if ( ON_UNSET_UINT_INDEX == face_status[face_count1] )
+          break;
       }
-      else if ( Eid.vi[0] > Eid.vi[1] )
+    }
+    else
+    {
+      face_count1 = 0;
+    }
+    for ( fi = face_count1; fi < face_count0; fi++ )
+    {
+      if ( ON_UNSET_UINT_INDEX == face_status[fi] )
+        continue;
+      fvi = (const unsigned int*)F[fi].vi;
+      fvi1 = (unsigned int*)(F[face_count1].vi);
+      fvi1[0] = vertex_status[fvi[0]];
+      fvi1[1] = vertex_status[fvi[1]];
+      fvi1[2] = vertex_status[fvi[2]];
+      fvi1[3] = vertex_status[fvi[3]];
+      if ( FN )
+        FN[face_count1] = FN[fi];
+      face_count1++;
+    }
+
+    if ( face_count1 < face_count0 )
+    {
+      m_F.SetCount(face_count1);
+      m_F.Shrink();
+      if ( FN )
       {
-        i = Eid.vi[0]; Eid.vi[0] = Eid.vi[1]; Eid.vi[1] = i;
-        Eid.dir = 1;
-        Eid_list[Eid_count++] = Eid;
+        m_FN.SetCount(face_count1);
+        m_FN.Shrink();
+      }
+    }
+
+    if ( vertex_count1 < vertex_count0 )
+    {
+      vertex_count1 = 0;
+      bool bValidSingles = (VertexUnsignedCount() == m_V.UnsignedCount());
+      bool bValidDoubles = (VertexUnsignedCount() == m_dV.UnsignedCount());
+      ON_3fPoint* fV = bValidSingles ? m_V.Array() : nullptr;
+      ON_3dPoint* dV = bValidDoubles ? m_dV.Array() : nullptr;
+      ON_2dPoint* S = HasSurfaceParameters() ? m_S.Array() : 0;
+      ON_3fVector* N = HasVertexNormals() ? m_N.Array() : 0;
+      ON_2fPoint* T = HasTextureCoordinates() ? m_T.Array() : 0;
+      ON_SurfaceCurvature* K = HasPrincipalCurvatures() ? m_K.Array() : 0;
+      ON_Color* C = HasVertexColors() ? m_C.Array() : 0;
+
+      for ( vertex_count1 = 0; vertex_count1 < vertex_count0; vertex_count1++ )
+      {
+        if ( ON_UNSET_UINT_INDEX == vertex_status[vertex_count1] )
+          break;
+      }
+
+      for ( unsigned int vi = vertex_count1+1; vi < vertex_count0; vi++ )
+      {
+        if ( ON_UNSET_UINT_INDEX == vertex_status[vi] )
+          continue;
+        if ( fV )
+          fV[vertex_count1] = fV[vi];
+        if ( dV )
+          dV[vertex_count1] = dV[vi];
+        if ( S )
+          S[vertex_count1] = S[vi];
+        if ( N )
+          N[vertex_count1] = N[vi];
+        if ( T )
+          T[vertex_count1] = T[vi];
+        if ( K )
+          K[vertex_count1] = K[vi];
+        if ( C )
+          C[vertex_count1] = C[vi];
+        vertex_count1++;
+      }
+
+      if ( fV )
+      {
+        m_V.SetCount(vertex_count1);
+        m_V.Shrink();
+      }
+      if ( dV )
+      {
+        m_dV.SetCount(vertex_count1);
+        m_dV.Shrink();
+      }
+      if ( S )
+      {
+        m_S.SetCount(vertex_count1);
+        m_S.Shrink();
+      }
+      if ( N )
+      {
+        m_N.SetCount(vertex_count1);
+        m_N.Shrink();
+      }
+      if ( T )
+      {
+        m_T.SetCount(vertex_count1);
+        m_T.Shrink();
+      }
+      if ( K )
+      {
+        m_K.SetCount(vertex_count1);
+        m_K.Shrink();
+      }
+      if ( C )
+      {
+        m_C.SetCount(vertex_count1);
+        m_C.Shrink();
+      }
+
+      InvalidateBoundingBoxes();
+    }
+
+    m_invalid_count = 0;
+    m_quad_count = 0;
+    m_triangle_count = 0;
+
+    SetClosed(-1);
+  }
+  else if (bModifiedFaces)
+  {
+    // converted degenerate quads into triangles
+    DestroyTopology();
+    m_invalid_count = 0;
+    m_quad_count = 0;
+    m_triangle_count = 0;
+  }
+
+  if ( bRemoveEmptyNgons )
+    RemoveEmptyNgons();
+
+  return true;
+}
+
+unsigned int* InitializeMap(unsigned int count,ON_SimpleArray< unsigned int >& map_buffer)
+{
+  map_buffer.Reserve(count);
+  map_buffer.SetCount(count);
+  unsigned int* map = map_buffer.Array();
+  for ( unsigned int i = 0; i < count; i++ )
+    map[i] = ON_UNSET_UINT_INDEX;
+  return map;
+}
+
+ON_Mesh* ON_Mesh::CopyComponents(
+  const ON_COMPONENT_INDEX* ci_list,
+  size_t ci_count,
+  class ON_Mesh* destination_mesh
+  ) const
+{
+  if ( ci_count <= 0 || 0 == ci_list )
+    return 0;
+
+  const unsigned int vertex_count = m_V.UnsignedCount();
+  const unsigned int face_count = m_F.UnsignedCount();
+
+  if ( vertex_count <= 0 && face_count <= 0 )
+    return 0;
+
+  const ON_MeshTopology* top = TopologyExists() ? &Topology() : 0;
+  const unsigned int topv_count = top ? top->m_topv.UnsignedCount() : 0;
+  const unsigned int tope_count = top ? top->m_tope.UnsignedCount() : 0;
+  
+  ON_SimpleArray< unsigned int > vertex_map_buffer;
+  ON_SimpleArray< unsigned int > face_map_buffer;
+
+  unsigned int* vertex_map = 0;
+  unsigned int* face_map = 0;
+  unsigned int i, fi, vi;
+
+  ON_MeshNgonBuffer ngon_buffer;
+  
+  for ( size_t ci_index = 0; ci_index < ci_count; ci_index++ )
+  {
+    ON_COMPONENT_INDEX ci = ci_list[ci_index];
+    if ( !ci.IsMeshComponentIndex() )
+      continue;
+    if ( ci.m_index < 0 )
+      continue;
+    i = (unsigned int)ci.m_index;
+
+    switch(ci.m_type)
+    {
+    case ON_COMPONENT_INDEX::mesh_vertex:
+      if ( i >= vertex_count )
+        break;
+      if ( 0 == vertex_map )
+        vertex_map = InitializeMap(vertex_count,vertex_map_buffer);
+      vertex_map[i] = 0;
+      break;
+
+    case ON_COMPONENT_INDEX::mesh_face:
+    case ON_COMPONENT_INDEX::mesh_ngon:
+      {
+        const ON_MeshNgon* ngon = NgonFromComponentIndex(ngon_buffer,ci);
+        if ( 0 == ngon )
+          break;
+        if ( 0 != ngon->m_vi )
+        {
+          for ( i = 0; i < ngon->m_Vcount; i++ )
+          {
+            vi = ngon->m_vi[i];
+            if ( vi >= vertex_count )
+              continue;
+            if ( 0 == vertex_map )
+              vertex_map = InitializeMap(vertex_count,vertex_map_buffer);
+            vertex_map[vi] = 0;
+          }
+        }
+        if ( 0 != ngon->m_fi )
+        {
+          for ( i = 0; i < ngon->m_Fcount; i++ )
+          {
+            fi = ngon->m_fi[i];
+            if ( fi >= face_count )
+              continue;
+            if ( 0 == face_map )
+              face_map = InitializeMap(face_count,face_map_buffer);
+            face_map[fi] = 0;
+          }
+        }
+      }
+      break;
+
+    case ON_COMPONENT_INDEX::meshtop_vertex:
+      if ( i < topv_count )
+      {
+        const ON_MeshTopologyVertex& v = top->m_topv[i];
+        if ( v.m_vi )
+        {
+          for ( int j = 0; j < v.m_v_count; j++ )
+          {
+            if ( v.m_vi[j] < 0 )
+              continue;
+            vi = (unsigned int)v.m_vi[j];
+            if ( vi < vertex_count )
+            {
+              if ( 0 == vertex_map )
+                vertex_map = InitializeMap(vertex_count,vertex_map_buffer);
+              vertex_map[vi] = 0;
+            }
+          }
+        }
+      }
+      break;
+
+    case ON_COMPONENT_INDEX::meshtop_edge:
+      if ( i < tope_count )
+      {
+        const ON_MeshTopologyEdge& e = top->m_tope[i];
+        if ( e.m_topfi )
+        {
+          for ( int j = 0; j < e.m_topf_count; j++ )
+          {
+            if ( e.m_topfi[j] < 0 )
+              continue;
+            fi = (unsigned int)e.m_topfi[j];
+            if ( fi >= face_count )
+              continue;
+            if ( 0 == face_map )
+              face_map = InitializeMap(face_count,face_map_buffer);
+            face_map[fi] = 0;
+          }
+        }
+      }
+      break;
+
+    default:
+      break;
+    }
+  }
+
+  unsigned int face_count1 = 0;
+  if ( 0 != face_map )
+  {
+    for ( i = 0; i < face_count; i++ )
+    {
+      if ( 0 == face_map[i] )
+      {
+        ON_MeshFace f = m_F[i];
+        if ( f.IsValid(vertex_count) )
+        {
+          face_map[i] = face_count1++;
+          if ( 0 == vertex_map )
+            vertex_map = InitializeMap(vertex_count,vertex_map_buffer);
+          vertex_map[f.vi[0]] = 0;
+          vertex_map[f.vi[1]] = 0;
+          vertex_map[f.vi[2]] = 0;
+          vertex_map[f.vi[3]] = 0;
+        }
+        else
+          face_map[i] = ON_UNSET_UINT_INDEX; // bogus input face
       }
     }
   }
 
-  return Eid_count;
-}
-
-int ON_Mesh::GetMeshFaceSideList( 
-    const int* Vid,
-    struct ON_MeshFaceSide*& sides
-    ) const
-{
-  const int Vcount = m_V.Count(); 
-  const int Fcount = m_F.Count(); 
-  const ON_MeshFace* F = m_F.Array();
-
-  if ( Fcount < 1 || 0 == F || Vcount < 2 )
+  if ( 0 == vertex_map )
     return 0;
 
-  struct ON_MeshFaceSide* Elist = sides;
-  if ( 0 == Elist )
+  unsigned int vertex_count1 = 0;
+  for ( i = 0; i < vertex_count; i++ )
   {
-    Elist = (struct ON_MeshFaceSide*)onmalloc(4*Fcount*sizeof(Elist[0]));
-    if ( 0 == Elist )
-      return 0;
+    if ( 0 == vertex_map[i] )
+      vertex_map[i] = vertex_count1++;
   }
 
-  int sides_count = ON_Mesh_GetEidHelper( Vcount, Fcount, F, Vid, Elist );
-  if ( sides_count <= 0 )
+  if ( vertex_count1 <= 0 )
+    return 0;
+
+  ON_Mesh* mesh_copy = 0;
+  if ( destination_mesh )
   {
-    if ( 0 == sides )
-      delete(Elist);
+    destination_mesh->Destroy();
+    mesh_copy = destination_mesh;
   }
-  else if ( 0 == sides )
+  else
   {
-    sides = Elist;
+    mesh_copy = new ON_Mesh();
   }
 
-  return sides_count;
+  if ( face_count1 > 0 )
+  {
+    // copy face information
+    const ON_MeshFace* F = m_F.Array();
+    mesh_copy->m_F.Reserve(face_count1);
+    const ON_3fVector* FN = HasFaceNormals() ? m_FN.Array() : 0;
+    if ( 0 != FN )
+      mesh_copy->m_FN.Reserve(face_count1);
+    const unsigned int* fvi;
+    unsigned int* fvi1;
+    for ( fi = 0; fi < face_count; fi++ )
+    {
+      if ( ON_UNSET_UINT_INDEX == face_map[fi] )
+        continue;
+      fvi = (const unsigned int*)F[fi].vi;
+      fvi1 = (unsigned int*)(mesh_copy->m_F.AppendNew().vi);
+      fvi1[0] = vertex_map[fvi[0]];
+      fvi1[1] = vertex_map[fvi[1]];
+      fvi1[2] = vertex_map[fvi[2]];
+      fvi1[3] = vertex_map[fvi[3]];
+      if ( FN )
+        mesh_copy->m_FN.AppendNew() = FN[fi];
+    }
+  }
+
+  const bool bValidSingles = (VertexUnsignedCount() == m_V.UnsignedCount());
+  const ON_3fPoint* fV = bValidSingles ? m_V.Array() : nullptr;
+  const bool bValidDoubles = (VertexUnsignedCount() == m_dV.UnsignedCount());
+  const ON_3dPoint* dV = bValidDoubles ? m_dV.Array() : nullptr;
+  const ON_2dPoint* S = HasSurfaceParameters() ? m_S.Array() : 0;
+  const ON_3fVector* N = HasVertexNormals() ? m_N.Array() : 0;
+  const ON_2fPoint* T = HasTextureCoordinates() ? m_T.Array() : 0;
+  const ON_SurfaceCurvature* K = HasPrincipalCurvatures() ? m_K.Array() : 0;
+  const ON_Color* C = HasVertexColors() ? m_C.Array() : 0;
+
+  if (fV)
+    mesh_copy->m_V.Reserve(vertex_count1);
+  if (dV)
+    mesh_copy->m_dV.Reserve(vertex_count1);
+  if (S)
+    mesh_copy->m_S.Reserve(vertex_count1);
+  if (N)
+    mesh_copy->m_N.Reserve(vertex_count1);
+  if (T)
+    mesh_copy->m_T.Reserve(vertex_count1);
+  if (K)
+    mesh_copy->m_K.Reserve(vertex_count1);
+  if (C)
+    mesh_copy->m_C.Reserve(vertex_count1);
+
+  for ( vi = 0; vi < vertex_count; vi++ )
+  {
+    if ( ON_UNSET_UINT_INDEX == vertex_map[vi] )
+      continue;
+    if (fV)
+      mesh_copy->m_V.AppendNew() = fV[vi];
+    if (dV)
+      mesh_copy->m_dV.AppendNew() = dV[vi];
+    if ( S )
+      mesh_copy->m_S.AppendNew() = S[vi];
+    if ( N )
+      mesh_copy->m_N.AppendNew() = N[vi];
+    if ( T )
+      mesh_copy->m_T.AppendNew() = T[vi];
+    if ( K )
+      mesh_copy->m_K.AppendNew() = K[vi];
+    if ( C )
+      mesh_copy->m_C.AppendNew() = C[vi];
+  }
+
+  const unsigned int ngon_count = NgonCount();
+  for ( unsigned int ngon_index = 0; ngon_index < ngon_count; ngon_index++ )
+  {
+    const ON_MeshNgon* ngon = Ngon(ngon_index);
+    if ( 0 == ngon )
+      continue;
+    if ( 0 == ngon->m_Vcount || 0 == ngon->m_vi )
+      continue;
+    if ( 0 == ngon->m_Fcount || 0 == ngon->m_fi )
+      continue;
+    
+    unsigned int j;
+    
+    for ( j = 0; j < ngon->m_Vcount; j++ )
+    {
+      vi = ngon->m_vi[j];
+      if ( vi >= vertex_count )
+        break;
+      if ( ON_UNSET_UINT_INDEX == vertex_map[vi] )
+        break;
+    }
+    if ( j < ngon->m_Vcount )
+      continue;
+
+    for ( j = 0; j < ngon->m_Fcount; j++ )
+    {
+      fi = ngon->m_fi[j];
+      if ( fi >= face_count )
+        break;
+      if ( ON_UNSET_UINT_INDEX == face_map[fi] )
+        break;
+    }
+    if ( j < ngon->m_Fcount )
+      continue;
+
+    ON_MeshNgon* ngon1 = mesh_copy->AllocateNgon(ngon->m_Vcount,ngon->m_Fcount);
+
+    ngon1->m_Vcount = 0;
+    ngon1->m_Fcount = 0;
+    for ( j = 0; j < ngon->m_Vcount; j++ )
+    {
+      ngon1->m_vi[ngon1->m_Vcount++] = vertex_map[ngon->m_vi[j]];
+    }
+    for ( j = 0; j < ngon->m_Fcount; j++ )
+    {
+      ngon1->m_fi[ngon1->m_Fcount++] = face_map[ngon->m_fi[j]];
+    }
+
+    mesh_copy->AddNgon(ngon1);
+
+    if ( 0 != NgonMap() )
+      mesh_copy->CreateNgonMap();
+  }
+
+  return mesh_copy;
 }
 
-#define ON_COMPILING_OPENNURBS_QSORT_FUNCTIONS
-#define ON_SORT_TEMPLATE_STATIC_FUNCTION
-#define ON_SORT_TEMPLATE_TYPE struct ON_MeshFaceSide
-
-#define ON_SORT_TEMPLATE_COMPARE ON_qsort_MeshFaceSide_compare
-static int ON_SORT_TEMPLATE_COMPARE( 
-        ON_SORT_TEMPLATE_TYPE const * side1, 
-        ON_SORT_TEMPLATE_TYPE const * side2 
-        )
+ON_Mesh* ON_Mesh::CopyComponents(
+  const ON_SimpleArray<ON_COMPONENT_INDEX>& ci_list,
+  class ON_Mesh* destination_mesh
+  ) const
 {
-  if ( side1->vi[0] < side2->vi[0] )
-    return -1;
-  if ( side1->vi[0] > side2->vi[0] )
-    return 1;
-  if ( side1->vi[1] < side2->vi[1] )
-    return -1;
-  if ( side1->vi[1] > side2->vi[1] )
-    return 1;
-  if ( side1->fi < side2->fi )
-    return -1;
-  if ( side1->fi > side2->fi )
-    return 1;
-  if ( side1->side < side2->side )
-    return -1;
-  if ( side1->side > side2->side )
-    return 1;
-  return 0;
+  return CopyComponents(ci_list.Array(), ci_list.UnsignedCount(), destination_mesh);
 }
 
-#define ON_QSORT_FNAME ON_qsort_MeshFaceSide
-#include "opennurbs_qsort_template.h"
-
-void ON_SortMeshFaceSidesByVertexIndex( int sides_count, struct ON_MeshFaceSide* sides )
+bool ON_Mesh::SetSurfaceParamtersFromTextureCoodinates()
 {
-  if ( sides_count >= 2 && 0 != sides )
-    ON_QSORT_FNAME( sides, sides_count );
+  unsigned int i;
+  const unsigned int vcount = m_V.UnsignedCount();
+
+  bool rc;
+  ON_Interval dom;
+  if (vcount == m_T.UnsignedCount())
+  {
+    dom.Set(0.0, 1.0);
+    m_S.SetCount(0);
+    m_S.Reserve(vcount);
+    for (i = 0; i < vcount; i++)
+    {
+      ON_2dPoint S = m_T[i];
+      m_S.Append(S);
+    }
+    rc = true;
+  }
+  else
+  {
+    dom = ON_Interval::EmptyInterval;
+    m_S.Destroy();
+    rc = false;
+  }
+
+  m_srf_domain[0] = dom;
+  m_srf_domain[1] = dom;
+  m_srf_scale[0] = 0.0;
+  m_srf_scale[1] = 0.0;
+  m_packed_tex_domain[0] = dom;
+  m_packed_tex_domain[1] = dom;
+  m_packed_tex_rotate = false;
+
+  return rc;
+
+  //bool rc = (vcount > 0 && vcount == m_T.UnsignedCount() && vcount != m_S.UnsignedCount());
+  //if (!rc)
+  //  return false;
+  //  
+  //ON_2dPoint Tmin = m_T[0];
+  //ON_2dPoint Tmax = m_T[0];
+  //ON_2dPoint T;
+  //for (i = 1; i < vcount; i++)
+  //{
+  //  T = m_T[i];
+  //  if (T.x < Tmin.x)
+  //    Tmin.x = T.x;
+  //  else if (T.x > Tmax.x)
+  //    Tmax.x = T.x;
+  //  if (T.y < Tmin.y)
+  //    Tmin.y = T.y;
+  //  else if (T.y > Tmax.y)
+  //    Tmax.y = T.y;
+  //}
+  //  
+  //rc = (0.0f <= Tmin.x && Tmax.x <= 1.0f && 0.0f <= Tmin.y && Tmax.y <= 1.0f);
+  //if (!rc)
+  //  return false;
+
+  //ON_Interval packed_tex_domain[2];
+  //packed_tex_domain[0] = m_packed_tex_domain[0];
+  //packed_tex_domain[1] = m_packed_tex_domain[1];
+  //const float Ttol = 1.0e-5f;
+
+  //if (packed_tex_domain[0].IsIncreasing() && packed_tex_domain[1].IsIncreasing())
+  //{
+  //  rc = (packed_tex_domain[0].IsIncreasing() && packed_tex_domain[1].IsIncreasing());
+  //  if (!rc)
+  //    return false;
+  //  rc = (packed_tex_domain[0][0] <= Tmin.x && Tmax.x <= packed_tex_domain[0][1]);
+  //  if (!rc)
+  //    return false;
+  //  rc = (packed_tex_domain[1][0] <= Tmin.y && Tmax.y <= packed_tex_domain[1][1]);
+  //  if (!rc)
+  //    return false;
+  //}
+  //else if (Tmin.x > Ttol || Tmax.x < 1.0 - Ttol || Tmin.y > Ttol || Tmax.y < 1.0 - Ttol)
+  //{
+  //  packed_tex_domain[0].Set(Tmin.x, Tmax.x);
+  //  packed_tex_domain[1].Set(Tmin.y, Tmax.y);
+  //}
+  //else
+  //{
+  //  packed_tex_domain[0].Set(0.0, 1.0);
+  //  packed_tex_domain[1].Set(0.0, 1.0);
+  //}
+
+  //ON_Interval Sdomain[2];
+  //if (m_packed_tex_rotate)
+  //{
+  //  Sdomain[0] = packed_tex_domain[1];
+  //  Sdomain[1].Set(1.0 - packed_tex_domain[0][1], 1.0 - packed_tex_domain[0][0]);
+  //}
+  //else
+  //{
+  //  Sdomain[0] = packed_tex_domain[0];
+  //  Sdomain[1] = packed_tex_domain[1];
+  //}
+
+  //rc = Sdomain[0].IsIncreasing() && Sdomain[1].IsIncreasing();
+  //if (!rc)
+  //  return false;
+
+  //m_packed_tex_domain[0] = packed_tex_domain[0];
+  //m_packed_tex_domain[1] = packed_tex_domain[1];
+  //m_srf_scale[0] = 0.0;
+  //m_srf_scale[1] = 0.0;
+  //m_srf_domain[0] = Sdomain[0];
+  //m_srf_domain[1] = Sdomain[1];
+
+  //m_S.Reserve(vcount);
+  //m_S.SetCount(0);
+  //ON_2dPoint S;
+  //if (m_packed_tex_rotate)
+  //{
+  //  for (i = 0; i < vcount; i++)
+  //  {
+  //    T = m_T[i];
+  //    double x = m_packed_tex_domain[0].NormalizedParameterAt(T.x);
+  //    double y = m_packed_tex_domain[1].NormalizedParameterAt(T.y);
+  //    S.x = m_srf_domain[0].ParameterAt(y);
+  //    S.y = m_srf_domain[1].ParameterAt(1.0 - x);
+  //    S = T;
+  //    m_S.Append(S);
+  //  }
+  //}
+  //else
+  //{
+  //  for (i = 0; i < vcount; i++)
+  //  { 
+  //    T = m_T[i];
+  //    S = T;
+  //    m_S.Append(S);
+  //  }
+  //}
+
+  //return true;
 }
 
-#undef ON_COMPILING_OPENNURBS_QSORT_FUNCTIONS
-#undef ON_SORT_TEMPLATE_STATIC_FUNCTION
-#undef ON_SORT_TEMPLATE_TYPE
-#undef ON_QSORT_FNAME
+//////////////////////////////////////////////////////////////////////////
+//
+// ON_MeshCache
+//
+
+class ON_MeshCacheItem
+{
+public:
+  ON_MeshCacheItem() = default;
+  ~ON_MeshCacheItem() = default;
+  ON_MeshCacheItem(const ON_MeshCacheItem&) = default;
+  ON_MeshCacheItem& operator=(const ON_MeshCacheItem&) = default;
+
+#if defined(ON_HAS_RVALUEREF)
+  // rvalue copy constructor
+  ON_MeshCacheItem( ON_MeshCacheItem&& ) ON_NOEXCEPT;
+  // rvalue assignment operator
+  ON_MeshCacheItem& operator=( ON_MeshCacheItem&& );
+#endif
+
+
+  bool Write(
+    ON_BinaryArchive& archive
+    ) const;
+
+  bool Read(
+    ON_BinaryArchive& archive
+    );
+
+  void Dump(
+    ON_TextLog& text_log
+    ) const;
+
+public:
+  ON_UUID m_mesh_id = ON_nil_uuid;
+  std::shared_ptr<ON_Mesh> m_mesh_sp;
+  ON_MeshCacheItem* m_next = nullptr;
+};
+
+#if defined(ON_HAS_RVALUEREF)
+
+ON_MeshCacheItem::ON_MeshCacheItem( ON_MeshCacheItem&& src ) ON_NOEXCEPT
+  : m_mesh_id(src.m_mesh_id)
+  , m_mesh_sp(std::move(src.m_mesh_sp))
+{
+
+}
+
+ON_MeshCacheItem& ON_MeshCacheItem::operator=( ON_MeshCacheItem&& src )
+{
+  std::move(src.m_mesh_sp).swap(m_mesh_sp);
+  m_mesh_id = src.m_mesh_id;
+  return *this;
+}
+
+#endif
+
+
+bool ON_MeshCacheItem::Write(
+  ON_BinaryArchive& archive
+  ) const
+{
+  const ON_Mesh* mesh = m_mesh_sp.get();
+  if (nullptr == mesh)
+    return true; // not an error
+
+  if (!archive.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,0))
+    return false;
+
+  bool rc = false;
+  for (;;)
+  {
+    if (!archive.WriteUuid(m_mesh_id))
+      break;
+    if ( !archive.WriteObject(mesh) )
+      break;
+    rc = true;
+    break;
+  }
+
+  if (!archive.EndWrite3dmChunk())
+    rc = false;
+
+  return rc;
+}
+
+bool ON_MeshCacheItem::Read(
+  ON_BinaryArchive& archive
+  )
+{
+  m_mesh_id = ON_nil_uuid;
+  m_mesh_sp.reset();
+
+  int major_version = 0;
+  int minor_version = 0;
+  if (!archive.BeginRead3dmChunk(TCODE_ANONYMOUS_CHUNK,&major_version,&minor_version))
+    return false;
+
+  bool rc = false;
+  for (;;)
+  {
+    if ( 1 != major_version )
+      break;
+
+    if (!archive.ReadUuid(m_mesh_id))
+      break;
+
+    ON_Object* mesh_object = nullptr;
+    if ( !archive.ReadObject(&mesh_object) )
+      break;
+    if ( nullptr == mesh_object )
+      break;
+    ON_Mesh* mesh = ON_Mesh::Cast(mesh_object);
+    if (nullptr == mesh)
+    {
+      delete mesh_object;
+      break;
+    }
+    std::shared_ptr<ON_Mesh>(mesh).swap(m_mesh_sp);
+    rc = true;
+    break;
+  }
+
+  if (!archive.EndRead3dmChunk())
+    rc = false;
+
+  return rc;
+}
+
+
+void ON_MeshCacheItem::Dump(
+  ON_TextLog& text_log
+  ) const
+{
+  const char* description = nullptr;
+  if ( ON_MeshCache::RenderMeshId == m_mesh_id )
+    description = "Render Mesh";
+  else if ( ON_MeshCache::AnalysisMeshId == m_mesh_id )
+    description = "Analysis Mesh";
+  else if ( ON_MeshCache::PreviewMeshId == m_mesh_id )
+    description = "Preview Mesh";
+
+  if (nullptr != description)
+  {
+    text_log.Print("%s\n", description);
+  }
+  else
+  {
+    char buffer[48] = { 0 };
+    ON_UuidToString(m_mesh_id, buffer);
+    text_log.Print("mesh id: %s\n",buffer);
+  }
+
+  text_log.PushIndent();
+  const ON_Mesh* mesh = m_mesh_sp.get();
+  if (nullptr == mesh)
+    text_log.Print("Null mesh\n");
+  else if (mesh->IsEmpty())
+    text_log.Print("Empty mesh\n");
+  else
+  {
+    const char* mp_style = "Custom";
+    const ON_MeshParameters* mp = mesh->MeshParameters();
+    if (mp)
+    {
+      if (0 == ON_MeshParameters::CompareGeometrySettings(*mp, ON_MeshParameters::FastRenderMesh))
+        mp_style = "Fast";
+      else if (0 == ON_MeshParameters::CompareGeometrySettings(*mp, ON_MeshParameters::QualityRenderMesh))
+        mp_style = "Quality";
+    }
+    text_log.Print("%s mesh with %d faces and %d vertices.\n", mp_style, mesh->FaceCount(), mesh->VertexCount());
+  }
+  text_log.PopIndent();
+}
+
+ON_UUID ON_MeshCache::MeshIdFromMeshType(
+  ON::mesh_type mesh_type
+  )
+{
+  switch (mesh_type)
+  {
+  case ON::default_mesh:
+    return ON_MeshCache::CoarseMeshId;
+    break;
+  case ON::render_mesh:
+    return ON_MeshCache::RenderMeshId;
+    break;
+  case ON::analysis_mesh:
+    return ON_MeshCache::AnalysisMeshId;
+    break;
+  case ON::preview_mesh:
+    return ON_MeshCache::PreviewMeshId;
+    break;
+  case ON::any_mesh:
+    return ON_MeshCache::AnyMeshId;
+    break;
+  default:
+    break;
+  }
+
+  return ON_nil_uuid;
+}
+
+
+class ON_MeshCacheItem* ON_MeshCache::Internal_CreateItem()
+{
+  // Items must come from the main memory pool to prevent
+  // crashing when meshing operations are canceled.
+  // Use placement operator new with main heap memory.
+  ON_MeshCacheItem* item;
+  void* p = onmalloc(sizeof(*item));
+  item = new (p) ON_MeshCacheItem();
+  return item;
+}
+
+class ON_MeshCacheItem* ON_MeshCache::Internal_CopyItem(const class ON_MeshCacheItem& src_item)
+{
+  // Items must come from the main memory pool to prevent
+  // crashing when meshing operations are canceled.
+  // Use placement operator new with main heap memory.
+  ON_MeshCacheItem* item;
+  void* p = onmalloc(sizeof(*item));
+  item = new (p) ON_MeshCacheItem(src_item);
+  item->m_next = nullptr;
+  return item;
+}
+
+void ON_MeshCache::Internal_DeleteItem(class ON_MeshCacheItem* item, bool bDeleteMesh)
+{
+  if (nullptr == item)
+    return;
+  void* p = (void*)item;
+
+  // When bDeleteMesh is false, the memory used by item->m_mesh_sp and the ON_Mesh
+  // it points to belongs to a memory pool that has been deleted because a worker
+  // thread was canceled.  In this case, calling ~ON_MeshCacheItem() will crash the
+  // application.
+  if ( bDeleteMesh )
+  {
+    item->~ON_MeshCacheItem();
+  }
+
+  onfree(p);
+}
+
+void ON_MeshCache::Internal_CopyHelper(
+  const class ON_MeshCacheItem* src_impl
+  )
+{
+  m_impl = 0;
+  ON_MeshCacheItem* prev = nullptr;
+  for (const ON_MeshCacheItem* src_item = src_impl; nullptr != src_item; src_item = src_item->m_next)
+  {
+    ON_MeshCacheItem* item_copy = Internal_CopyItem(*src_item);
+    if (nullptr == prev)
+      m_impl = item_copy;
+    else
+      prev->m_next = item_copy;
+    prev = item_copy;
+  }
+}
+
+class ON_MeshCacheItem* ON_MeshCache::Internal_FindHelper(
+  ON_UUID mesh_id
+  ) const
+{
+  unsigned int coarse_mesh_face_count = 0xFFFFFFFFU;
+  unsigned int fine_mesh_face_count = 0;
+  ON_MeshCacheItem* item_coarse_mesh = nullptr;
+  ON_MeshCacheItem* item_fine_mesh = nullptr;
+
+  const bool bCountFaces = (ON_MeshCache::FineMeshId == mesh_id || ON_MeshCache::CoarseMeshId == mesh_id);
+
+  for (ON_MeshCacheItem* item = m_impl; nullptr != item; item = item->m_next)
+  {
+    if (mesh_id == item->m_mesh_id)
+      return item;
+    if (false == bCountFaces)
+      continue;
+    const ON_Mesh* mesh = item->m_mesh_sp.get();
+    if (nullptr == mesh)
+      continue;
+    unsigned int mesh_face_count = mesh->FaceUnsignedCount();
+    if (mesh_face_count <= 0 || mesh->VertexUnsignedCount() < 3)
+      continue;
+    if (mesh_face_count > fine_mesh_face_count)
+    {
+      item_fine_mesh = item;
+      fine_mesh_face_count = mesh_face_count;
+    }
+    if (mesh_face_count < coarse_mesh_face_count)
+    {
+      item_coarse_mesh = item;
+      coarse_mesh_face_count = mesh_face_count;
+    }
+  }
+  
+  if (ON_MeshCache::CoarseMeshId == mesh_id)
+    return item_coarse_mesh;
+  
+  if (ON_MeshCache::FineMeshId == mesh_id)
+    return item_fine_mesh;
+
+  return nullptr;
+}
+
+ON_MeshCache::~ON_MeshCache()
+{
+  ClearAllMeshes();
+}
+
+ON_MeshCache::ON_MeshCache(const ON_MeshCache& src)
+{
+  Internal_CopyHelper(src.m_impl);
+}
+
+ON_MeshCache& ON_MeshCache::operator=(const ON_MeshCache& src)
+{
+  if (this != &src)
+  {
+    ClearAllMeshes();
+    Internal_CopyHelper(src.m_impl);
+  }
+  return *this;
+}
+
+#if defined(ON_HAS_RVALUEREF)
+// rvalue copy constructor
+ON_MeshCache::ON_MeshCache( ON_MeshCache&& src) ON_NOEXCEPT
+{
+  m_impl = src.m_impl;
+  src.m_impl = nullptr;
+}
+
+ON_MeshCache& ON_MeshCache::operator=( ON_MeshCache&& src )
+{
+  if (this != &src)
+  {
+    m_impl = src.m_impl;
+    src.m_impl = nullptr;
+  }
+  return *this;
+}
+
+#endif
+
+
+void ON_MeshCache::SetMesh(
+  ON::mesh_type mesh_type,
+  const std::shared_ptr<ON_Mesh>& mesh_sp
+  )
+{
+  SetMesh(ON_MeshCache::MeshIdFromMeshType(mesh_type),mesh_sp);
+}
+
+void ON_MeshCache::SetMesh(
+  ON_UUID mesh_id,
+  const std::shared_ptr<ON_Mesh>& mesh_sp
+  )
+{
+  if ( ON_nil_uuid == mesh_id )
+    return;
+  if ( ON_max_uuid == mesh_id )
+    return;
+
+  const ON_Mesh* mesh = mesh_sp.get();
+
+  if (nullptr == mesh || mesh->IsEmpty())
+  {
+    ClearMesh(mesh_id);
+    return;
+  }
+
+  if ( ON_MeshCache::AnyMeshId == mesh_id )
+    return;
+
+  ON_MeshCacheItem* item = Internal_FindHelper(mesh_id);
+  if (nullptr == item)
+  {
+    item = Internal_CreateItem();
+    item->m_mesh_id = mesh_id;
+    item->m_next = m_impl;
+    m_impl = item;
+  }
+  if ( nullptr == item )
+    return;
+
+  item->m_mesh_sp = mesh_sp;
+}
+  
+void ON_MeshCache::ClearMesh(
+  ON::mesh_type mesh_type
+  )
+{
+  ClearMesh(mesh_type, true);
+}
+  
+void ON_MeshCache::ClearMesh(
+  ON::mesh_type mesh_type,
+  bool bDeleteMesh
+  )
+{
+  ClearMesh(ON_MeshCache::MeshIdFromMeshType(mesh_type),bDeleteMesh);
+}
+
+void ON_MeshCache::ClearMesh(
+  ON_UUID mesh_id
+  )
+{
+  ClearMesh(mesh_id, true);
+}  
+
+void ON_MeshCache::ClearMesh(
+  ON_UUID mesh_id,
+  bool bDeleteMesh
+  )
+{
+  if (ON_MeshCache::AnyMeshId == mesh_id)
+    ClearAllMeshes(bDeleteMesh);
+  else
+  {
+    ON_MeshCacheItem* prev = nullptr;
+    for (ON_MeshCacheItem* item = m_impl; nullptr != item; item = item->m_next)
+    {
+      if (mesh_id == item->m_mesh_id)
+      {
+        if ( nullptr == prev )
+          m_impl = item->m_next;
+        else
+          prev->m_next = item->m_next;
+        Internal_DeleteItem(item,bDeleteMesh);
+        return;
+      }
+      prev = item;
+    }
+  }
+}  
+
+void ON_MeshCache::ClearAllMeshes()
+{
+  ClearAllMeshes(true);
+}
+
+void ON_MeshCache::ClearAllMeshes(bool bDeleteMesh)
+{
+  if ( 0 != m_impl )
+  {
+    ON_MeshCacheItem* next = m_impl;
+    m_impl = nullptr;
+    for (ON_MeshCacheItem* item = next; nullptr != item; item = next)
+    {
+      next = item->m_next;
+      Internal_DeleteItem(item,bDeleteMesh);
+    }
+  }
+}
+  
+const ON_Mesh* ON_MeshCache::Mesh(
+  ON::mesh_type mesh_type
+  ) const
+{
+  return Mesh(ON_MeshCache::MeshIdFromMeshType(mesh_type));
+}
+  
+const ON_Mesh* ON_MeshCache::Mesh(
+  ON_UUID mesh_id
+  ) const
+{
+  return MeshSharedPtr(mesh_id).get();
+}
+
+std::shared_ptr<ON_Mesh> ON_MeshCache::MeshSharedPtr(
+  ON::mesh_type mesh_type
+  ) const
+{
+  return MeshSharedPtr(ON_MeshCache::MeshIdFromMeshType(mesh_type));
+}
+
+std::shared_ptr<ON_Mesh> ON_MeshCache::MeshSharedPtr(
+  ON_UUID mesh_id
+  ) const
+{
+  const ON_MeshCacheItem* item 
+    = (ON_MeshCache::AnyMeshId == mesh_id)
+    ? m_impl
+    : Internal_FindHelper(mesh_id);
+  if ( item )
+    return item->m_mesh_sp;
+  return std::shared_ptr<ON_Mesh>();
+}
+
+bool ON_MeshCache::Write(
+  ON_BinaryArchive& archive
+  ) const
+{
+  if (!archive.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,0))
+    return false;
+  bool rc = true;
+  char c;
+  for (const ON_MeshCacheItem* item = m_impl; nullptr != item; item = item->m_next)
+  {
+    c = 1;
+    rc = archive.WriteChar(c);
+    if ( false == rc )
+      break;
+    rc = item->Write(archive);
+    if ( false == rc )
+      break;
+  }
+  if (rc)
+  {
+    c = 0;
+    rc = archive.WriteChar(c);
+  }
+  if (!archive.EndWrite3dmChunk())
+    rc = false;
+  return rc;
+}
+
+bool ON_MeshCache::Read(
+  ON_BinaryArchive& archive
+  )
+{
+  int major_version = 0;
+  int minor_version = 0;
+  if (!archive.BeginRead3dmChunk(TCODE_ANONYMOUS_CHUNK, &major_version, &minor_version))
+    return false;
+
+  bool rc = false;
+  for (;;)
+  {
+    if (1 != major_version)
+      break;
+    ON_MeshCacheItem* prev = nullptr;
+
+    for (;;)
+    {
+      char c = 0;
+      if (!archive.ReadChar(&c))
+        break;
+      if (0 == c)
+      {
+        rc = true;
+        break;
+      }
+      if (1 != c)
+        break;
+      ON_MeshCacheItem* item = Internal_CreateItem();
+      if (!item->Read(archive))
+      {
+        Internal_DeleteItem(item,true);
+        break;
+      }
+      if (nullptr == prev)
+        m_impl = item;
+      else
+        prev->m_next = item;
+      prev = item;
+    }
+    break;
+  }
+
+  if (!archive.EndRead3dmChunk())
+    rc = false;
+
+  return rc;
+}
+
+unsigned int ON_MeshCache::MeshCount() const
+{
+  unsigned int count = 0;
+  for (const ON_MeshCacheItem* item = m_impl; nullptr != item; item = item->m_next)
+  {
+    count++;
+  }
+  return count;
+}
+
+void ON_MeshCache::Dump(
+  ON_TextLog& text_log
+  ) const
+{
+  unsigned int count = MeshCount();
+  text_log.Print("%u cached meshes.\n",count);
+  for (const ON_MeshCacheItem* item = m_impl; nullptr != item; item = item->m_next)
+  {
+    item->Dump(text_log);
+  }
+}
+
+bool ON_MeshCache::Transform(
+  const ON_Xform& xform
+  )
+{
+  if (!xform.IsValid())
+    return false;
+  if (xform.IsZero())
+    return false;
+  if (xform.IsIdentity())
+    return true;
+  bool rc = true;
+  for (ON_MeshCacheItem* item = m_impl; nullptr != item; item = item->m_next)
+  {
+    ON_Mesh* mesh = item->m_mesh_sp.get();
+    if (nullptr == mesh || mesh->IsEmpty())
+      continue;
+    if (false == item->m_mesh_sp.unique())
+    {
+      // make a copy and transform the copy
+      std::shared_ptr<ON_Mesh>(new ON_Mesh(*mesh)).swap(item->m_mesh_sp);
+      mesh = item->m_mesh_sp.get();
+    }
+    if ( !mesh->Transform(xform) )
+      rc = false;
+  }
+  return rc;
+}
+

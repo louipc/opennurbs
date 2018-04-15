@@ -16,16 +16,65 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
 ON_OBJECT_IMPLEMENT(ON_ArcCurve,ON_Curve,"CF33BE2A-09B4-11d4-BFFB-0010830122F0");
 
+ON_ArcCurve::ON_ArcCurve() ON_NOEXCEPT
+{}
 
-ON_ArcCurve::ON_ArcCurve()
+ON_ArcCurve::~ON_ArcCurve()
+{}
+
+ON_ArcCurve::ON_ArcCurve( const ON_ArcCurve& src )
+  : ON_Curve(src)
+  , m_arc(src.m_arc)
+  , m_t(src.m_t)
+  , m_dim(src.m_dim)
+{}
+
+ON_ArcCurve& ON_ArcCurve::operator=( const ON_ArcCurve& src )
 {
-  m_arc.Create(ON_xy_plane, 1.0, 2.0*ON_PI);
-  m_t.m_t[0] = 0.0;
-  m_t.m_t[1] = m_arc.Length();
-  m_dim = 3;
+  if ( this != &src ) 
+  {
+    ON_Curve::operator=(src);
+    m_arc = src.m_arc;
+    m_t = src.m_t;
+    m_dim  = src.m_dim;
+  }
+  return *this;
 }
+
+#if defined(ON_HAS_RVALUEREF)
+
+ON_ArcCurve::ON_ArcCurve( ON_ArcCurve&& src) ON_NOEXCEPT
+  : ON_Curve(std::move(src))
+  , m_arc(std::move(src.m_arc))
+  , m_t(src.m_t)
+  , m_dim(src.m_dim)
+{
+}
+
+ON_ArcCurve& ON_ArcCurve::operator=( ON_ArcCurve&& src)
+{
+  if ( this != &src ) 
+  {
+    ON_Curve::operator=(std::move(src));
+    m_arc = std::move(src.m_arc);
+    m_t = src.m_t;
+    m_dim  = src.m_dim;
+  }
+  return *this;
+}
+
+#endif
+
 
 ON_ArcCurve::ON_ArcCurve( const ON_Arc& A )
 {
@@ -58,16 +107,6 @@ ON_ArcCurve::ON_ArcCurve( const ON_Circle& circle, double t0, double t1 )
   m_dim = 3;
 }
 
-ON_ArcCurve::ON_ArcCurve( const ON_ArcCurve& src ) : ON_Curve(src)
-{
-  m_arc = src.m_arc;
-  m_t = src.m_t;
-  m_dim  = src.m_dim;
-}
-
-ON_ArcCurve::~ON_ArcCurve()
-{
-}
 
 
 unsigned int ON_ArcCurve::SizeOf() const
@@ -83,17 +122,6 @@ ON__UINT32 ON_ArcCurve::DataCRC(ON__UINT32 current_remainder) const
   current_remainder = ON_CRC32(current_remainder,sizeof(m_t),&m_t);
   current_remainder = ON_CRC32(current_remainder,sizeof(m_dim),&m_dim);
   return current_remainder;
-}
-
-ON_ArcCurve& ON_ArcCurve::operator=( const ON_ArcCurve& src )
-{
-  if ( this != &src ) {
-    ON_Curve::operator=(src);
-    m_arc = src.m_arc;
-    m_t = src.m_t;
-    m_dim  = src.m_dim;
-  }
-  return *this;
 }
 
 ON_ArcCurve& ON_ArcCurve::operator=( const ON_Arc& A )
@@ -123,14 +151,13 @@ int ON_ArcCurve::Dimension() const
   return m_dim;
 }
 
-ON_BOOL32 
-ON_ArcCurve::GetBBox( // returns true if successful
+bool ON_ArcCurve::GetBBox( // returns true if successful
          double* boxmin,    // minimum
          double* boxmax,    // maximum
-         ON_BOOL32 bGrowBox
+         bool bGrowBox
          ) const
 {
-  ON_BOOL32 rc = m_arc.IsValid();
+  bool rc = m_arc.IsValid();
   if (rc) {
     ON_BoundingBox bbox = m_arc.BoundingBox();
     if ( bGrowBox ) {
@@ -157,7 +184,7 @@ ON_ArcCurve::GetBBox( // returns true if successful
   return rc;
 }
 
-ON_BOOL32
+bool
 ON_ArcCurve::Transform( const ON_Xform& xform )
 {
   TransformUserData(xform);
@@ -165,7 +192,7 @@ ON_ArcCurve::Transform( const ON_Xform& xform )
   return m_arc.Transform( xform );
 }
 
-ON_BOOL32 ON_ArcCurve::IsValid( ON_TextLog* text_log ) const
+bool ON_ArcCurve::IsValid( ON_TextLog* text_log ) const
 {
   if ( !m_t.IsIncreasing() )
   {
@@ -199,11 +226,11 @@ void ON_ArcCurve::Dump( ON_TextLog& dump ) const
   dump.PopIndent();
 }
 
-ON_BOOL32 ON_ArcCurve::Write(
+bool ON_ArcCurve::Write(
        ON_BinaryArchive& file // open binary file
      ) const
 {
-  ON_BOOL32 rc = file.Write3dmChunkVersion(1,0);
+  bool rc = file.Write3dmChunkVersion(1,0);
   if (rc) 
   {
     rc = file.WriteArc( m_arc );
@@ -213,13 +240,13 @@ ON_BOOL32 ON_ArcCurve::Write(
   return rc;
 }
 
-ON_BOOL32 ON_ArcCurve::Read(
+bool ON_ArcCurve::Read(
        ON_BinaryArchive& file // open binary file
      )
 {
   int major_version = 0;
   int minor_version = 0;
-  ON_BOOL32 rc = file.Read3dmChunkVersion(&major_version,&minor_version);
+  bool rc = file.Read3dmChunkVersion(&major_version,&minor_version);
   if (rc)
   {
     if (major_version==1) 
@@ -240,9 +267,9 @@ ON_BOOL32 ON_ArcCurve::Read(
 }
 
 
-ON_BOOL32 ON_ArcCurve::SetDomain( double t0, double t1 )
+bool ON_ArcCurve::SetDomain( double t0, double t1 )
 {
-  ON_BOOL32 rc = false;
+  bool rc = false;
   if ( t0 < t1 )
   {
     m_t.Set(t0,t1);
@@ -273,7 +300,7 @@ ON_Interval ON_ArcCurve::Domain() const
   return m_t;
 }
 
-ON_BOOL32 ON_ArcCurve::ChangeClosedCurveSeam( 
+bool ON_ArcCurve::ChangeClosedCurveSeam( 
             double t ){
 	bool rc = false;
 	if( IsCircle() ){
@@ -293,7 +320,7 @@ int ON_ArcCurve::SpanCount() const
   return 1;
 }
 
-ON_BOOL32 ON_ArcCurve::GetSpanVector( double* s ) const
+bool ON_ArcCurve::GetSpanVector( double* s ) const
 {
   s[0] = m_t[0];
   s[1] = m_t[1];
@@ -306,7 +333,7 @@ int ON_ArcCurve::Degree() const
 }
 
 
-ON_BOOL32
+bool
 ON_ArcCurve::IsLinear(  // true if curve locus is a line segment
       double // tolerance - formal parameter intentionally ignored in this virtual function
       ) const
@@ -314,15 +341,15 @@ ON_ArcCurve::IsLinear(  // true if curve locus is a line segment
   return false;
 }
 
-ON_BOOL32
+bool
 ON_ArcCurve::IsArc( // true if curve locus in an arc or circle
-      const ON_Plane* plane, // if not NULL, test is performed in this plane
-      ON_Arc* arc,         // if not NULL and true is returned, then arc
+      const ON_Plane* plane, // if not nullptr, test is performed in this plane
+      ON_Arc* arc,         // if not nullptr and true is returned, then arc
                               // arc parameters are filled in
       double tolerance // tolerance to use when checking linearity
       ) const
 {
-  ON_BOOL32 rc = (plane) ? IsInPlane(*plane,tolerance) : true;
+  bool rc = (plane) ? IsInPlane(*plane,tolerance) : true;
   if (arc) 
     *arc = m_arc;
   if (rc)
@@ -330,9 +357,9 @@ ON_ArcCurve::IsArc( // true if curve locus in an arc or circle
   return rc;
 }
 
-ON_BOOL32
+bool
 ON_ArcCurve::IsPlanar(
-      ON_Plane* plane, // if not NULL and true is returned, then plane parameters
+      ON_Plane* plane, // if not nullptr and true is returned, then plane parameters
                          // are filled in
       double tolerance // tolerance to use when checking linearity
       ) const
@@ -348,7 +375,7 @@ ON_ArcCurve::IsPlanar(
   return true;
 }
 
-ON_BOOL32
+bool
 ON_ArcCurve::IsInPlane(
       const ON_Plane& plane, // plane to test
       double tolerance // tolerance to use when checking linearity
@@ -357,22 +384,22 @@ ON_ArcCurve::IsInPlane(
   return m_arc.IsInPlane( plane, tolerance );
 }
 
-ON_BOOL32 
+bool 
 ON_ArcCurve::IsClosed() const
 {
   return m_arc.IsCircle();
 }
 
-ON_BOOL32 
+bool 
 ON_ArcCurve::IsPeriodic() const
 {
   return m_arc.IsCircle();
 }
 
-ON_BOOL32
+bool
 ON_ArcCurve::Reverse()
 {
-  ON_BOOL32 rc = m_arc.Reverse();
+  bool rc = m_arc.Reverse();
   if (rc)
 	{
     m_t.Reverse();
@@ -382,18 +409,20 @@ ON_ArcCurve::Reverse()
 }
 
 
-ON_BOOL32 ON_ArcCurve::SetStartPoint(ON_3dPoint start_point)
+bool ON_ArcCurve::SetStartPoint(ON_3dPoint start_point)
 {
+  if (ON_Curve::SetStartPoint(start_point))
+    return true;
   if (IsCircle())
     return false;
-  ON_BOOL32 rc = false;
+  bool rc = false;
   if ( m_dim == 3 || start_point.z == 0.0 )
   {
     ON_3dPoint P;
     ON_3dVector T;
     double t = Domain()[1];
     Ev1Der( t, P, T );
-    T.Reverse();
+    T = -T;
     ON_Arc a;
     rc = a.Create( P, T, start_point );
     if ( rc )
@@ -419,11 +448,13 @@ ON_BOOL32 ON_ArcCurve::SetStartPoint(ON_3dPoint start_point)
 }
 
 
-ON_BOOL32 ON_ArcCurve::SetEndPoint(ON_3dPoint end_point)
+bool ON_ArcCurve::SetEndPoint(ON_3dPoint end_point)
 {
+  if (ON_Curve::SetEndPoint(end_point))
+    return true;
   if (IsCircle())
     return false;
-  ON_BOOL32 rc = false;
+  bool rc = false;
   if ( m_dim == 3 || end_point.z == 0.0 )
   {
     ON_3dPoint P;
@@ -453,7 +484,7 @@ ON_BOOL32 ON_ArcCurve::SetEndPoint(ON_3dPoint end_point)
   return rc;  
 }
 
-ON_BOOL32 ON_ArcCurve::Evaluate( // returns false if unable to evaluate
+bool ON_ArcCurve::Evaluate( // returns false if unable to evaluate
        double t,       // evaluation parameter
        int der_count,  // number of derivatives (>=0)
        int v_stride,   // v[] array stride (>=Dimension())
@@ -462,8 +493,24 @@ ON_BOOL32 ON_ArcCurve::Evaluate( // returns false if unable to evaluate
        int* // hint - formal parameter intentionally ignored in this virtual function
        ) const
 {
+  // The issue here is that ON_PI is a rational approximation of the "real" pi. 
+  // Ideally sin(N*pi) would be zero and the bugs of July 2012 and RH-26341 that are
+  // discussed below would not exist.  When N is large, N*ON_PI isn't close by any 
+  // measure to a multiple of "real" pi.  But, for smallish N that we are likely to
+  // encounter in practice, we want sin(N*ON_PI) to be zero in this evaluator.
+  // The multiple 4 is used because we felt is was reasonable for somebody to want 
+  // this evaluator to apply the same special case handing to a and a + 2.0*ON_PI
+  // when fabs(a) <= 2.0*ON_PI.
+  static const double sin_of_pi = fabs(sin(4.0*ON_PI)) > fabs(sin(ON_PI))
+    ? fabs(sin(4.0*ON_PI)) // the fabs(sin(4.0*ON_PI)) values is used in the tests we performed.
+    : fabs(sin(ON_PI));
+
+  static const double cos_of_pi_over_2 = fabs(cos(4.5*ON_PI)) > fabs(cos(0.5*ON_PI))
+    ? fabs(cos(4.5*ON_PI)) // the fabs(cos(4.5*ON_PI)) values is used in the tests we performed.
+    : fabs(cos(0.5*ON_PI)); 
+
   ON_3dVector d;
-  ON_BOOL32 rc = false;
+  bool rc = false;
   if ( m_t[0] < m_t[1] ) 
   {
     double rat = m_arc.DomainRadians().Length()/m_t.Length();
@@ -471,18 +518,41 @@ ON_BOOL32 ON_ArcCurve::Evaluate( // returns false if unable to evaluate
     double a = m_arc.DomainRadians().ParameterAt( m_t.NormalizedParameterAt(t) );
 
     // 12 July 2012 Dale Lear
-    //   When making a sphere with center (0,0,0) and radius = 1.0e9,
-    //   a = ON_PI = 3.1415926535897931, c = -1.0 and s = 1.2246467991473532e-016
-    //   so I'm adding the if ... statements to keep arc evaluations more precise
-    //   at multiples of 1/2 pi.
+    //   When evaluating circles centered at the origin 
+    //   a = ON_PI = 3.1415926535897931, c = -1.0 and s = 1.2246467991473532e-016.
+    //   As a result the y coordinates that "should" be zero comes out as
+    //   radius*1.2246467991473532e-016.  When the radius is large (1.0e9 in the
+    //   bug I was looking at), the y coordinate is big enough to cause other problems.
+    //   When I added this comment I failed to insert the bug number, so I cannot
+    //   provide more details as of May 6, 2014 and the changes for bug RH-26341.
     double c = cos(a);
     double s = sin(a);
-    if ( fabs(c) < ON_EPSILON || fabs(s) > 1.0-ON_EPSILON )
+
+
+    // This test turned out to be too crude.  The bug RH-26341
+    // is one example.  The issue is that the trig function with the
+    // largest derivative has more pecise sensitivity to changes in
+    // angle and in orger to get as precise an evaluation as possible,
+    // it is inportant to allow non-zero values of one trig function
+    // even when the other is being rounded to +1 or -1.
+    //
+    ////if ( fabs(c) < ON_EPSILON || fabs(s) > 1.0-ON_EPSILON )
+    ////{
+    ////  c = 0.0;
+    ////  s = s < 0.0 ? -1.0 : 1.0;
+    ////}
+    ////else if ( fabs(s) < ON_EPSILON || fabs(c) > 1.0-ON_EPSILON )
+    ////{
+    ////  s = 0.0;
+    ////  c = c < 0.0 ? -1.0 : 1.0;
+    ////}
+
+    if (fabs(c) <= cos_of_pi_over_2)
     {
       c = 0.0;
       s = s < 0.0 ? -1.0 : 1.0;
     }
-    else if ( fabs(s) < ON_EPSILON || fabs(c) > 1.0-ON_EPSILON )
+    else if (fabs(s) <= sin_of_pi)
     {
       s = 0.0;
       c = c < 0.0 ? -1.0 : 1.0;
@@ -513,9 +583,9 @@ ON_BOOL32 ON_ArcCurve::Evaluate( // returns false if unable to evaluate
   return rc;
 }
 
-ON_BOOL32 ON_ArcCurve::Trim( const ON_Interval& in )
+bool ON_ArcCurve::Trim( const ON_Interval& in )
 {
-  ON_BOOL32 rc = in.IsIncreasing();
+  bool rc = in.IsIncreasing();
   if (rc) 
   {
     double t0 = m_t.NormalizedParameterAt(in.m_t[0]);
@@ -570,7 +640,7 @@ bool ON_ArcCurve::Extend(
   return true;
 }
 
-ON_BOOL32 ON_ArcCurve::Split(
+bool ON_ArcCurve::Split(
     double t,
     ON_Curve*& left_side,
     ON_Curve*& right_side
@@ -627,7 +697,7 @@ ON_BOOL32 ON_ArcCurve::Split(
     right_arc->operator=(*this);
   }
 
-  ON_BOOL32 rc = false;
+  bool rc = false;
   if ( this != left_arc )
   {
     rc = left_arc->Trim( ON_Interval( arc_domain[0], t ) );
@@ -683,7 +753,7 @@ static double ArcDeFuzz( double d )
   return d;
 }
 
-static ON_BOOL32 NurbsCurveArc ( const ON_Arc& arc, int dim, ON_NurbsCurve& nurb )
+static bool NurbsCurveArc ( const ON_Arc& arc, int dim, ON_NurbsCurve& nurb )
 { 
   if ( !arc.IsValid() )
     return false;
@@ -809,7 +879,7 @@ static ON_BOOL32 NurbsCurveArc ( const ON_Arc& arc, int dim, ON_NurbsCurve& nurb
 int ON_Arc::GetNurbForm( ON_NurbsCurve& nurbscurve ) const
 
 {
-  ON_BOOL32 rc = NurbsCurveArc ( *this, 3, nurbscurve );
+  bool rc = NurbsCurveArc ( *this, 3, nurbscurve );
   return (rc) ? 2 : 0;
 }
 
@@ -823,7 +893,7 @@ bool ON_Arc::GetRadianFromNurbFormParameter(double NurbParameter, double* Radian
 
 	ON_NurbsCurve crv;
 	
-	if( !IsValid()|| RadianParameter==NULL) 
+	if( !IsValid()|| RadianParameter==nullptr) 
 		return false;
 
 	ON_Interval dom= Domain();
@@ -883,22 +953,13 @@ bool ON_Arc::GetRadianFromNurbFormParameter(double NurbParameter, double* Radian
 
 	*RadianParameter = theta;
 
-//#if defined(ON_DEBUG)
-//	double np2;
-//	ON_3dPoint AP = PointAt(*RadianParameter);
-//
-//	GetNurbFormParameterFromRadian( *RadianParameter, &np2);
-//	ON_ASSERT(fabs(np2-NurbParameter)<=100* ON_EPSILON*( fabs(NurbParameter) + AP.MaximumCoordinate()+1.0) ); 
-//#endif
-
 	return true;
-  
 }
 
 
 bool ON_Arc::GetNurbFormParameterFromRadian(double RadianParameter, double* NurbParameter ) const
 {
-	if(!IsValid() || NurbParameter==NULL) 
+	if(!IsValid() || NurbParameter==nullptr) 
 		return false;
 
   ON_Interval ADomain = DomainRadians();
@@ -1015,6 +1076,7 @@ bool ON_Arc::GetNurbFormParameterFromRadian(double RadianParameter, double* Nurb
 
 }
 
+
 int ON_ArcCurve::GetNurbForm( // returns 0: unable to create NURBS representation
                  //            with desired accuracy.
                  //         1: success - returned NURBS parameterization
@@ -1036,7 +1098,7 @@ int ON_ArcCurve::GetNurbForm( // returns 0: unable to create NURBS representatio
     ON_ArcCurve trimmed_arc(*this);
     if ( trimmed_arc.Trim(*subdomain) ) 
     {
-      rc = trimmed_arc.GetNurbForm( c, tolerance, NULL );
+      rc = trimmed_arc.GetNurbForm( c, tolerance, nullptr );
     }
   }
   else if ( m_t.IsIncreasing() && m_arc.IsValid() ) 
@@ -1068,7 +1130,7 @@ int ON_ArcCurve::HasNurbForm( // returns 0: unable to create NURBS representatio
   return 2;
 }
 
-ON_BOOL32 ON_ArcCurve::GetCurveParameterFromNurbFormParameter(
+bool ON_ArcCurve::GetCurveParameterFromNurbFormParameter(
       double nurbs_t,
       double* curve_t
       ) const
@@ -1077,20 +1139,20 @@ ON_BOOL32 ON_ArcCurve::GetCurveParameterFromNurbFormParameter(
 
   double arcnurb_t = m_arc.DomainRadians().ParameterAt(m_t.NormalizedParameterAt(nurbs_t));
 
-  ON_BOOL32 rc = m_arc.GetRadianFromNurbFormParameter(arcnurb_t,&radians);
+  bool rc = m_arc.GetRadianFromNurbFormParameter(arcnurb_t,&radians);
   *curve_t = m_t.ParameterAt( m_arc.DomainRadians().NormalizedParameterAt(radians) );
   
   return rc;
 }
 
-ON_BOOL32 ON_ArcCurve::GetNurbFormParameterFromCurveParameter(
+bool ON_ArcCurve::GetNurbFormParameterFromCurveParameter(
       double curve_t,
       double* nurbs_t
       ) const
 {
   double radians = m_arc.DomainRadians().ParameterAt(m_t.NormalizedParameterAt(curve_t));
   double arcnurb_t;
-  ON_BOOL32 rc = m_arc.GetNurbFormParameterFromRadian(radians,&arcnurb_t);
+  bool rc = m_arc.GetNurbFormParameterFromRadian(radians,&arcnurb_t);
   if (rc)        // Oct 29, 2009 - Dale Lear added condition to set *nurbs_t = curve_t
     *nurbs_t = m_t.ParameterAt(m_arc.DomainRadians().NormalizedParameterAt(arcnurb_t));
   else
@@ -1126,9 +1188,9 @@ Description:
 class ON__OBSOLETE__CircleCurve : public ON_ArcCurve
 {
 public: 
-  static const ON_ClassId m_ON_CircleCurve_class_id;
+  static const ON_ClassId m_ON__OBSOLETE__CircleCurve_class_rtti;
   const ON_ClassId* ClassId() const;
-  ON_BOOL32 Read(
+  bool Read(
          ON_BinaryArchive&  // open binary file
        );
 };
@@ -1142,24 +1204,26 @@ static ON_Object* CreateNewON_CircleCurve()
   return new ON__OBSOLETE__CircleCurve();
 } 
 
-const ON_ClassId ON__OBSOLETE__CircleCurve::m_ON_CircleCurve_class_id("ON__OBSOLETE__CircleCurve",
-                                                           "ON_ArcCurve",
-                                                           CreateNewON_CircleCurve,0,
-                                                           "CF33BE29-09B4-11d4-BFFB-0010830122F0");
+const ON_ClassId ON__OBSOLETE__CircleCurve::m_ON__OBSOLETE__CircleCurve_class_rtti(
+    "ON__OBSOLETE__CircleCurve",
+    "ON_ArcCurve",
+    CreateNewON_CircleCurve,
+    "CF33BE29-09B4-11d4-BFFB-0010830122F0"
+    );
 
 const ON_ClassId* ON__OBSOLETE__CircleCurve::ClassId() const 
 {
   // so write will save ON_ArcCurve uuid
-  return &ON_ArcCurve::m_ON_ArcCurve_class_id;
+  return &ON_CLASS_RTTI(ON_ArcCurve);
 }
 
-ON_BOOL32 ON__OBSOLETE__CircleCurve::Read(
+bool ON__OBSOLETE__CircleCurve::Read(
        ON_BinaryArchive& file // open binary file
      )
 {
   int major_version = 0;
   int minor_version = 0;
-  ON_BOOL32 rc = file.Read3dmChunkVersion(&major_version,&minor_version);
+  bool rc = file.Read3dmChunkVersion(&major_version,&minor_version);
   if (rc)
   {
     if (major_version==1) 

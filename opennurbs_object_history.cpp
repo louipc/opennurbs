@@ -16,6 +16,14 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
 class ON_Value
 {
 public:
@@ -1450,55 +1458,59 @@ ON_Value* ON_Value::CreateValue( int value_type )
 // ON_HistoryRecord implementation
 //
 
-ON_OBJECT_IMPLEMENT(ON_HistoryRecord,ON_Object,"ECD0FD2F-2088-49dc-9641-9CF7A28FFA6B");
+ON_OBJECT_IMPLEMENT(ON_HistoryRecord,ON_ModelComponent,"ECD0FD2F-2088-49dc-9641-9CF7A28FFA6B");
 
-ON_HistoryRecord::ON_HistoryRecord() 
-                 : m_antecedents(2),
-                   m_descendants(1)                   
-{
-  m_command_id    = ON_nil_uuid;
-  m_version       = 0;
-  m_record_type   = history_parameters;
-  m_record_id     = ON_nil_uuid;
-  m_bValuesSorted = true;
-}
+ON_HistoryRecord::ON_HistoryRecord() ON_NOEXCEPT
+  : ON_ModelComponent(ON_ModelComponent::Type::HistoryRecord)
+{}
 
 ON_HistoryRecord::~ON_HistoryRecord()
 {
-  int i, count = m_value.Count();
-  m_value.SetCount(0);
-  for ( i = 0; i < count; i++ )
-  {
-    ON_Value* v = m_value[i];
-    if ( v )
-      delete v;
-  }
+  Internal_Destroy();
 }
 
-void  ON_HistoryRecord::CopyHelper(const ON_HistoryRecord& src)
+ON_HistoryRecord::ON_HistoryRecord(const ON_HistoryRecord& src)
+  : ON_ModelComponent(ON_ModelComponent::Type::HistoryRecord,src)
+{
+  Internal_Copy(src);
+}
+
+ON_HistoryRecord& ON_HistoryRecord::operator=(const ON_HistoryRecord& src)
+{
+  if ( this != &src && false == this->IsSystemComponent() )
+  {
+    ON_ModelComponent::operator=(*this);
+    Internal_Destroy();
+    ON_Object::operator=(src);
+    Internal_Copy(src);
+  }
+  return *this;
+}
+
+void ON_HistoryRecord::Internal_Copy(const ON_HistoryRecord& src)
 {
   // input value of this->m_value[] is known to be empty
-  m_command_id   = src.m_command_id;
-  m_version      = src.m_version;
-  m_record_type  = src.m_record_type;
-  m_record_id    = src.m_record_id;
-  m_descendants  = src.m_descendants;
-  m_antecedents  = src.m_antecedents;
+  m_command_id = src.m_command_id;
+  m_version = src.m_version;
+  m_record_type = src.m_record_type;
+  m_descendants = src.m_descendants;
+  m_antecedents = src.m_antecedents;
   m_bValuesSorted = true;
+  m_bCopyOnReplaceObject = src.m_bCopyOnReplaceObject;
 
-  int i, count = src.m_value.Count();
+  const unsigned int count = src.m_value.UnsignedCount();
   m_value.SetCapacity(count);
   const ON_Value* prev_v = 0;
-  for ( i = 0; i < count; i++ )
+  for (unsigned int i = 0; i < count; i++)
   {
     const ON_Value* src_v = src.m_value[i];
-    if ( src_v )
+    if (src_v)
     {
       ON_Value* v = src_v->Duplicate();
-      if ( v )
+      if (v)
       {
         m_value.Append(v);
-        if ( m_bValuesSorted && prev_v && prev_v->m_value_id > v->m_value_id )
+        if (m_bValuesSorted && prev_v && prev_v->m_value_id > v->m_value_id)
           m_bValuesSorted = false;
         prev_v = v;
       }
@@ -1506,52 +1518,38 @@ void  ON_HistoryRecord::CopyHelper(const ON_HistoryRecord& src)
   }
 }
 
-ON_HistoryRecord::ON_HistoryRecord(const ON_HistoryRecord& src) : ON_Object(src)
-{
-  CopyHelper(src);
-}
-
-ON_HistoryRecord& ON_HistoryRecord::operator=(const ON_HistoryRecord& src)
-{
-  if ( this != &src )
-  {
-    Destroy();
-    ON_Object::operator =(src);
-    CopyHelper(src);
-  }
-  return *this;
-}
-
-ON_BOOL32 ON_HistoryRecord::IsValid( ON_TextLog* text_log ) const
+bool ON_HistoryRecord::IsValid( ON_TextLog* text_log ) const
 {
   return true;
 }
 
-void ON_HistoryRecord::Destroy()
+void ON_HistoryRecord::Internal_Destroy()
 {
-  int i, count = m_value.Count();
-  for ( i = 0; i < count; i++ )
+  const unsigned int count = m_value.UnsignedCount();
+  for ( unsigned int i = 0; i < count; i++ )
   {
     ON_Value* v = m_value[i];
-    m_value[i] = 0;
-    if (v)
+    if (nullptr != v)
+    {
+      m_value[i] = nullptr;
       delete v;
+    }
   }
-  m_value.SetCount(0);
-  m_record_id = ON_nil_uuid;
-  m_record_type = ON_HistoryRecord::history_parameters;
-  m_version = 0;
-  m_command_id = ON_nil_uuid;
-  m_antecedents.Empty();
-  m_descendants.Empty();
+  m_value.Empty();
 }
 
 ON_HistoryRecord::RECORD_TYPE ON_HistoryRecord::RecordType(int i)
 {
-  RECORD_TYPE rc = ( ON_HistoryRecord::feature_parameters == i )
-                 ? ON_HistoryRecord::feature_parameters
-                 : ON_HistoryRecord::history_parameters;
-  return rc;
+  switch (i)
+  {
+  case (int)ON_HistoryRecord::RECORD_TYPE::history_parameters:
+    return ON_HistoryRecord::RECORD_TYPE::history_parameters;
+
+  case (int)ON_HistoryRecord::RECORD_TYPE::feature_parameters:
+    return ON_HistoryRecord::RECORD_TYPE::feature_parameters;
+  }
+
+  return ON_HistoryRecord::RECORD_TYPE::history_parameters;
 }
 
 bool ON_HistoryRecord::SetBoolValue( int value_id, bool b)
@@ -2263,7 +2261,7 @@ int ON_HistoryRecord::ValueReport( ON_TextLog& text_log ) const
   vi_list.SetCount(count);
   vi_list.Zero();
 
-  m_value.Sort( ON::quick_sort, vi_list.Array(), CompareValueId );
+  m_value.Sort( ON::sort_algorithm::quick_sort, vi_list.Array(), CompareValueId );
 
   for ( i = 0; i < count; i++ )
   {
@@ -2282,6 +2280,8 @@ int ON_HistoryRecord::ValueReport( ON_TextLog& text_log ) const
 
 void ON_HistoryRecord::Dump( ON_TextLog& text_log ) const
 {
+  ON_ModelComponent::Dump(text_log);
+
   int i, count;
   ON_SimpleArray<ON_UUID> uuid_list;
 
@@ -2292,11 +2292,11 @@ void ON_HistoryRecord::Dump( ON_TextLog& text_log ) const
   text_log.Print("Version %d\n",m_version);
 
   text_log.Print("Record ID: ");
-  text_log.Print(m_record_id);
+  text_log.Print(Id());
   text_log.Print("\n");
 
   text_log.Print("Record type: %s\n",
-                 (m_record_type == ON_HistoryRecord::feature_parameters) 
+                 (m_record_type == ON_HistoryRecord::RECORD_TYPE::feature_parameters) 
                  ? "feature parameters" : "history parameters");
 
   // list antededents
@@ -2369,9 +2369,14 @@ void ON_HistoryRecord::DestroyValue( int value_id )
   }
 }
 
-ON_BOOL32 ON_HistoryRecord::Read( ON_BinaryArchive& archive )
+bool ON_HistoryRecord::Read(ON_BinaryArchive& archive)
 {
-  Destroy();
+  return Internal_ReadV5(archive);
+}
+
+bool ON_HistoryRecord::Internal_ReadV5( ON_BinaryArchive& archive )
+{
+  *this = ON_HistoryRecord::Empty;
 
   // put entire history record in a chunk
   int major_version = 0;
@@ -2385,8 +2390,10 @@ ON_BOOL32 ON_HistoryRecord::Read( ON_BinaryArchive& archive )
     rc = (1 == major_version);
     if (!rc) break;
 
-    rc = archive.ReadUuid(m_record_id);
+    ON_UUID record_id = ON_nil_uuid;
+    rc = archive.ReadUuid(record_id);
     if(!rc) break;
+    SetId(record_id);
 
     rc = archive.ReadInt(&m_version);
     if(!rc) break;
@@ -2407,6 +2414,7 @@ ON_BOOL32 ON_HistoryRecord::Read( ON_BinaryArchive& archive )
 
     // all values are in a chunk
     int mjvs=0,mnvs=0;
+    int value_id0 = 0;
     rc = archive.BeginRead3dmChunk(TCODE_ANONYMOUS_CHUNK,&mjvs,&mnvs);
     if (rc)
     {
@@ -2450,6 +2458,10 @@ ON_BOOL32 ON_HistoryRecord::Read( ON_BinaryArchive& archive )
               break;
             }
             m_value.Append(value);
+            if ( value->m_value_id <= value_id0 )
+              m_bValuesSorted = false;
+            else
+              value_id0 = value->m_value_id;
           }
 
           break;
@@ -2466,11 +2478,16 @@ ON_BOOL32 ON_HistoryRecord::Read( ON_BinaryArchive& archive )
     if ( rc && minor_version >= 1 )
     {
       // 1.1 fields added to opennurbs version 200603200
-      int rec_type = ON_HistoryRecord::history_parameters;
+      int rec_type = (int)ON_HistoryRecord::RECORD_TYPE::history_parameters;
       if (rc)
         rc = archive.ReadInt( &rec_type );
       if (rc )
         m_record_type = RecordType(rec_type);
+
+      if (rc && minor_version >= 2)
+      {
+        archive.ReadBool(&m_bCopyOnReplaceObject);
+      }
 
     }
 
@@ -2483,15 +2500,29 @@ ON_BOOL32 ON_HistoryRecord::Read( ON_BinaryArchive& archive )
   return rc;
 }
 
-ON_BOOL32 ON_HistoryRecord::Write( ON_BinaryArchive& archive ) const
+
+bool ON_HistoryRecord::Write(ON_BinaryArchive& archive) const
 {
-  bool rc = archive.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,1);
+  return Internal_WriteV5(archive);
+}
+
+bool ON_HistoryRecord::Internal_WriteV5( ON_BinaryArchive& archive ) const
+{
+  // 2015-06-01 Dale Lear
+  //   Save m_bCopyOnReplaceObject in the file in chunck version 1.2
+
+  const int minor_version 
+    = (archive.Archive3dmVersion() >= 60)
+    ? 2  // V6 after 2015-06-01 or later file
+    : 1; // V5 or earlier file
+
+  bool rc = archive.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,minor_version);
   if (!rc)
     return false;
 
   for(;;)
   {
-    rc = archive.WriteUuid(m_record_id);
+    rc = archive.WriteUuid(Id());
     if(!rc) break;
 
     rc = archive.WriteInt(m_version);
@@ -2554,7 +2585,15 @@ ON_BOOL32 ON_HistoryRecord::Write( ON_BinaryArchive& archive ) const
 
     // 1.1 fields added to opennurbs version 200603200
     if (rc)
-      rc = archive.WriteInt( m_record_type );
+    {
+      int i = (int)m_record_type;
+      rc = archive.WriteInt(i);
+    }
+
+    if (rc && minor_version >= 2)
+    {
+      rc = archive.WriteBool(m_bCopyOnReplaceObject);
+    }
 
     break;
   }
@@ -2562,11 +2601,6 @@ ON_BOOL32 ON_HistoryRecord::Write( ON_BinaryArchive& archive ) const
   if (!archive.EndWrite3dmChunk())
     rc = false;
   return rc;
-}
-
-ON_UUID ON_HistoryRecord::ModelObjectId() const
-{
-  return m_record_id;
 }
 
 void ON_HistoryRecord::RemapObjectIds( const ON_SimpleArray<ON_UuidPair>& id_remap )
@@ -2591,6 +2625,17 @@ void ON_HistoryRecord::RemapObjectIds( const ON_SimpleArray<ON_UuidPair>& id_rem
   }
 }
 
+bool ON_HistoryRecord::CopyOnReplaceObject() const
+{
+  return m_bCopyOnReplaceObject;
+}
+void ON_HistoryRecord::SetCopyOnReplaceObject(
+  bool bCopyOnReplaceObject
+  )
+{
+  m_bCopyOnReplaceObject = (bCopyOnReplaceObject) ? true : false;
+}
+
 
 /////////////////////////////////////////////////////////////////////////////////
 //
@@ -2609,9 +2654,9 @@ void ON_CurveProxyHistory::Destroy()
 {
   m_curve_ref.Destroy();
   m_bReversed = false;
-  m_full_real_curve_domain.Destroy();
-  m_sub_real_curve_domain.Destroy();
-  m_proxy_curve_domain.Destroy();
+  m_full_real_curve_domain = ON_Interval::EmptyInterval;
+  m_sub_real_curve_domain = ON_Interval::EmptyInterval;
+  m_proxy_curve_domain = ON_Interval::EmptyInterval;
 }
 
 

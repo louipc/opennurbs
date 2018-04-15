@@ -43,19 +43,22 @@ class ON_CLASS ON_3dmObjectAttributes : public ON_Object
   ON_OBJECT_DECLARE(ON_3dmObjectAttributes);
 
 public:
+  static const ON_3dmObjectAttributes Unset;
+  static const ON_3dmObjectAttributes DefaultAttributes;
+
+public:
   // ON_Object virtual interface.  See ON_Object
   // for details.
 
+  bool IsValid( class ON_TextLog* text_log = nullptr ) const override;
   // virtual
-  ON_BOOL32 IsValid( ON_TextLog* text_log = NULL ) const;
+  void Dump( ON_TextLog& ) const override;
   // virtual
-  void Dump( ON_TextLog& ) const;
+  unsigned int SizeOf() const override;
   // virtual
-  unsigned int SizeOf() const;
+  bool Write(ON_BinaryArchive&) const override;
   // virtual
-  ON_BOOL32 Write(ON_BinaryArchive&) const;
-  // virtual
-  ON_BOOL32 Read(ON_BinaryArchive&);
+  bool Read(ON_BinaryArchive&) override;
 
   /*
   Returns:
@@ -79,6 +82,13 @@ public:
 
   // Initializes all attributes to the default values.
   void Default();
+
+
+  bool UpdateReferencedComponents(
+    const class ON_ComponentManifest& source_manifest,
+    const class ON_ComponentManifest& destination_manifest,
+    const class ON_ManifestMap& manifest_map
+    ) override;
 
   // Interface ////////////////////////////////////////////////////////
 
@@ -146,16 +156,6 @@ public:
   ON::plot_weight_source PlotWeightSource() const;
   void SetPlotWeightSource( ON::plot_weight_source );
 
-
-  // OpenNURBS objects can be displayed in one of three ways: wireframe,
-  // shaded, or render preview.  If the display mode is ON::default_display,
-  // then the display mode of the viewport detrmines how the object
-  // is displayed.  If the display mode is ON::wireframe_display,
-  // ON::shaded_display, or ON::renderpreview_display, then the object is
-  // forced to display in that mode.
-  ON::display_mode DisplayMode() const;
-  void SetDisplayMode( ON::display_mode  ); // See DisplayMode().
-
   /*
   Description:
     If "this" has attributes (color, plot weight, ...) with 
@@ -187,29 +187,39 @@ public:
             0x20: linetype
             0x40: display order
   */
-  ON_DEPRECATED unsigned int ApplyParentalControl( 
-         const ON_3dmObjectAttributes& parent_attributes,
-         unsigned int control_limits = 0xFFFFFFFF
-         );
+  //ON_DEPRECATED unsigned int ApplyParentalControl(
+  //       const ON_3dmObjectAttributes& parent_attributes,
+  //       unsigned int control_limits = 0xFFFFFFFF
+  //       );
 
-  unsigned int ApplyParentalControl( 
+  unsigned int ApplyParentalControl(
          const ON_3dmObjectAttributes& parent_attributes,
          const ON_Layer& parent_layer,
          unsigned int control_limits = 0xFFFFFFFF
          );
 
   // Every OpenNURBS object has a UUID (universally unique identifier).  The
-  // default value is NULL.  When an OpenNURBS object is added to a model, the
-  // value is checked.  If the value is NULL, a new UUID is created.  If the
-  // value is not NULL but it is already used by another object in the model,
-  // a new UUID is created.  If the value is not NULL and it is not used by 
+  // default value is nullptr.  When an OpenNURBS object is added to a model, the
+  // value is checked.  If the value is nullptr, a new UUID is created.  If the
+  // value is not nullptr but it is already used by another object in the model,
+  // a new UUID is created.  If the value is not nullptr and it is not used by 
   // another object in the model, then that value persists. When an object
   // is updated, by a move for example, the value of m_uuid persists.
   ON_UUID m_uuid;
 
+  // The m_name member is public to avoid breaking the SDK.
+  // Use SetName() and Name() for proper validation.
   // OpenNURBS object have optional text names.  More than one object in
   // a model can have the same name and some objects may have no name.
+  // ON_ModelComponent::IsValidComponentName(m_name) should be true.
   ON_wString m_name;
+
+  bool SetName(
+    const wchar_t* name,
+    bool bFixInvalidName
+  );
+
+  const ON_wString Name() const;
 
   // OpenNURBS objects may have an URL.  There are no restrictions on what
   // value this URL may have.  As an example, if the object came from a
@@ -386,10 +396,15 @@ private:
   unsigned char m_linetype_source;    // ON::object_linetype_source values
   
   unsigned char m_reserved_0;
+
+  ON_Xform m_reserved_future_frame = ON_Xform::Nan;
   
   ON_SimpleArray<int> m_group; // array of zero based group indices
-public:
 
+private:
+  ON__UINT_PTR m_reserved_ptr = 0;
+
+public:
   // group interface
 
   // returns number of groups object belongs to
@@ -397,7 +412,7 @@ public:
 
   // Returns and array an array of GroupCount() zero based 
   // group indices.  If GroupCount() is zero, then GroupList()
-  // returns NULL.
+  // returns nullptr.
   const int* GroupList() const;
 
   // Returns GroupCount() and puts a list of zero based group indices 
@@ -409,18 +424,18 @@ public:
   int TopGroup() const;
 
   // Returns true if object is in group with the specified index
-  ON_BOOL32 IsInGroup(
+  bool IsInGroup(
     int // zero based group index
     ) const;
 
   // Returns true if the object is in any of the groups in the list
-  ON_BOOL32 IsInGroups(
+  bool IsInGroups(
     int,       // group_list_count
     const int* // group_list[] array
     ) const;
 
   // Returns true if object is in any of the groups in the list
-  ON_BOOL32 IsInGroups(
+  bool IsInGroups(
     const ON_SimpleArray<int>& // group_list[] array
     ) const;
 
@@ -494,7 +509,7 @@ public:
   */
   bool FindDisplayMaterialRef(
       const ON_DisplayMaterialRef& search_material,
-      ON_DisplayMaterialRef* found_material = NULL
+      ON_DisplayMaterialRef* found_material = nullptr
     ) const;
 
   /*
@@ -508,7 +523,7 @@ public:
   */
   bool FindDisplayMaterialId( 
         const ON_UUID& viewport_id, 
-        ON_UUID* display_material_id = NULL
+        ON_UUID* display_material_id = nullptr
         ) const;
      
   /*
@@ -566,8 +581,10 @@ public:
   ON_SimpleArray<ON_DisplayMaterialRef> m_dmref;
 
 private:
-  bool WriteV5Helper( ON_BinaryArchive& file ) const;
-  bool ReadV5Helper( ON_BinaryArchive& file );
+  bool Internal_WriteV5( ON_BinaryArchive& archive ) const;
+  bool Internal_ReadV5( ON_BinaryArchive& archive );
 };
 
 #endif
+
+// Brian G adding another comment on Tim's machine.

@@ -519,8 +519,8 @@ local void putShortMSB (s, b)
     deflate_state *s;
     uInt b;
 {
-    put_byte(s, (Byte)(b >> 8));
-    put_byte(s, (Byte)(b & 0xff));
+    put_byte(s, (b >> 8));
+    put_byte(s, (b & 0xff));
 }
 
 /* =========================================================================
@@ -600,10 +600,10 @@ int ZEXPORT deflate (strm, flush)
                             (s->gzhead->name == Z_NULL ? 0 : 8) +
                             (s->gzhead->comment == Z_NULL ? 0 : 16)
                         );
-                put_byte(s, (Byte)(s->gzhead->time & 0xff));
-                put_byte(s, (Byte)((s->gzhead->time >> 8) & 0xff));
-                put_byte(s, (Byte)((s->gzhead->time >> 16) & 0xff));
-                put_byte(s, (Byte)((s->gzhead->time >> 24) & 0xff));
+                put_byte(s, (s->gzhead->time & 0xff));
+                put_byte(s, ((s->gzhead->time >> 8) & 0xff));
+                put_byte(s, ((s->gzhead->time >> 16) & 0xff));
+                put_byte(s, ((s->gzhead->time >> 24) & 0xff));
                 put_byte(s, s->level == 9 ? 2 :
                             (s->strategy >= Z_HUFFMAN_ONLY || s->level < 2 ?
                              4 : 0));
@@ -742,8 +742,8 @@ int ZEXPORT deflate (strm, flush)
             if (s->pending + 2 > s->pending_buf_size)
                 flush_pending(strm);
             if (s->pending + 2 <= s->pending_buf_size) {
-                put_byte(s, (Byte)(strm->adler & 0xff));
-                put_byte(s, (Byte)((strm->adler >> 8) & 0xff));
+                put_byte(s, (strm->adler & 0xff));
+                put_byte(s, ((strm->adler >> 8) & 0xff));
                 strm->adler = crc32(0L, Z_NULL, 0);
                 s->status = BUSY_STATE;
             }
@@ -832,14 +832,14 @@ int ZEXPORT deflate (strm, flush)
     /* Write the trailer */
 #ifdef GZIP
     if (s->wrap == 2) {
-        put_byte(s, (Byte)(strm->adler & 0xff));
-        put_byte(s, (Byte)((strm->adler >> 8) & 0xff));
-        put_byte(s, (Byte)((strm->adler >> 16) & 0xff));
-        put_byte(s, (Byte)((strm->adler >> 24) & 0xff));
-        put_byte(s, (Byte)(strm->total_in & 0xff));
-        put_byte(s, (Byte)((strm->total_in >> 8) & 0xff));
-        put_byte(s, (Byte)((strm->total_in >> 16) & 0xff));
-        put_byte(s, (Byte)((strm->total_in >> 24) & 0xff));
+        put_byte(s, (strm->adler & 0xff));
+        put_byte(s, ((strm->adler >> 8) & 0xff));
+        put_byte(s, ((strm->adler >> 16) & 0xff));
+        put_byte(s, ((strm->adler >> 24) & 0xff));
+        put_byte(s, (strm->total_in & 0xff));
+        put_byte(s, ((strm->total_in >> 8) & 0xff));
+        put_byte(s, ((strm->total_in >> 16) & 0xff));
+        put_byte(s, ((strm->total_in >> 24) & 0xff));
     }
     else
 #endif

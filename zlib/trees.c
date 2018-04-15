@@ -191,8 +191,8 @@ local void gen_trees_header OF((void));
  * IN assertion: there is enough room in pendingBuf.
  */
 #define put_short(s, w) { \
-    put_byte(s, (uch)((w) & 0xff)); \
-    put_byte(s, (uch)((ush)(w) >> 8)); \
+    put_byte(s, ((w) & 0xff)); \
+    put_byte(s, ((ush)(w) >> 8)); \
 }
 
 /* ===========================================================================
@@ -614,7 +614,7 @@ local void gen_codes (tree, max_code, bl_count)
         int len = tree[n].Len;
         if (len == 0) continue;
         /* Now reverse the bits */
-        tree[n].Code = bi_reverse(next_code[len]++, len);
+        tree[n].Code = (ush)bi_reverse(next_code[len]++, len);
 
         Tracecv(tree != static_ltree, (stderr,"\nn %3d %c l %2d c %4x (%x) ",
              n, (isgraph(n) ? n : ' '), len, tree[n].Code, next_code[len]-1));
@@ -738,7 +738,7 @@ local void scan_tree (s, tree, max_code)
         if (++count < max_count && curlen == nextlen) {
             continue;
         } else if (count < min_count) {
-            s->bl_tree[curlen].Freq += count;
+            s->bl_tree[curlen].Freq += ((ush)count);
         } else if (curlen != 0) {
             if (curlen != prevlen) s->bl_tree[curlen].Freq++;
             s->bl_tree[REP_3_6].Freq++;
@@ -1179,7 +1179,7 @@ local void bi_flush(s)
         s->bi_buf = 0;
         s->bi_valid = 0;
     } else if (s->bi_valid >= 8) {
-        put_byte(s, (Byte)s->bi_buf);
+        put_byte(s, s->bi_buf);
         s->bi_buf >>= 8;
         s->bi_valid -= 8;
     }
@@ -1194,7 +1194,7 @@ local void bi_windup(s)
     if (s->bi_valid > 8) {
         put_short(s, s->bi_buf);
     } else if (s->bi_valid > 0) {
-        put_byte(s, (Byte)s->bi_buf);
+        put_byte(s, s->bi_buf);
     }
     s->bi_buf = 0;
     s->bi_valid = 0;

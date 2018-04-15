@@ -16,6 +16,14 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
 ON_Sum::ON_Sum()
 {
   Begin(0.0);
@@ -60,7 +68,7 @@ double ON_Sum::SortAndSum( int count, double* a )
   {
     if ( count >= 2 )
     {
-      ON_SortDoubleArray( ON::quick_sort, a, count );
+      ON_SortDoubleArray( ON::sort_algorithm::quick_sort, a, count );
       //double a0 = fabs(a[0]);
       //double a1 = fabs(a[count-1]);
       m_sum_err += ON_EPSILON*( fabs(a[count-1]) + count*fabs(a[0]) );

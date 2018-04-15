@@ -13,7 +13,16 @@
 //
 ////////////////////////////////////////////////////////////////
 */
+
 #include "opennurbs.h"
+
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
 
 ON__UINT16 ON_CRC16( ON__UINT16 current_remainder, size_t count, const void* p )
 {
@@ -222,19 +231,26 @@ ON__UINT32 ON_CRC32( ON__UINT32 current_remainder, size_t count, const void* p )
     // problems that it is fixing.
     // current_remainder ^= 0xffffffffL; 
     current_remainder ^= 0xffffffff;
-    while (count >= 8)
-    {
-      // while() loop unrolled for speed
-      current_remainder = ON_CRC32_ZLIB_TABLE[((int)current_remainder ^ (*b++)) & 0xff] ^ (current_remainder >> 8);
-      current_remainder = ON_CRC32_ZLIB_TABLE[((int)current_remainder ^ (*b++)) & 0xff] ^ (current_remainder >> 8);
-      current_remainder = ON_CRC32_ZLIB_TABLE[((int)current_remainder ^ (*b++)) & 0xff] ^ (current_remainder >> 8);
-      current_remainder = ON_CRC32_ZLIB_TABLE[((int)current_remainder ^ (*b++)) & 0xff] ^ (current_remainder >> 8);
-      current_remainder = ON_CRC32_ZLIB_TABLE[((int)current_remainder ^ (*b++)) & 0xff] ^ (current_remainder >> 8);
-      current_remainder = ON_CRC32_ZLIB_TABLE[((int)current_remainder ^ (*b++)) & 0xff] ^ (current_remainder >> 8);
-      current_remainder = ON_CRC32_ZLIB_TABLE[((int)current_remainder ^ (*b++)) & 0xff] ^ (current_remainder >> 8);
-      current_remainder = ON_CRC32_ZLIB_TABLE[((int)current_remainder ^ (*b++)) & 0xff] ^ (current_remainder >> 8);
-      count -= 8;
-    }
+
+    ////    // The loop unwrapping was done almost 20 years ago.  We need to run tests to
+    ////    // see if it does anything with current compilers and computers.
+    ////#if defined (ON_RUNTIME_WIN)
+    ////    // This slows down the Mac implementation by 50%
+    ////    while (count >= 8)
+    ////    {
+    ////      // while() loop unrolled for speed
+    ////      current_remainder = ON_CRC32_ZLIB_TABLE[((int)current_remainder ^ (*b++)) & 0xff] ^ (current_remainder >> 8);
+    ////      current_remainder = ON_CRC32_ZLIB_TABLE[((int)current_remainder ^ (*b++)) & 0xff] ^ (current_remainder >> 8);
+    ////      current_remainder = ON_CRC32_ZLIB_TABLE[((int)current_remainder ^ (*b++)) & 0xff] ^ (current_remainder >> 8);
+    ////      current_remainder = ON_CRC32_ZLIB_TABLE[((int)current_remainder ^ (*b++)) & 0xff] ^ (current_remainder >> 8);
+    ////      current_remainder = ON_CRC32_ZLIB_TABLE[((int)current_remainder ^ (*b++)) & 0xff] ^ (current_remainder >> 8);
+    ////      current_remainder = ON_CRC32_ZLIB_TABLE[((int)current_remainder ^ (*b++)) & 0xff] ^ (current_remainder >> 8);
+    ////      current_remainder = ON_CRC32_ZLIB_TABLE[((int)current_remainder ^ (*b++)) & 0xff] ^ (current_remainder >> 8);
+    ////      current_remainder = ON_CRC32_ZLIB_TABLE[((int)current_remainder ^ (*b++)) & 0xff] ^ (current_remainder >> 8);
+    ////      count -= 8;
+    ////    }
+    ////#endif
+
     while(count--) 
     {
       current_remainder = ON_CRC32_ZLIB_TABLE[((int)current_remainder ^ (*b++)) & 0xff] ^ (current_remainder >> 8);

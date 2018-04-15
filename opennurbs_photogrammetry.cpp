@@ -16,6 +16,14 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
 ON_AerialPhotoImage::ON_AerialPhotoImage()
 : m_id(ON_nil_uuid)
 , m_image_width_pixels(0)
@@ -183,7 +191,7 @@ void ON_AerialPhotoImage::GetImageFileName(
   ) const
 {
   // copy array
-  const wchar_t* s = m_image_file_name;
+  const wchar_t* s = static_cast< const wchar_t* >(m_image_file_name);
   image_file_name = s;
 }
 
@@ -210,7 +218,7 @@ void ON_AerialPhotoImageFrustum::Unset()
   m_corners[1] = ON_2dPoint::UnsetPoint;
   m_corners[2] = ON_2dPoint::UnsetPoint;
   m_corners[3] = ON_2dPoint::UnsetPoint;
-  m_unit_system.Unset();
+  m_unit_system = ON_UnitSystem::None;
 }
 
 bool ON_AerialPhotoImageFrustum::HeightIsSet() const
@@ -290,15 +298,14 @@ bool ON_AerialPhotoCameraPosition::UnitSystemIsSet() const
   return m_unit_system.IsSet();
 }
 
-bool ON_AerialPhotoCameraPosition::SetUnitSystem( ON::unit_system unit_system )
+bool ON_AerialPhotoCameraPosition::SetUnitSystem( ON::LengthUnitSystem unit_system )
 {
-  if (    ON::no_unit_system != unit_system
-       && ON::custom_unit_system != unit_system
-       && unit_system == ON::UnitSystem(unit_system)
+  if (    ON::LengthUnitSystem::None != unit_system
+       && ON::LengthUnitSystem::CustomUnits != unit_system
+       && unit_system == ON::LengthUnitSystemFromUnsigned(static_cast<unsigned int>(unit_system))
      )
   {
-    m_unit_system.Default();
-    m_unit_system.m_unit_system = unit_system;
+    m_unit_system = ON_UnitSystem(unit_system);
   }
   else
     Unset();
@@ -329,7 +336,7 @@ bool ON_AerialPhotoCameraPosition::GetUnitSystem( ON_UnitSystem& unit_system ) c
 
 void ON_AerialPhotoCameraPosition::UnsetUnitSystem()
 {
-  m_unit_system.Unset();
+  m_unit_system = ON_UnitSystem(ON::LengthUnitSystem::None);
 }
 
 bool ON_AerialPhotoCameraPosition::LocationIsSet() const
@@ -389,7 +396,7 @@ void ON_AerialPhotoCameraPosition::UnsetOrientation()
   m_orientation_angles_radians.Set(ON_UNSET_VALUE,ON_UNSET_VALUE,ON_UNSET_VALUE);
   m_orientation_angles_degrees.Set(ON_UNSET_VALUE,ON_UNSET_VALUE,ON_UNSET_VALUE);
 
-  m_orientation_rotation.Zero();
+  m_orientation_rotation = ON_Xform::Zero4x4;
 
   m_orientation_right = ON_3dVector::ZeroVector;
   m_orientation_up = ON_3dVector::ZeroVector;
@@ -738,7 +745,7 @@ bool ON_AerialPhotoImage::GetViewProjection(
   ON_Viewport& viewport
   ) const
 {
-  viewport.Initialize();
+  viewport = ON_Viewport::DefaultTopViewYUp;
 
   if ( !this->ImageSizeIsSet() )
     return false;

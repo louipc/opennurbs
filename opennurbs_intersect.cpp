@@ -16,6 +16,13 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
 
 bool ON_IntersectLineLine(
           const ON_Line& lineA, 
@@ -559,7 +566,7 @@ int Intersect2dLineCircle(ON_2dPoint line_from, // 2d line from point
   // 2 = 2 intersections returned
   // 3 = 1 closest point returned
   int xcnt = 0;
-  ON_BOOL32 bRev;
+  bool bRev;
   double t, d, c, s, x, y, dx, dy;
   ON_2dVector v;
 
@@ -686,7 +693,7 @@ int ON_Intersect( // returns 0 = no intersections,
                   ON_3dPoint& A, ON_3dPoint& B // intersection point(s) returned here
                   )
 {
-  ON_BOOL32 bFiniteCyl = true;
+  bool bFiniteCyl = true;
   int rc = 0;
   const double cylinder_radius = fabs(cylinder.circle.radius);
   double tol = cylinder_radius*ON_SQRT_EPSILON;
@@ -702,7 +709,7 @@ int ON_Intersect( // returns 0 = no intersections,
   }
 
 
-  //ON_BOOL32 bIsParallel = false;
+  //bool bIsParallel = false;
   double line_t, axis_t;
   if ( !ON_Intersect(line,axis,&line_t,&axis_t) ) {
     axis.ClosestPointTo( cylinder.circle.plane.origin, &axis_t );
@@ -822,7 +829,7 @@ int ON_Intersect(
   }
   else
   {
-    xcnt = Intersect2dLineCircle( L.from, L.to, r, tol, line_t0, line_t1 );
+    xcnt = Intersect2dLineCircle( ON_2dPoint(L.from), ON_2dPoint(L.to), r, tol, line_t0, line_t1 );
     if ( xcnt == 3 )
       xcnt = 1;
   }
@@ -939,7 +946,7 @@ int ON_Intersect(
   ON_Circle c = arc;
   ON_3dPoint p[2];
   double t[2], a[2], s;
-  ON_BOOL32 b[2] = {false,false};
+  bool b[2] = {false,false};
   int i, xcnt = ON_Intersect( line, c, &t[0], p[0], &t[1], p[1] );
   if ( xcnt > 0 )
   {

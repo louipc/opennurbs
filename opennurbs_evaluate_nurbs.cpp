@@ -16,6 +16,14 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
 double ON_EvaluateBernsteinBasis(int degree, int i, double t)
 /*****************************************************************************
 Evaluate Bernstein basis polynomial
@@ -303,7 +311,7 @@ RELATED FUNCTIONS:
 
 bool ON_IncreaseBezierDegree(
         int     dim, 
-        ON_BOOL32    is_rat, 
+        bool    is_rat, 
         int     order, 
         int     cv_stride,
         double* cv 
@@ -444,7 +452,7 @@ bool ON_RemoveBezierSingAt1(
 
 bool ON_EvaluateBezier(
                 int dim,              // dimension
-                ON_BOOL32 is_rat,          // true if NURBS is rational
+                bool is_rat,          // true if NURBS is rational
                 int order,            // order
                 int cv_stride,        // cv_stride >= (is_rat)?dim+1:dim
                 const double* cv,     // cv[order*cv_stride] array
@@ -478,7 +486,7 @@ INPUT:
   der_count
     (>= 0)  number of derivatives to evaluate
   answer
-     answer[i] is NULL or points to an array of dim doubles.
+     answer[i] is nullptr or points to an array of dim doubles.
 OUTPUT:
   ON_EvBezier()
     0: successful
@@ -509,10 +517,10 @@ RELATED FUNCTIONS:
 {
   unsigned char stack_buffer[4*64*sizeof(double)];
   double delta_t;
-  register double alpha0;
-  register double alpha1;
-  register double *cv0, *cv1;
-  register int i, j, k; 
+  double alpha0;
+  double alpha1;
+  double *cv0, *cv1;
+  int i, j, k; 
   double* CV, *tmp;
   void* free_me = 0;
   const int degree = order-1;
@@ -523,11 +531,20 @@ RELATED FUNCTIONS:
 
   memset( v, 0, v_stride*(der_count+1)*sizeof(*v) );
 
-#if defined( ON_DEBUG)
-  if (t0==t1) {
+
+  if (!(t0!=t1)) 
+  {
+    // Fix http://mcneel.myjetbrains.com/youtrack/issue/RH-28304
+    //  This test for valid domain was being done only in debug builds
+    //  and not in release builds.  The #if defined(ON_DEBUG) projection
+    //  has been here since 2005 when we switched to svn.
+    //  I can't determine when or why it got added because it happened
+    //  when we used SourceSafe or earlier version control.
+    //  The bug was a crash in release builds, which skipped this test.
+    //  I'm enabling the test in all builds and addeing a call to ON_ERROR().
+    ON_ERROR("Invalid domain");
     return false;
   }
-#endif
 
   i = order*cvdim;
   j = 0;
@@ -655,81 +672,12 @@ RELATED FUNCTIONS:
   return true;
 }
 
-
-/*****************************************************************************
-Evaluate B-spline basis functions
- 
-INPUT:
-  order >= 1 
-    d = degree = order - 1
-  knot[]
-    array of length 2*d.  
-    Generally, knot[0] <= ... <= knot[d-1] < knot[d] <= ... <= knot[2*d-1].
-  N[]
-    array of length order*order
-
-OUTPUT:
-  If "N" were declared as double N[order][order], then
-
-                 k
-    N[d-k][i] = N (t) = value of i-th degree k basis function.
-                 i
-  where 0 <= k <= d and k <= i <= d.
-
-	In particular, N[0], ..., N[d] - values of degree d basis functions.
-  The "lower left" triangle is not initialized.
-
-  Actually, the above is true when knot[d-1] <= t < knot[d].  Otherwise, the
-  value returned is the value of the polynomial that agrees with N_i^k on the
-  half open domain [ knot[d-1], knot[d] )
-
-COMMENTS:
-  If a degree d NURBS has n control points, then the TL knot vector has
-  length d+n-1. ( Most literature, including DeBoor and The NURBS Book,
-  duplicate the TL start and end knot and have knot vectors of length
-  d+n+1. )
-  
-  Assume C is a B-spline of degree d (order=d+1) with n control vertices
-  (n>=d+1) and knot[] is its knot vector.  Then
-
-    C(t) = Sum( 0 <= i < n, N_{i}(t) * C_{i} )
-
-  where N_{i} are the degree d b-spline basis functions and C_{i} are the control
-  vertices.  The knot[] array length d+n-1 and satisfies
-
-    knot[0] <= ... <= knot[d-1] < knot[d]
-    knot[n-2] < knot[n-1] <= ... <= knot[n+d-2]
-    knot[i] < knot[d+i] for 0 <= i < n-1
-    knot[i] <= knot[i+1] for 0 <= i < n+d-2
-
-  The domain of C is [ knot[d-1], knot[n-1] ].
-
-  The support of N_{i} is [ knot[i-1], knot[i+d] ).
-
-  If d-1 <= k < n-1 and knot[k] <= t < knot[k+1], then 
-  N_{i}(t) = 0 if i <= k-d
-           = 0 if i >= k+2
-           = B[i-k+d-1] if k-d+1 <= i <= k+1, where B[] is computed by the call
-             TL_EvNurbBasis( d+1, knot+k-d+1, t, B );
-
-  If 0 <= j < n-d, 0 <= m <= d, knot[j+d-1] <= t < knot[j+d], and B[] is 
-  computed by the call
-
-    TL_EvNurbBasis( d+1, knot+j, t, B ),
-
-  then 
-
-    N_{j+m}(t) = B[m].
-
-EXAMPLE:
-REFERENCE:
-  The NURBS book
-RELATED FUNCTIONS:
-  TL_EvNurbBasis
-  TL_EvNurbBasisDer
-*****************************************************************************/
-bool ON_EvaluateNurbsBasis( int order, const double* knot, 
-                                       double t, double* N )
+bool ON_EvaluateNurbsBasis(
+  int order, 
+  const double* knot,
+  double t,
+  double* N 
+  )
 {
   double a0, a1, x, y;
   const double *k0;
@@ -815,33 +763,13 @@ bool ON_EvaluateNurbsBasis( int order, const double* knot,
 }
 
 
-bool ON_EvaluateNurbsBasisDerivatives( int order, const double* knot, 
-                       int der_count, double* N )
+bool ON_EvaluateNurbsBasisDerivatives(
+  int order,
+  const double* knot, 
+  int der_count,
+  double* N 
+)
 {
-	/* INPUT:
-	 *   Results of the call
-	 *      TL_EvNurbBasis( order, knot, t, N );  (initializes N[] )
-	 *   are sent to
-	 *      TL_EvNurbBasisDer( order, knot, der_count, N ),
-	 *   where 1 <= der_count < order
-	 *
-	 * OUTPUT:
-   *  If "N" were declared as double N[order][order], then
-	 *
-   *                                    d
-   *    N[d-k][i] = k-th derivative of N (t)
-   *                                    i
-   *
-	 *  where 0 <= k <= d and 0 <= i <= d.
-	 *
-	 * In particular, 
-	 *   N[0], ..., N[d] - values of degree d basis functions.
-	 *   N[order], ..., N[order_d] - values of first derivative.
-	 *
-   * Actually, the above is true when knot[d-1] <= t < knot[d].  Otherwise, the
-   * values returned are the values of the polynomials that agree with N_i^k on the
-   * half open domain [ knot[d-1], knot[d] )
-	 */
 	double dN, c;
 	const double *k0, *k1;
 	double *a0, *a1, *ptr, **dk;
@@ -1086,7 +1014,7 @@ bool ON_EvaluateNurbsRationalSpan(
 
 bool ON_EvaluateNurbsSpan( 
                   int dim,             // dimension
-                  ON_BOOL32 is_rat,         // true if NURBS is rational
+                  bool is_rat,         // true if NURBS is rational
                   int order,           // order
                   const double* knot,  // knot[] array of (2*order-2) doubles
                   int cv_stride,       // cv_stride >= (is_rat)?dim+1:dim
@@ -1120,7 +1048,7 @@ bool ON_EvaluateNurbsSpan(
 
 bool ON_EvaluateNurbsSurfaceSpan(
         int dim,
-        ON_BOOL32 is_rat,
+        bool is_rat,
         int order0, int order1,
         const double* knot0,
         const double* knot1,
@@ -1599,7 +1527,7 @@ bool ON_EvaluateNurbsBlossom(int cvdim,
   int degree = order-1;
   double workspace[32];
   double* space = workspace;
-  double* free_space = NULL;
+  double* free_space = nullptr;
   if (order > 32){
     free_space = (double*)onmalloc(order*sizeof(double));
     space = free_space;

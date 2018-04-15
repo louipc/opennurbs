@@ -39,7 +39,7 @@ public:
   //   order - [in] (>=2) order = degree+1
   ON_PolynomialCurve(
     int dim,
-    ON_BOOL32 bIsRational,
+    bool bIsRational,
     int order
     );
 
@@ -59,9 +59,9 @@ public:
   //   dim - [in] dimension of the curve
   //   bIsRational - [in] true if rational
   //   order - [in] (>=2) order = degree+1
-  ON_BOOL32 Create(
+  bool Create(
     int dim,
-    ON_BOOL32 bIsRational,
+    bool bIsRational,
     int order
     );
 
@@ -82,7 +82,7 @@ public:
   //       etc.
   // Returns:
   //   false if unable to evaluate.
-  ON_BOOL32 Evaluate(
+  bool Evaluate(
          double t,
          int der_count,
          int v_stride,
@@ -111,7 +111,7 @@ public:
   ON_PolynomialSurface();
   ON_PolynomialSurface(
     int,  // dim,
-    ON_BOOL32, // true if rational
+    bool, // true if rational
     int,  // "u" order
     int   // "v" order
     );
@@ -121,15 +121,15 @@ public:
   ON_PolynomialSurface& operator=(const ON_PolynomialSurface&);
   ON_PolynomialSurface& operator=(const ON_BezierSurface&);
 
-  ON_BOOL32 Create(
+  bool Create(
     int,  // dim,
-    ON_BOOL32, // true if rational
+    bool, // true if rational
     int,  // "u" order
     int   // "v" order
     );
   void Destroy();
 
-  ON_BOOL32 Evaluate(          // returns false if unable to evaluate
+  bool Evaluate(          // returns false if unable to evaluate
          double s, 
          double t,        // evaluation parameter
          int der_count,   // number of derivatives (>=0)
@@ -159,7 +159,7 @@ public:
   //   order - [in] (>=2) order (=degree+1) of bezier curve
   ON_BezierCurve(
     int dim,
-    ON_BOOL32 bIsRational,
+    bool bIsRational,
     int order
     );
 
@@ -195,7 +195,7 @@ public:
   //   true if successful.
   bool Create(
     int dim,
-    ON_BOOL32 bIsRational,
+    bool bIsRational,
     int order
     );
 
@@ -257,7 +257,7 @@ public:
   bool GetBBox( // returns true if successful
          double* box_min,
          double* box_max,
-         int bGrowBox = false
+         bool bGrowBox = false
          ) const;
 
   // Description:
@@ -290,8 +290,8 @@ public:
       If true and the input tight_bbox is valid, then returned
       tight_bbox is the union of the input tight_bbox and the 
       tight bounding box of the bezier curve.
-		xform -[in] (default=NULL)
-      If not NULL, the tight bounding box of the transformed
+		xform -[in] (default=nullptr)
+      If not nullptr, the tight bounding box of the transformed
       bezier is calculated.  The bezier curve is not modified.
 	Returns:
     True if the returned tight_bbox is set to a valid 
@@ -299,8 +299,8 @@ public:
   */
 	bool GetTightBoundingBox( 
 			ON_BoundingBox& tight_bbox, 
-      int bGrowBox = false,
-			const ON_Xform* xform = 0
+      bool bGrowBox = false,
+			const ON_Xform* xform = nullptr
       ) const;
 
   // Description:
@@ -313,6 +313,7 @@ public:
   bool Transform( 
          const ON_Xform& xform
          );
+
 
   // Description:
   //   Rotates the bezier curve about the specified axis.  A positive
@@ -543,8 +544,9 @@ public:
   //   nurbs_curve - [out] NURBS curve form of a bezier.
   //       The domain is [0,1].
   // Returns:
-  //   true if successful
-  bool GetNurbForm( 
+  //   0 = failure
+  //   1 = success
+  int GetNurbForm( 
     ON_NurbsCurve& nurbs_curve
     ) const;
 
@@ -594,6 +596,22 @@ public:
   double* CV(
         int cv_index
         ) const;
+
+  /*
+  Parameters:
+    cv_index - [in]
+      zero based control point index
+  Returns:
+    Control point as an ON_4dPoint.
+  Remarks:
+    If cv_index or the bezier is not valid, then ON_4dPoint::Nan is returned.
+    If dim < 3, unused coordinates are zero.
+    If dim >= 4, the first three coordinates are returned.
+    If is_rat is false, the weight is 1.
+  */
+  const ON_4dPoint ControlPoint(
+    int cv_index
+  ) const;
 
   /*
   Description:
@@ -881,7 +899,8 @@ public:
           );
 
   // misspelled function name is obsolete
-  ON_DEPRECATED bool Reparametrize(double);
+  ON_DEPRECATED_MSG("misspelled - use Reparameterize")
+  bool Reparametrize(double);
 
   /*
   Description:
@@ -948,6 +967,9 @@ public:
           double w1
           );
 
+
+
+
   /////////////////////////////////////////////////////////////////
   // Implementation
 public:
@@ -976,7 +998,7 @@ public:
   double* m_cv;
 
   // Number of doubles in m_cv array.  If m_cv_capacity is zero
-  // and m_cv is not NULL, an expert user is managing the m_cv
+  // and m_cv is not nullptr, an expert user is managing the m_cv
   // memory.  ~ON_BezierCurve will not deallocate m_cv unless
   // m_cv_capacity is greater than zero.
   int m_cv_capacity;
@@ -996,7 +1018,7 @@ public:
   ON_BezierSurface();
   ON_BezierSurface(
     int dim,
-    int is_rat,
+    bool is_rat,
     int order0,
     int order1
     );
@@ -1013,7 +1035,7 @@ public:
 
   bool Create(
     int dim,
-    int is_rat,
+    bool is_rat,
     int order0,
     int order1
     );
@@ -1048,7 +1070,7 @@ public:
   bool GetBBox(        // returns true if successful
          double*,      // minimum
          double*,      // maximum
-         int bGrowBox = false  // true means grow box
+         bool bGrowBox = false  // true means grow box
          ) const;
 
   bool GetBoundingBox(
@@ -1061,6 +1083,7 @@ public:
   bool Transform( 
          const ON_Xform&
          );
+
 
   // Description:
   //   Rotates the bezier surface about the specified axis.  A positive
@@ -1143,7 +1166,12 @@ public:
 
   ON_3dPoint PointAt(double s, double t) const;
 
-  bool GetNurbForm( ON_NurbsSurface& ) const;
+  /*
+  Returns:
+    0 = failure.
+    1 = success.
+  */
+  int GetNurbForm( ON_NurbsSurface& ) const;
 
   bool IsRational() const;  // true if NURBS curve is rational
   
@@ -1266,7 +1294,7 @@ public:
                    // 1 first parameter is constant and second parameter varies
                    //   e.g., point on IsoCurve(1,c) at t is srf(c,t)
        double c,    // value of constant parameter
-			 ON_BezierCurve* iso=NULL	// When NULL result is constructed on the heap.
+			 ON_BezierCurve* iso=nullptr	// When nullptr result is constructed on the heap.
 			 ) const;
 
 	bool IsSingular( // true if surface side is collapsed to a point
@@ -1280,6 +1308,19 @@ public:
   bool ReserveCVCapacity(
     int // number of doubles to reserve
     );
+
+
+	/*
+	Description:
+		Get an estimate of the size of the rectangle that would
+		be created if the 3d surface where flattened into a rectangle.
+	Parameters:
+		width - [out]  (corresponds to the first surface parameter)
+		height - [out] (corresponds to the first surface parameter)
+	Returns:
+		true if successful.
+	*/
+	bool GetSurfaceSize(double* width, double* height) const;
 
   /////////////////////////////////////////////////////////////////
   // Implementation
@@ -1481,7 +1522,7 @@ public:
   /*
   Description:
     Sets all members to zero.  Does not free the CV array
-    even when m_cv is not NULL.  Generally used when the
+    even when m_cv is not nullptr.  Generally used when the
     CVs were allocated from a memory pool that no longer
     exists and the free done in ~ON_BezierCage would
     cause a crash.
@@ -1529,12 +1570,13 @@ public:
   bool GetBBox(
          double* boxmin,
          double* boxmax,
-         int bGrowBox = false 
+         bool bGrowBox = false 
          ) const;
 
   bool Transform( 
          const ON_Xform& xform
          );
+
 
   // Description:
   //   Rotates the bezier surface about the specified axis.  A positive
@@ -1803,7 +1845,8 @@ class ON_CLASS ON_BezierCageMorph : public ON_SpaceMorph
 {
 public:
   ON_BezierCageMorph();
-  ~ON_BezierCageMorph();
+  virtual ~ON_BezierCageMorph();
+
 
   /*
   Description:
@@ -1917,12 +1960,6 @@ private:
 };
 
 #if defined(ON_DLL_TEMPLATE)
-
-// This stuff is here because of a limitation in the way Microsoft
-// handles templates and DLLs.  See Microsoft's knowledge base 
-// article ID Q168958 for details.
-#pragma warning( push )
-#pragma warning( disable : 4231 )
 ON_DLL_TEMPLATE template class ON_CLASS ON_ClassArray<ON_BezierCurve>;
 ON_DLL_TEMPLATE template class ON_CLASS ON_SimpleArray<ON_BezierCurve*>;
 ON_DLL_TEMPLATE template class ON_CLASS ON_ClassArray<ON_BezierSurface>;
@@ -1931,8 +1968,6 @@ ON_DLL_TEMPLATE template class ON_CLASS ON_ClassArray<ON_BezierCage>;
 ON_DLL_TEMPLATE template class ON_CLASS ON_SimpleArray<ON_BezierCage*>;
 ON_DLL_TEMPLATE template class ON_CLASS ON_ClassArray<ON_BezierCageMorph>;
 ON_DLL_TEMPLATE template class ON_CLASS ON_SimpleArray<ON_BezierCageMorph*>;
-#pragma warning( pop )
-
 #endif
 
 #endif

@@ -16,6 +16,14 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
 ON_OBJECT_IMPLEMENT(ON_PointCloud, ON_Geometry, "2488F347-F8FA-11d3-BFEC-0010830122F0");
 
 
@@ -33,7 +41,7 @@ ON_3dPoint ON_PointCloud::Point( ON_COMPONENT_INDEX ci ) const
 {
   return (ON_COMPONENT_INDEX::pointcloud_point == ci.m_type && ci.m_index >= 0 && ci.m_index < m_P.Count() )
     ? m_P[ci.m_index]
-    : ON_UNSET_POINT;
+    : ON_3dPoint::UnsetPoint;
 }
 
 ON_PointCloud::ON_PointCloud() : m_flags(0)
@@ -59,6 +67,7 @@ ON_PointCloud& ON_PointCloud::operator=( const ON_PointCloud& src )
     m_P = src.m_P;
     m_H = src.m_H;
     m_C = src.m_C;
+    m_V = src.m_V;
     m_N = src.m_N;
     m_hidden_count = src.m_hidden_count;
 
@@ -78,6 +87,7 @@ void ON_PointCloud::Destroy()
 {
   m_H.Destroy();
   m_C.Destroy();
+  m_V.Destroy();
   m_N.Destroy();
   m_P.Destroy();
   m_hidden_count=0;
@@ -89,6 +99,7 @@ void ON_PointCloud::EmergencyDestroy()
 {
   m_P.EmergencyDestroy();
   m_C.EmergencyDestroy();
+  m_V.EmergencyDestroy();
   m_H.EmergencyDestroy();
   m_N.EmergencyDestroy();
   m_hidden_count=0;
@@ -96,39 +107,61 @@ void ON_PointCloud::EmergencyDestroy()
   m_bbox.Destroy();
 }
 
-ON_BOOL32 ON_PointCloud::IsValid( ON_TextLog* text_log ) const
+bool ON_PointCloud::IsValid( ON_TextLog* text_log ) const
 {
   return ( m_P.Count() > 0 ) ? true : false;
 }
 
 void ON_PointCloud::Dump( ON_TextLog& dump ) const
 {
+  // Aug 23, 2016 Tim - Fix for RH-35351
+  // half_max is arbitrary, if you want more than 100 points 
+  // change it to your liking. This is to prevent all of the 
+  // points from displaying when you have a very large point 
+  // cloud, like a billion. (see model on RH-35348)
+  const int half_max = 50;
+
   int i;
   const bool bHasNormals = HasPointNormals();
+  const bool bHasColors = HasPointColors();
   const bool bHasHiddenPoints = (HiddenPointCount() > 0);
   const int point_count = m_P.Count();
   dump.Print("ON_PointCloud: %d points\n",point_count);
   dump.PushIndent();
-  for ( i = 0; i < point_count; i++ ) {
-    dump.Print("point[%2d]: ",i);
-    dump.Print( m_P[i] );
-    if ( bHasNormals )
+  for ( i = 0; i < point_count; i++ ) 
+  {
+    if (i == half_max && 2 * half_max < point_count)
     {
-      dump.Print(", normal = ");
-      dump.Print(m_N[i]);
+      dump.Print("...\n");
+      i = point_count - half_max;
     }
-    if ( bHasHiddenPoints && m_H[i])
+    else
     {
-      dump.Print(" (hidden)");
+      dump.Print("point[%2d]: ", i);
+      dump.Print(m_P[i]);
+      if (bHasNormals)
+      {
+        dump.Print(", normal = ");
+        dump.Print(m_N[i]);
+      }
+      if (bHasColors)
+      {
+        dump.Print(", color = ");
+        dump.PrintRGB(m_C[i]);
+      }
+      if (bHasHiddenPoints && m_H[i])
+      {
+        dump.Print(" (hidden)");
+      }
+      dump.Print("\n");
     }
-    dump.Print("\n");
   }
   dump.PopIndent();
 }
 
-ON_BOOL32 ON_PointCloud::Write( ON_BinaryArchive& file ) const
+bool ON_PointCloud::Write( ON_BinaryArchive& file ) const
 {
-  bool rc = file.Write3dmChunkVersion(1,1);
+  bool rc = file.Write3dmChunkVersion(1,2);
 
   if (rc) rc = file.WriteArray( m_P );
   if (rc) rc = file.WritePlane( m_plane );
@@ -139,10 +172,14 @@ ON_BOOL32 ON_PointCloud::Write( ON_BinaryArchive& file ) const
   if (rc) rc = file.WriteArray(m_N);
   if (rc) rc = file.WriteArray(m_C);
 
+
+  // added for 1.2  (8 August 2016)
+  if (rc) rc = file.WriteArray(m_V);
+
   return rc;
 }
 
-ON_BOOL32 ON_PointCloud::Read( ON_BinaryArchive& file )
+bool ON_PointCloud::Read( ON_BinaryArchive& file )
 {
   int major_version = 0;
   int minor_version = 0;
@@ -158,6 +195,10 @@ ON_BOOL32 ON_PointCloud::Read( ON_BinaryArchive& file )
     {
       if (rc) rc = file.ReadArray( m_N );
       if (rc) rc = file.ReadArray( m_C );
+      if (rc && minor_version >= 2)
+      {
+        rc = file.ReadArray( m_V );
+      }
     }
   }
   return rc;
@@ -174,16 +215,16 @@ int ON_PointCloud::Dimension() const
   return 3;
 }
 
-ON_BOOL32 ON_PointCloud::GetBBox( // returns true if successful
+bool ON_PointCloud::GetBBox( // returns true if successful
        double* boxmin,    // minimum
        double* boxmax,    // maximum
-       ON_BOOL32 bGrowBox  // true means grow box
+       bool bGrowBox  // true means grow box
        ) const
 {
   if ( !m_bbox.IsValid() ) {
     m_P.GetBBox( (double*)&m_bbox.m_min.x, (double*)&m_bbox.m_max.x, false );
   }
-  ON_BOOL32 rc = m_bbox.IsValid();
+  bool rc = m_bbox.IsValid();
   if (rc) {
     if ( bGrowBox ) {
       if ( boxmin ) {
@@ -213,12 +254,12 @@ ON_BOOL32 ON_PointCloud::GetBBox( // returns true if successful
   return rc;
 }
 
-ON_BOOL32 ON_PointCloud::Transform( 
+bool ON_PointCloud::Transform( 
        const ON_Xform& xform
        )
 {
   TransformUserData(xform);
-  ON_BOOL32 rc = m_P.Transform(xform);
+  bool rc = m_P.Transform(xform);
   if (rc && HasPlane() )
     rc = m_plane.Transform(xform);
   m_bbox.Destroy();
@@ -235,11 +276,11 @@ bool ON_PointCloud::MakeDeformable()
   return true;
 }
 
-ON_BOOL32 ON_PointCloud::SwapCoordinates(
+bool ON_PointCloud::SwapCoordinates(
       int i, int j        // indices of coords to swap
       )
 {
-  ON_BOOL32 rc = m_P.SwapCoordinates(i,j);
+  bool rc = m_P.SwapCoordinates(i,j);
   if ( rc && HasPlane() ) {
     rc = m_plane.SwapCoordinates(i,j);
   }
@@ -382,14 +423,20 @@ bool ON_3dPointArray::GetClosestPoint(
 
 bool ON_PointCloud::HasPointColors() const
 {
-  const int point_count = m_P.Count();
-  return (point_count > 0 && point_count == m_C.Count());
+  const unsigned int point_count = m_P.UnsignedCount();
+  return (point_count > 0 && point_count == m_C.UnsignedCount());
+}
+
+bool ON_PointCloud::HasPointValues() const
+{
+  const unsigned int point_count = m_P.UnsignedCount();
+  return (point_count > 0 && point_count == m_V.UnsignedCount());
 }
 
 bool ON_PointCloud::HasPointNormals() const
 {
-  const int point_count = m_P.Count();
-  return (point_count > 0 && point_count == m_N.Count());
+  const unsigned int point_count = m_P.UnsignedCount();
+  return (point_count > 0 && point_count == m_N.UnsignedCount());
 }
 
 bool ON_PointCloud::GetClosestPoint(
@@ -407,16 +454,22 @@ bool ON_PointCloud::GetClosestPoint(
   return m_P.GetClosestPoint( P, closest_point_index, maximum_distance );
 }
 
-int ON_PointCloud::HiddenPointCount() const
+unsigned int ON_PointCloud::HiddenPointUnsignedCount() const
 {
-  int point_count;
+  unsigned int point_count;
   return (    m_hidden_count > 0 
-           && (point_count = m_P.Count()) > 0
-           && m_hidden_count < point_count 
-           && m_H.Count() == point_count 
+           && (point_count = m_P.UnsignedCount()) > 0
+           && m_hidden_count <= point_count 
+           && m_H.UnsignedCount() == point_count 
            )
            ? m_hidden_count
            : 0;
+}
+
+
+int ON_PointCloud::HiddenPointCount() const
+{
+  return (int)HiddenPointUnsignedCount();
 }
 
 void ON_PointCloud::DestroyHiddenPointArray()
@@ -427,7 +480,7 @@ void ON_PointCloud::DestroyHiddenPointArray()
 
 const bool* ON_PointCloud::HiddenPointArray() const
 {
-  return (m_hidden_count > 0 && m_H.Count() == m_P.Count()) 
+  return (m_hidden_count > 0 && m_H.UnsignedCount() == m_P.UnsignedCount()) 
          ? m_H.Array() 
          : 0;
 }

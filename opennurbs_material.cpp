@@ -16,89 +16,80 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
 
 ////////////////////////////////////////////////////////////////
 //   Class ON_Material
 ////////////////////////////////////////////////////////////////
 
-ON_OBJECT_IMPLEMENT(ON_Material,ON_Object,"60B5DBBC-E660-11d3-BFE4-0010830122F0");
+ON_OBJECT_IMPLEMENT(ON_Material,ON_ModelComponent,"60B5DBBC-E660-11d3-BFE4-0010830122F0");
 
-double ON_Material::m_max_shine = 255.0f;
 
-double ON_Material::MaxShine()
+const ON_Material* ON_Material::FromModelComponentRef(
+  const class ON_ModelComponentReference& model_component_reference,
+  const ON_Material* none_return_value
+  )
 {
-  return m_max_shine;
-}
-
-void ON_Material::Default()
-{
-  PurgeUserData();
-
-  m_material_index = 0;
-  m_material_id = ON_nil_uuid;
-  m_material_name.Destroy();
-  m_flamingo_library.Destroy();
-
-  m_ambient.SetRGB( 0, 0, 0 );
-  m_diffuse.SetRGB( 128, 128, 128 );
-  m_emission.SetRGB( 0, 0, 0 );
-  m_specular.SetRGB( 255, 255, 255 );
-  //m_reflection = m_specular;
-  //m_transparent = m_diffuse;
-  m_reflection.SetRGB( 255, 255, 255 );
-  m_transparent.SetRGB( 255, 255, 255 );
-
-  m_index_of_refraction = 1.0;
-  m_reflectivity = 0.0;
-
-  m_shine = 0.0;
-  m_transparency = 0.0;
-
-  m_bShared = false;
-  m_bDisableLighting = false;
-  m_reserved1[0] = 0;
-  m_reserved1[1] = 0;
-#if defined(ON_64BIT_POINTER)
-  m_reserved2[0] = 0;
-  m_reserved2[1] = 0;
-  m_reserved2[2] = 0;
-  m_reserved2[3] = 0;
-#endif
-
-  m_textures.Destroy();
-
-  m_plugin_id = ON_nil_uuid;
-
-  m_material_channel.Destroy();
+  const ON_Material* p = ON_Material::Cast(model_component_reference.ModelComponent());
+  return (nullptr != p) ? p : none_return_value;
 }
 
 // Default constructor
-ON_Material::ON_Material() 
-{
-  Default();
-}
-
-ON_Material::~ON_Material()
+ON_Material::ON_Material() ON_NOEXCEPT
+  : ON_ModelComponent(ON_ModelComponent::Type::RenderMaterial)
 {}
 
-ON_BOOL32
-ON_Material::IsValid( ON_TextLog* text_log ) const
+ON_Material::ON_Material( const ON_Material& src)
+  : ON_ModelComponent(ON_ModelComponent::Type::RenderMaterial,src)
+{
+  Internal_CopyFrom(src);
+}
+
+void ON_Material::Internal_CopyFrom(
+  const ON_Material& src
+  )
+{
+#define ON_COPY_SRC(m) m=src.m
+  ON_COPY_SRC(m_rdk_material_instance_id);
+  ON_COPY_SRC(m_ambient);
+  ON_COPY_SRC(m_diffuse);
+  ON_COPY_SRC(m_emission);
+  ON_COPY_SRC(m_specular);
+  ON_COPY_SRC(m_reflection);
+  ON_COPY_SRC(m_transparent);
+  ON_COPY_SRC(m_bShareable);
+  ON_COPY_SRC(m_bDisableLighting);
+  ON_COPY_SRC(m_bUseDiffuseTextureAlphaForObjectTransparencyTexture);
+  ON_COPY_SRC(m_bFresnelReflections);
+  ON_COPY_SRC(m_reflectivity);
+  ON_COPY_SRC(m_shine);
+  ON_COPY_SRC(m_transparency);
+  ON_COPY_SRC(m_reflection_glossiness);
+  ON_COPY_SRC(m_refraction_glossiness);
+  ON_COPY_SRC(m_index_of_refraction);
+  ON_COPY_SRC(m_fresnel_index_of_refraction);
+  ON_COPY_SRC(m_textures);
+  ON_COPY_SRC(m_material_channel);
+  ON_COPY_SRC(m_plugin_id);
+#undef ON_COPY_SRC
+}
+
+bool ON_Material::IsValid( ON_TextLog* text_log ) const
 {
   return true;
 }
 
-
 void
 ON_Material::Dump( ON_TextLog& dump ) const
 {
-  const wchar_t* s;
-  dump.Print("index = %d\n",MaterialIndex());
-  dump.Print("id = "); dump.Print(m_material_id); dump.Print("\n");
-  
-  s = m_material_name;
-  if ( !s ) 
-    s = L"";
-  dump.Print("name = \"%ls\"\n",s);
+  ON_ModelComponent::Dump(dump);
   
   dump.Print("ambient rgb = "); dump.PrintRGB( m_ambient ); dump.Print("\n");
   dump.Print("diffuse rgb = "); dump.PrintRGB( m_diffuse ); dump.Print("\n");
@@ -106,7 +97,7 @@ ON_Material::Dump( ON_TextLog& dump ) const
   dump.Print("specular rgb = "); dump.PrintRGB( m_specular ); dump.Print("\n");
   dump.Print("reflection rgb = "); dump.PrintRGB( m_reflection ); dump.Print("\n");
   dump.Print("transparent rgb = "); dump.PrintRGB( m_transparent ); dump.Print("\n");
-  dump.Print("shine = %g%%\n",100.0*m_shine/ON_Material::MaxShine() );
+  dump.Print("shine = %g%%\n",100.0*m_shine/ON_Material::MaxShine );
   dump.Print("transparency = %g%%\n",100.0*m_transparency);
   dump.Print("reflectivity = %g%%\n",100.0*m_reflectivity);
   dump.Print("index of refraction = %g\n",m_index_of_refraction);
@@ -123,23 +114,217 @@ ON_Material::Dump( ON_TextLog& dump ) const
 }
 
 
-ON_UUID ON_Material::MaterialPlugInUuid() const
+ON_UUID ON_Material::MaterialPlugInId() const
 {
   return m_plugin_id;
 }
 
-void ON_Material::SetMaterialPlugInUuid( ON_UUID u )
+void ON_Material::SetMaterialPlugInId(
+  ON_UUID plugin_id
+  )
 {
-  m_plugin_id = u;
+  if (m_plugin_id != plugin_id)
+  {
+    m_plugin_id = plugin_id;
+    IncrementContentVersionNumber();
+  }
 }
 
-ON_BOOL32 ON_Material::Write( ON_BinaryArchive& file ) const
+bool ON_Material::Write( ON_BinaryArchive& archive ) const
+{
+  if (archive.Archive3dmVersion() < 60)
+    return Internal_WriteV5(archive);
+
+  const int major_version = 1;
+  const int minor_version = 0;
+  if (!archive.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,major_version,minor_version))
+    return false;
+  
+  bool rc = false;
+  for (;;)
+  {
+    const unsigned int attributes_filter
+      = ON_ModelComponent::Attributes::IndexAttribute
+      | ON_ModelComponent::Attributes::IdAttribute
+      | ON_ModelComponent::Attributes::NameAttribute;
+    if ( !WriteModelComponentAttributes(archive,attributes_filter)) break;
+
+    if ( !archive.WriteUuid(m_plugin_id) ) break;
+
+    if ( !archive.WriteColor( m_ambient ) ) break;
+    if ( !archive.WriteColor( m_diffuse ) ) break;
+    if ( !archive.WriteColor( m_emission ) ) break;
+    if ( !archive.WriteColor( m_specular ) ) break;
+    if ( !archive.WriteColor( m_reflection ) ) break;
+    if ( !archive.WriteColor( m_transparent ) ) break;
+
+    if ( !archive.WriteDouble( m_index_of_refraction ) ) break;
+    if ( !archive.WriteDouble( m_reflectivity ) ) break;
+    if ( !archive.WriteDouble( m_shine ) ) break;
+    if (!archive.WriteDouble(m_transparency)) break;
+
+    // array of textures written in a way that user data persists
+    {
+      const int textures_major_version = 1;
+      const int textures_minor_version = 0;
+      if (!archive.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK, textures_major_version, textures_minor_version))
+        break;
+      bool textures_chunk_rc = false;
+      for (;;)
+      {
+        const unsigned int count = m_textures.Count();
+        if (!archive.WriteInt(count))
+          break;
+        unsigned int i;
+        for (i = 0; i < count; i++)
+        {
+          if (!archive.WriteObject(&m_textures[i]))
+            break;
+        }
+        if (i < count)
+          break;
+        textures_chunk_rc = true;
+        break;
+      }
+      if (!archive.EndWrite3dmChunk())
+        textures_chunk_rc = false;
+      if ( !textures_chunk_rc )
+        break;
+    }
+
+    if ( !archive.WriteArray(m_material_channel) )
+      break;
+    if ( !archive.WriteBool(m_bShareable) )
+      break;
+    if ( !archive.WriteBool(m_bDisableLighting))
+      break;
+    if ( !archive.WriteBool(m_bFresnelReflections))
+      break;
+    if ( !archive.WriteDouble(m_reflection_glossiness))
+      break;
+    if ( !archive.WriteDouble(m_refraction_glossiness))
+      break;
+    if ( !archive.WriteDouble(m_fresnel_index_of_refraction)) 
+      break;
+    if ( !archive.WriteUuid(m_rdk_material_instance_id))
+      break;
+    if ( !archive.WriteBool(m_bUseDiffuseTextureAlphaForObjectTransparencyTexture))
+      break;
+
+    rc = true;
+    break;
+  }
+
+  if (!archive.EndWrite3dmChunk())
+    rc = false;
+
+  return rc;
+}
+
+
+bool ON_Material::Read( ON_BinaryArchive& archive )
+{
+  *this = ON_Material::Unset;
+
+  if (archive.Archive3dmVersion() < 60)
+    return Internal_ReadV5(archive);
+  if (archive.ArchiveOpenNURBSVersion() <  2348833910)
+    return Internal_ReadV5(archive);
+
+  bool rc = false;
+  int major_version = 0;
+  int minor_version = 0;
+  if (!archive.BeginRead3dmChunk(TCODE_ANONYMOUS_CHUNK,&major_version,&minor_version))
+    return false;
+  for (;;)
+  {
+    if (1 != major_version)
+      break;
+
+    if ( !ReadModelComponentAttributes(archive)) break;
+
+    if ( !archive.ReadUuid(m_plugin_id) ) break;
+
+    if ( !archive.ReadColor( m_ambient ) ) break;
+    if ( !archive.ReadColor( m_diffuse ) ) break;
+    if ( !archive.ReadColor( m_emission ) ) break;
+    if ( !archive.ReadColor( m_specular ) ) break;
+    if ( !archive.ReadColor( m_reflection ) ) break;
+    if ( !archive.ReadColor( m_transparent ) ) break;
+
+    if ( !archive.ReadDouble( &m_index_of_refraction ) ) break;
+    if ( !archive.ReadDouble( &m_reflectivity ) ) break;
+    if ( !archive.ReadDouble( &m_shine ) ) break;
+    if (!archive.ReadDouble(&m_transparency)) break;
+
+    // array of textures read in a way that user data persists
+    {
+      int textures_major_version = 0;
+      int textures_minor_version = 0;
+      if (!archive.BeginRead3dmChunk(TCODE_ANONYMOUS_CHUNK, &textures_major_version, &textures_minor_version))
+        break;
+      bool textures_chunk_rc = false;
+      for (;;)
+      {
+        if (1 != textures_major_version)
+          break;
+
+        unsigned int count = 0;
+        if ( !archive.ReadInt(&count) )
+          break;
+        m_textures.SetCount(0);
+        m_textures.Reserve(count);
+        unsigned int i;
+        for (i = 0; i < count; i++)
+        {
+          if (!archive.ReadObject(m_textures.AppendNew()))
+            break;
+        }
+        if (i < count)
+          break;
+        textures_chunk_rc = true;
+        break;
+      }
+      if (!archive.EndRead3dmChunk())
+        textures_chunk_rc = false;
+      if (!textures_chunk_rc)
+        break;
+    }
+
+    if ( !archive.ReadArray(m_material_channel) )
+      break;
+    if ( !archive.ReadBool(&m_bShareable) )
+      break;
+    if ( !archive.ReadBool(&m_bDisableLighting))
+      break;
+    if ( !archive.ReadBool(&m_bFresnelReflections))
+      break;
+    if ( !archive.ReadDouble(&m_reflection_glossiness))
+      break;
+    if ( !archive.ReadDouble(&m_refraction_glossiness))
+      break;
+    if ( !archive.ReadDouble(&m_fresnel_index_of_refraction)) 
+      break;
+    if ( !archive.ReadUuid(m_rdk_material_instance_id))
+      break;
+    if ( !archive.ReadBool(&m_bUseDiffuseTextureAlphaForObjectTransparencyTexture))
+      break;
+
+    rc = true; 
+    break;
+  }
+  if (!archive.EndRead3dmChunk())
+    rc = false;
+  return rc;
+}
+
+bool ON_Material::Internal_WriteV5( ON_BinaryArchive& file ) const
 {
   bool rc = false;
   if ( file.Archive3dmVersion() <= 3 )
   {
     // V2 or V3 file format
-    rc = WriteV3Helper(file);
+    rc = Internal_WriteV3(file);
   }
   else 
   {
@@ -152,14 +337,18 @@ ON_BOOL32 ON_Material::Write( ON_BinaryArchive& file ) const
 
     // version 1.2 field (20061113*)
     // version 1.3 fields (20100917*)
-    if (rc) rc = file.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,3);
+    // version 1.4 fields 6.0.2013-11-6
+    // version 1.5 fields 6.0.2014-05-16 (RDK material instance id)
+    // version 1.6 fields 6.0.2014-07-11 (m_bUseDiffuseTextureAlphaForObjectTransparencyTexture)
+    const int minor_version = (file.Archive3dmVersion() >= 60) ? 6 : 3;
+    if (rc) rc = file.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,minor_version);
     if (rc)
     {
       for(;;)
       {
-        if ( rc ) rc = file.WriteUuid(m_material_id);
-        if ( rc ) rc = file.WriteInt(m_material_index);
-        if ( rc ) rc = file.WriteString(m_material_name);
+        if ( rc ) rc = file.WriteUuid(Id());
+        if ( rc ) rc = file.Write3dmReferencedComponentIndex(*this);
+        if ( rc ) rc = file.WriteString(Name());
 
         if ( rc ) rc = file.WriteUuid(m_plugin_id);
 
@@ -193,16 +382,39 @@ ON_BOOL32 ON_Material::Write( ON_BinaryArchive& file ) const
         }
 
         //version 1.1 field
-        if (rc) rc = file.WriteString(m_flamingo_library);
+        ON_wString obsolete_flamingo_library = ON_wString::EmptyString;
+        if (rc) rc = file.WriteString(obsolete_flamingo_library);
 
         // version 1.2 field (20061113)
         if (rc) rc = file.WriteArray(m_material_channel);
 
         // version 1.3 fields (20100917*)
-        rc = file.WriteBool(m_bShared);
+        rc = file.WriteBool(m_bShareable);
         if (!rc) break;
         rc = file.WriteBool(m_bDisableLighting);
         if (!rc) break;
+
+        if ( minor_version >= 4 )
+        {
+          rc = file.WriteBool(m_bFresnelReflections);
+          if (!rc) break;
+          rc = file.WriteDouble(m_reflection_glossiness);
+          if (!rc) break;
+          rc = file.WriteDouble(m_refraction_glossiness);
+          if (!rc) break;
+          rc = file.WriteDouble(m_fresnel_index_of_refraction);
+          if (!rc) break;
+          if (minor_version >= 5)
+          {
+            rc = file.WriteUuid(m_rdk_material_instance_id);
+            if (!rc) break;
+          }
+          if (minor_version >= 6)
+          {
+            rc = file.WriteBool(m_bUseDiffuseTextureAlphaForObjectTransparencyTexture);
+            if (!rc) break;
+          }
+        }
 
         break;
       }
@@ -210,123 +422,27 @@ ON_BOOL32 ON_Material::Write( ON_BinaryArchive& file ) const
         rc = false;
     }
   }
-  return rc;
-}
 
-bool ON_Material::WriteV3Helper( ON_BinaryArchive& file ) const
-{
-  int i;
-  // V2 and V3 file format
-
-  bool rc = file.Write3dmChunkVersion(1,1);
-  if ( rc ) rc = file.WriteColor( m_ambient );
-  if ( rc ) rc = file.WriteColor( m_diffuse );
-  if ( rc ) rc = file.WriteColor( m_emission );
-  if ( rc ) rc = file.WriteColor( m_specular );
-  if ( rc ) rc = file.WriteDouble( Shine() );
-  if ( rc ) rc = file.WriteDouble( m_transparency );
-
-  if ( rc ) rc = file.WriteChar( (unsigned char)1 ); // OBSOLETE // m_casts_shadows
-  if ( rc ) rc = file.WriteChar( (unsigned char)1 ); // OBSOLETE // m_shows_shadows
-
-  if ( rc ) rc = file.WriteChar( (unsigned char)0 ); // OBSOLETE // m_wire_mode
-  if ( rc ) rc = file.WriteChar( (unsigned char)2 ); // OBSOLETE // m_wire_density
-
-  if ( rc ) rc = file.WriteColor( ON_Color(0,0,0) ); // OBSOLETE // m_wire_color
-
-  if (rc)
+  if (rc && file.Archive3dmVersion() < 60)
   {
-    // OBSOLETE - line style info never used
-    short s = 0;
-    if (rc) rc = file.WriteShort(s);
-    if (rc) rc = file.WriteShort(s);
-    if (rc) rc = file.WriteDouble(0.0);
-    if (rc) rc = file.WriteDouble(1.0);
-  }  
-
-  ON_wString filename;
-  int j = 0;
-  i = FindTexture( NULL, ON_Texture::bitmap_texture );
-  if ( i >= 0 )
-  {
-    const ON_Texture& tmap = m_textures[i];
-    if ( tmap.m_filename.Length() > 0  )
+    if (RdkMaterialInstanceIdIsNotNil())
     {
-      filename = tmap.m_filename;
-      j = ( ON_Texture::decal_texture == tmap.m_mode ) ? 2 : 1;
+      // For V5 files and earlier, we need to save
+      // the RDK material instance id as user data.
+      // Because ON_RdkMaterialInstanceIdObsoleteUserData.DeleteAfterWrite()
+      // returns true, the user data we are attaching here will be deleted
+      // after it is written.
+      ON_RdkMaterialInstanceIdObsoleteUserData* ud = new ON_RdkMaterialInstanceIdObsoleteUserData();
+      ud->m_rdk_material_instance_id = RdkMaterialInstanceId();
+      const_cast<ON_Material*>(this)->AttachUserData(ud);
     }
   }
-  // OBSOLETE // if ( rc ) rc = file.WriteString( TextureBitmapFileName() );
-  // OBSOLETE // i = TextureMode();
-  // OBSOLETE // if ( rc ) rc = file.WriteInt( i );
-  // OBSOLETE // if ( rc ) rc = file.WriteInt( m_texture_bitmap_index );
-  if ( rc ) rc = file.WriteString(filename);
-  if ( rc ) rc = file.WriteInt( j );
-  if ( rc ) rc = file.WriteInt( 0 );
-
-  filename.Destroy();
-  j = 0;
-  double bump_scale = 1.0;
-  i = FindTexture( NULL, ON_Texture::bump_texture );
-  if ( i >= 0 )
-  {
-    const ON_Texture& tmap = m_textures[i];
-    if ( tmap.m_filename.Length() > 0  )
-    {
-      filename = tmap.m_filename;
-      j = ( ON_Texture::decal_texture == tmap.m_mode ) ? 2 : 1;
-      bump_scale = tmap.m_bump_scale[1];
-    }
-  }
-  // OBSOLETE //if ( rc ) rc = file.WriteString( BumpBitmapFileName() );
-  // OBSOLETE //i = BumpMode();
-  // OBSOLETE //if ( rc ) rc = file.WriteInt( i );
-  // OBSOLETE //if ( rc ) rc = file.WriteInt( m_bump_bitmap_index );
-  // OBSOLETE //if ( rc ) rc = file.WriteDouble( m_bump_scale );
-  if ( rc ) rc = file.WriteString( filename );
-  if ( rc ) rc = file.WriteInt( j );
-  if ( rc ) rc = file.WriteInt( 0 );
-  if ( rc ) rc = file.WriteDouble( bump_scale );
-
-  filename.Destroy();
-  j = 0;
-  i = FindTexture( NULL, ON_Texture::emap_texture );
-  if ( i >= 0 )
-  {
-    const ON_Texture& tmap = m_textures[i];
-    if ( tmap.m_filename.Length() > 0  )
-    {
-      filename = tmap.m_filename;
-      j = ( ON_Texture::decal_texture == tmap.m_mode ) ? 2 : 1;
-    }
-  }
-  // OBSOLETE //if ( rc ) rc = file.WriteString( EmapBitmapFileName() );
-  // OBSOLETE //i = EmapMode();
-  // OBSOLETE //if ( rc ) rc = file.WriteInt( i );
-  // OBSOLETE //if ( rc ) rc = file.WriteInt( m_emap_bitmap_index );
-  if ( rc ) rc = file.WriteString( filename );
-  if ( rc ) rc = file.WriteInt( j );
-  if ( rc ) rc = file.WriteInt( 0 );
-
-  if ( rc ) rc = file.WriteInt( m_material_index );
-
-  if ( rc ) rc = file.WriteUuid( m_plugin_id );
-  if ( rc ) rc = file.WriteString( m_flamingo_library );
-  if ( rc ) rc = file.WriteString( m_material_name );
-
-
-  // 1.1 fields
-  if (rc) rc = file.WriteUuid( m_material_id );
-  if (rc) rc = file.WriteColor( m_reflection);
-  if (rc) rc = file.WriteColor( m_transparent);
-  if (rc) rc = file.WriteDouble( m_index_of_refraction );
 
   return rc;
 }
 
-ON_BOOL32 ON_Material::Read( ON_BinaryArchive& file )
+bool ON_Material::Internal_ReadV5( ON_BinaryArchive& file )
 {
-  Default();
   int major_version = 0;
   int minor_version = 0;
   bool rc = file.Read3dmChunkVersion(&major_version,&minor_version);
@@ -334,7 +450,7 @@ ON_BOOL32 ON_Material::Read( ON_BinaryArchive& file )
   {
     if ( 1 == major_version )
     {
-      rc = ReadV3Helper(file,minor_version);
+      rc = Internal_ReadV3(file,minor_version);
     }
     else if ( 2 == major_version )
     {
@@ -348,9 +464,17 @@ ON_BOOL32 ON_Material::Read( ON_BinaryArchive& file )
       {
         for(;;)
         {
-          if ( rc ) rc = file.ReadUuid(m_material_id);
-          if ( rc ) rc = file.ReadInt(&m_material_index);
-          if ( rc ) rc = file.ReadString(m_material_name);
+          ON_UUID material_id = Id();
+          if ( rc ) rc = file.ReadUuid(material_id);
+          if (rc) SetId(material_id);
+
+          int material_index = Index();
+          if ( rc ) rc = file.ReadInt(&material_index);
+          if (rc) SetIndex(material_index);
+
+          ON_wString material_name;
+          if ( rc ) rc = file.ReadString(material_name);
+          if (rc) SetName(material_name);
 
           if ( rc ) rc = file.ReadUuid(m_plugin_id);
 
@@ -397,8 +521,13 @@ ON_BOOL32 ON_Material::Read( ON_BinaryArchive& file )
               for ( i = 0; i < count && rc; i++ )
               {
                 int trc = file.ReadObject(m_textures.AppendNew());
-                if ( trc <= 0 )
+                if (trc <= 0)
+                {
+                  // http://mcneel.myjetbrains.com/youtrack/issue/RH-30204
+                  // Part of fixing crash reading corrupt file sem2observe copy.3dm
                   rc = false;
+                  m_textures.Remove();
+                }
                 else if ( trc > 1 )
                   m_textures.Remove();
               }
@@ -409,7 +538,8 @@ ON_BOOL32 ON_Material::Read( ON_BinaryArchive& file )
 
           if ( rc && minor_version >= 1 )
           {
-            rc = file.ReadString(m_flamingo_library);
+            ON_wString obsolete_flamingo_library;
+            rc = file.ReadString(obsolete_flamingo_library);
             if ( !rc ) break;
 
             if ( minor_version >= 2 )
@@ -421,10 +551,35 @@ ON_BOOL32 ON_Material::Read( ON_BinaryArchive& file )
               if ( minor_version >= 3 )
               {
                 // version 1.3 fields (20100917*)
-                rc = file.ReadBool(&m_bShared);
+                rc = file.ReadBool(&m_bShareable);
                 if (!rc) break;
                 rc = file.ReadBool(&m_bDisableLighting);
                 if (!rc) break;
+                if ( minor_version >= 4 )
+                {
+                  rc = file.ReadBool(&m_bFresnelReflections);
+                  if (!rc) break;
+                  rc = file.ReadDouble(&m_reflection_glossiness);
+                  if (!rc) break;
+                  rc = file.ReadDouble(&m_refraction_glossiness);
+                  if (!rc) break;
+                  rc = file.ReadDouble(&m_fresnel_index_of_refraction);
+                  if (!rc) break;
+
+                  if (minor_version >= 5)
+                  {
+                    // version 1.5 field 6.0.2014-05-16
+                    rc = file.ReadUuid(m_rdk_material_instance_id);
+                    if (!rc) break;
+                  }
+
+                  if (minor_version >= 6)
+                  {
+                    // version 1.6 field 6.0.2014-07-11
+                    rc = file.ReadBool(&m_bUseDiffuseTextureAlphaForObjectTransparencyTexture);
+                    if (!rc) break;
+                  }
+                }
               }
             }
 
@@ -440,7 +595,126 @@ ON_BOOL32 ON_Material::Read( ON_BinaryArchive& file )
   return rc;
 }
 
-bool ON_Material::ReadV3Helper( ON_BinaryArchive& file, int minor_version )
+
+bool ON_Material::Internal_WriteV3( ON_BinaryArchive& file ) const
+{
+  int i;
+  // V2 and V3 file format
+
+  bool rc = file.Write3dmChunkVersion(1,1);
+  if ( rc ) rc = file.WriteColor( m_ambient );
+  if ( rc ) rc = file.WriteColor( m_diffuse );
+  if ( rc ) rc = file.WriteColor( m_emission );
+  if ( rc ) rc = file.WriteColor( m_specular );
+  if ( rc ) rc = file.WriteDouble( Shine() );
+  if (rc) rc = file.WriteDouble(m_transparency);
+
+  if (rc) rc = file.WriteChar((unsigned char)1); // OBSOLETE // m_casts_shadows
+  if (rc) rc = file.WriteChar((unsigned char)1); // OBSOLETE // m_shows_shadows
+
+  if (rc) rc = file.WriteChar((unsigned char)0); // OBSOLETE // m_wire_mode
+  if (rc) rc = file.WriteChar((unsigned char)2); // OBSOLETE // m_wire_density
+
+  if (rc) rc = file.WriteColor(ON_Color(0, 0, 0)); // OBSOLETE // m_wire_color
+
+  if (rc)
+  {
+    // OBSOLETE - line style info never used
+    short s = 0;
+    if (rc) rc = file.WriteShort(s);
+    if (rc) rc = file.WriteShort(s);
+    if (rc) rc = file.WriteDouble(0.0);
+    if (rc) rc = file.WriteDouble(1.0);
+  }
+
+  ON_wString filename;
+  int j = 0;
+  i = FindTexture(nullptr, ON_Texture::TYPE::bitmap_texture);
+  if (i >= 0)
+  {
+    const ON_Texture& tmap = m_textures[i];
+    const ON_wString tmap_filename = tmap.m_image_file_reference.FullPath();
+    if (tmap_filename.Length() > 0)
+    {
+      filename = tmap_filename;
+      j = (ON_Texture::MODE::decal_texture == tmap.m_mode) ? 2 : 1;
+    }
+  }
+  // OBSOLETE // if ( rc ) rc = file.WriteString( TextureBitmapFileName() );
+  // OBSOLETE // i = TextureMode();
+  // OBSOLETE // if ( rc ) rc = file.WriteInt( i );
+  // OBSOLETE // if ( rc ) rc = file.WriteInt( m_texture_bitmap_index );
+  if (rc) rc = file.WriteString(filename);
+  if (rc) rc = file.WriteInt(j);
+  if (rc) rc = file.WriteInt(0);
+
+  filename.Destroy();
+  j = 0;
+  double bump_scale = 1.0;
+  i = FindTexture(nullptr, ON_Texture::TYPE::bump_texture);
+  if (i >= 0)
+  {
+    const ON_Texture& tmap = m_textures[i];
+    const ON_wString tmap_filename = tmap.m_image_file_reference.FullPath();
+    if (tmap_filename.Length() > 0)
+    {
+      filename = tmap_filename;
+      j = (ON_Texture::MODE::decal_texture == tmap.m_mode) ? 2 : 1;
+      bump_scale = tmap.m_bump_scale[1];
+    }
+  }
+  // OBSOLETE //if ( rc ) rc = file.WriteString( BumpBitmapFileName() );
+  // OBSOLETE //i = BumpMode();
+  // OBSOLETE //if ( rc ) rc = file.WriteInt( i );
+  // OBSOLETE //if ( rc ) rc = file.WriteInt( m_bump_bitmap_index );
+  // OBSOLETE //if ( rc ) rc = file.WriteDouble( m_bump_scale );
+  if (rc) rc = file.WriteString(filename);
+  if (rc) rc = file.WriteInt(j);
+  if (rc) rc = file.WriteInt(0);
+  if (rc) rc = file.WriteDouble(bump_scale);
+
+  filename.Destroy();
+  j = 0;
+  i = FindTexture(nullptr, ON_Texture::TYPE::emap_texture);
+  if (i >= 0)
+  {
+    const ON_Texture& tmap = m_textures[i];
+    const ON_wString tmap_filename = tmap.m_image_file_reference.FullPath();
+    if (tmap_filename.Length() > 0)
+    {
+      filename = tmap_filename;
+      j = (ON_Texture::MODE::decal_texture == tmap.m_mode) ? 2 : 1;
+    }
+  }
+  // OBSOLETE //if ( rc ) rc = file.WriteString( EmapBitmapFileName() );
+  // OBSOLETE //i = EmapMode();
+  // OBSOLETE //if ( rc ) rc = file.WriteInt( i );
+  // OBSOLETE //if ( rc ) rc = file.WriteInt( m_emap_bitmap_index );
+  if (rc) rc = file.WriteString(filename);
+  if (rc) rc = file.WriteInt(j);
+  if (rc) rc = file.WriteInt(0);
+
+  if (rc) rc = file.Write3dmReferencedComponentIndex(*this);
+
+  if (rc) rc = file.WriteUuid(m_plugin_id);
+
+  const ON_wString obsolete_flamingo_library = ON_wString::EmptyString;
+  if (rc) rc = file.WriteString(obsolete_flamingo_library);
+  if (rc) rc = file.WriteString(Name());
+
+
+  // 1.1 fields
+  if (rc) rc = file.WriteUuid(Id());
+  if (rc) rc = file.WriteColor(m_reflection);
+  if (rc) rc = file.WriteColor(m_transparent);
+  if (rc) rc = file.WriteDouble(m_index_of_refraction);
+
+  return rc;
+}
+
+
+
+bool ON_Material::Internal_ReadV3( ON_BinaryArchive& file, int minor_version )
 {
   double shine = 0.0, transparency = 0.0;
   int i, j;
@@ -488,14 +762,14 @@ bool ON_Material::ReadV3Helper( ON_BinaryArchive& file, int minor_version )
 
     if ( rc && !str.IsEmpty() )
     {
-      ON_Texture& texture = m_textures[AddTexture(str,ON_Texture::bitmap_texture)];
+      ON_Texture& texture = m_textures[AddTexture(static_cast< const wchar_t* >(str),ON_Texture::TYPE::bitmap_texture)];
       if ( 2 == i )
       {
-        texture.m_mode = ON_Texture::decal_texture;
+        texture.m_mode = ON_Texture::MODE::decal_texture;
       }
       else
       {
-        texture.m_mode = ON_Texture::modulate_texture;
+        texture.m_mode = ON_Texture::MODE::modulate_texture;
       }
     }
 
@@ -508,14 +782,14 @@ bool ON_Material::ReadV3Helper( ON_BinaryArchive& file, int minor_version )
 
     if ( rc && !str.IsEmpty() )
     {
-      ON_Texture& texture = m_textures[AddTexture(str,ON_Texture::bump_texture)];
+      ON_Texture& texture = m_textures[AddTexture(static_cast< const wchar_t* >(str),ON_Texture::TYPE::bump_texture)];
       if ( 2 == i )
       {
-        texture.m_mode = ON_Texture::decal_texture;
+        texture.m_mode = ON_Texture::MODE::decal_texture;
       }
       else
       {
-        texture.m_mode = ON_Texture::modulate_texture;
+        texture.m_mode = ON_Texture::MODE::modulate_texture;
       }
       texture.m_bump_scale.Set(0.0,bump_scale);
     }
@@ -527,35 +801,44 @@ bool ON_Material::ReadV3Helper( ON_BinaryArchive& file, int minor_version )
 
     if ( rc && !str.IsEmpty() )
     {
-      ON_Texture& texture = m_textures[AddTexture(str,ON_Texture::emap_texture)];
+      ON_Texture& texture = m_textures[AddTexture(static_cast< const wchar_t* >(str),ON_Texture::TYPE::emap_texture)];
       if ( 2 == i )
       {
-        texture.m_mode = ON_Texture::decal_texture;
+        texture.m_mode = ON_Texture::MODE::decal_texture;
       }
       else
       {
-        texture.m_mode = ON_Texture::modulate_texture;
+        texture.m_mode = ON_Texture::MODE::modulate_texture;
       }
     }
 
-    if ( rc ) rc = file.ReadInt( &m_material_index );
+    int material_index = Index();
+    if ( rc ) rc = file.ReadInt( &material_index );
+    if (rc) SetIndex(material_index);
 
     if ( rc ) rc = file.ReadUuid( m_plugin_id );
-    if ( rc ) rc = file.ReadString( m_flamingo_library );
-    if ( rc ) rc = file.ReadString( m_material_name );
+
+    ON_wString obsolete_flamingo_library;
+    if ( rc ) rc = file.ReadString( obsolete_flamingo_library );
+
+    ON_wString material_name;
+    if ( rc ) rc = file.ReadString( material_name );
+    if (rc) SetName(material_name);
 
     if ( minor_version >= 1 )
     {
       // 1.1 fields
-      if (rc) rc = file.ReadUuid( m_material_id );
+      ON_UUID material_id = Id();
+      if (rc) rc = file.ReadUuid( material_id );
+      SetId(material_id);
       if (rc) rc = file.ReadColor( m_reflection);
       if (rc) rc = file.ReadColor( m_transparent);
       if (rc) rc = file.ReadDouble( &m_index_of_refraction );
     }
     else
     {
-      // old material needs a valid id.
-      ON_CreateUuid(m_material_id);
+      // old material needs a valid non-nil id.
+      SetId();
     }
 
   }
@@ -577,17 +860,82 @@ int ON_Material::FindTexture( const wchar_t* filename,
   for (i = ((i0 < 0) ? 0 : (i0+1)); i < count; i++ )
   {
     if (    type != m_textures[i].m_type 
-         && type != ON_Texture::no_texture_type )
+         && type != ON_Texture::TYPE::no_texture_type )
     {
       continue;
     }
-    if ( filename && m_textures[i].m_filename.CompareNoCase(filename) )
+    const ON_wString texture_file_name = m_textures[i].m_image_file_reference.FullPath();
+    if ( filename && texture_file_name.ComparePath(filename) )
     {
       continue;
     }
     return i;
   }
   return -1;
+}
+
+double ON_Material::FresnelReflectionCoefficient(
+  double fresnel_index_of_refraction,
+  const double N[3],
+  const double R[3]
+  )
+{
+  double x,y,z,c,g;
+
+  for(;;)
+  {
+    x = N[0]-R[0];
+    y = N[1]-R[1];
+    z = N[2]-R[2];
+    c = ON_Length3d(x,y,z);
+    if ( !(c > ON_DBL_MIN) )
+      break;
+
+    c = (N[0]*x + N[1]*y + N[2]*z)/c; // c = N o (N - R) / |N - R|
+
+    g = fresnel_index_of_refraction*fresnel_index_of_refraction + c*c - 1.0;
+    g = (g > 0.0) ? sqrt(g) : 0.0;
+
+    // unsafe (potiential divide by zero, overflow, ...) and inefficient
+    // return ( ((g-c)*(g-c))/(2*(g+c)*(g+c)) ) * (1.0f + ( ((c*(g+c)-1.0)*(c*(g+c)-1.0))/((c*(g+c)+1.0)*(c*(g+c)+1.0)) ) );
+
+    x = g+c;
+    if ( !(x != 0.0) )
+      break; // x is NAN or zero
+
+    z = (g-c)/x; // z = (g-c)/(g+c)
+    if ( fabs(z) <= 1.0e-154 )
+      return 0.0; // z*z below will be zero or denormalized
+
+    x *= c; // x = c*(g+c)
+
+    y = x + 1.0; // y = c*(g+c) + 1.0
+    if ( !(y != 0.0) )
+      break; // y is NAN or zero
+  
+    y = (x - 1.0)/y; // y = (c*(g+c) - 1.0)/(c*(g+c) + 1.0)
+
+    x =  0.5*z*z*(1.0 + y*y);
+    if ( !(x == x) )
+      break; // x is NAN
+
+    if ( !ON_IS_FINITE(x) )
+      break; // x is infinity
+
+    return x; // x is 
+  }
+
+  return 1.0; // error occured
+}
+
+double  ON_Material::FresnelReflectionCoefficient(
+  ON_3dVector N,
+  ON_3dVector R
+  ) const
+{
+  return m_bFresnelReflections
+    ? ON_Material::FresnelReflectionCoefficient(m_fresnel_index_of_refraction,&N.x,&R.x)
+    : 1.0;
 }
 
 int ON_Material::FindTexture( ON_UUID texture_id ) const
@@ -606,7 +954,7 @@ int ON_Material::DeleteTexture(const wchar_t* filename,ON_Texture::TYPE type )
   int deleted_count = 0;
   int i;
 
-  if ( !filename && type == ON_Texture::no_texture_type )
+  if ( !filename && type == ON_Texture::TYPE::no_texture_type )
   {
     deleted_count = m_textures.Count();
     m_textures.Destroy();
@@ -615,9 +963,9 @@ int ON_Material::DeleteTexture(const wchar_t* filename,ON_Texture::TYPE type )
   {
     for ( i = m_textures.Count()-1; i >= 0; i--)
     {
-      if ( type != ON_Texture::no_texture_type && type != m_textures[i].m_type )
+      if ( type != ON_Texture::TYPE::no_texture_type && type != m_textures[i].m_type )
         continue;
-      if ( filename && m_textures[i].m_filename.CompareNoCase(filename) )
+      if ( filename && m_textures[i].m_image_file_reference.FullPath().ComparePath(filename) )
         continue;
       m_textures.Remove(i);
       deleted_count++;
@@ -629,7 +977,7 @@ int ON_Material::DeleteTexture(const wchar_t* filename,ON_Texture::TYPE type )
 int ON_Material::AddTexture( const ON_Texture& tx )
 {
   // has to copy user data
-  int i = FindTexture( tx.m_filename, tx.m_type );
+  int i = FindTexture( static_cast< const wchar_t* >(tx.m_image_file_reference.FullPath()), tx.m_type );
   if ( i < 0 )
   {
     i = m_textures.Count();
@@ -650,7 +998,7 @@ int ON_Material::AddTexture( const ON_Texture& tx )
 
 int ON_Material::AddTexture(const wchar_t* filename,ON_Texture::TYPE type)
 {
-  int ti = FindTexture(NULL,type);
+  int ti = FindTexture(nullptr,type);
   if ( ti < 0 )
   {
     ti = m_textures.Count();
@@ -658,10 +1006,10 @@ int ON_Material::AddTexture(const wchar_t* filename,ON_Texture::TYPE type)
   }
   if (ti >= 0 )
   {
-    m_textures[ti].m_filename = filename;
+    m_textures[ti].m_image_file_reference.SetFullPath(filename,false);
     m_textures[ti].m_type = type;
-    m_textures[ti].m_mode = ON_Texture::modulate_texture;
-    m_textures[ti].m_magfilter = ON_Texture::linear_filter;
+    m_textures[ti].m_mode = ON_Texture::MODE::modulate_texture;
+    m_textures[ti].m_magfilter = ON_Texture::FILTER::linear_filter;
     ON_CreateUuid(m_textures[ti].m_texture_id);
   }
   return ti;
@@ -675,12 +1023,15 @@ double ON_Material::Shine() const
 
 void ON_Material::SetShine( double shine )
 {
-  if ( shine < 0.0 )
-    m_shine = 0.0;
-  else if ( shine > m_max_shine)
-    m_shine = m_max_shine;
-  else
-    m_shine = (float)shine;
+  if (shine == shine) // NANs fail this test
+  {
+    if (shine < 0.0)
+      m_shine = 0.0;
+    else if (shine > ON_Material::MaxShine)
+      m_shine = ON_Material::MaxShine;
+    else
+      m_shine = (float)shine;
+  }
 }
 
   // Transparency values are in range 0.0 = opaque to 1.0 = transparent
@@ -692,26 +1043,61 @@ double ON_Material::Transparency( ) const
 void ON_Material::SetTransparency( double transparency )
 {
   if ( transparency < 0.0 )
-    m_transparency = 0.0f;
+    m_transparency = 0.0;
   else if ( transparency > 1.0)
-    m_transparency = 1.0f;
+    m_transparency = 1.0;
   else
-    m_transparency = (float)transparency;
+    m_transparency = transparency;
 }
 
-bool ON_Material::operator==( const ON_Material& src ) const
+  // Transparency values are in range 0.0 = opaque to 1.0 = transparent
+double ON_Material::Reflectivity( ) const
 {
-  return Compare(src) ? false : true;
+  return  m_reflectivity;
 }
 
-bool ON_Material::operator!=( const ON_Material& src ) const
+void ON_Material::SetReflectivity( double reflectivity )
 {
-  return Compare(src) ? true : false;
+  if ( reflectivity < 0.0 )
+    m_reflectivity = 0.0;
+  else if ( reflectivity > 1.0)
+    m_reflectivity = 1.0;
+  else
+    m_reflectivity = reflectivity;
+}
+
+bool operator==( const ON_Material& a, const ON_Material& b )
+{
+  return (0 == ON_Material::Compare(a,b));
+}
+
+bool operator!=( const ON_Material& a, const ON_Material& b )
+{
+  return (0 != ON_Material::Compare(a,b));
+}
+
+static int CompareNans(double a, double b)
+{
+  if (a == a)
+  {
+    if (b == b)
+    {
+      return ( ( a < b ) ? -1 : ((a > b) ? 1 : 0 ) );
+    }
+    // a is not a NAN, b is a NAN
+    return -1; // a < b - NAN's are last
+  }
+  else if (b == b)
+  {
+    // a is a NAN, b is not a NAN
+    return -1; // b < a - NAN's are last
+  }
+  return 0; // a and b are both NaNs
 }
 
 static int CompareDouble( double a, double b )
 {
-  return ( ( a < b ) ? -1 : ((a > b) ? 1 : 0) );
+  return ( ( a < b ) ? -1 : ((a > b) ? 1 : (a==b ? 0 : CompareNans(a,b)) ) );
 }
 
 static int CompareXform( const ON_Xform& a, const ON_Xform& b )
@@ -729,74 +1115,75 @@ static int CompareXform( const ON_Xform& a, const ON_Xform& b )
   return j;
 }
 
-static int CompareTextureDoubles( size_t count, const double* a, const double* b )
+int ON_Texture::Compare(  const ON_Texture& a, const ON_Texture& b )
 {
-  while ( count-- )
-  {
-    if ( *a < *b )
-      return -1;
-    if ( *a > *b )
-      return  1;
-    a++;
-    b++;
-  }
-  return 0;
-}
-
-int ON_Texture::Compare( const ON_Texture& other ) const
-{
-  int rc = ON_UuidCompare( &m_texture_id, &other.m_texture_id );
+  int rc = ON_UuidCompare(&a.m_texture_id, &b.m_texture_id);
   while(!rc)
   {
-    rc = m_mapping_channel_id - other.m_mapping_channel_id;
+    if ( a.m_mapping_channel_id < b.m_mapping_channel_id )
+      rc = -1;
+    else if ( a.m_mapping_channel_id > b.m_mapping_channel_id )
+      rc = 1;
     if (rc) break;
 
-    rc = m_filename.CompareNoCase(other.m_filename);    
+    rc = a.m_image_file_reference.FullPath().ComparePath(static_cast< const wchar_t* >(b.m_image_file_reference.FullPath()));    
     if (rc) break;
 
-    rc = ((int)m_bOn) - ((int)other.m_bOn);
+    rc = ((int)(a.m_bOn?1:0)) - ((int)(b.m_bOn?1:0));
     if (rc) break;
 
-    rc = ((int)m_type) - ((int)other.m_type);
+    rc = ((int)a.m_type) - ((int)b.m_type);
     if (rc) break;
 
-    rc = ((int)m_mode) - ((int)other.m_mode);
+    rc = ((int)a.m_mode) - ((int)b.m_mode);
     if (rc) break;
 
-    rc = ((int)m_minfilter) - ((int)other.m_minfilter);
+    rc = ((int)a.m_minfilter) - ((int)b.m_minfilter);
     if (rc) break;
 
-    rc = ((int)m_magfilter) - ((int)other.m_magfilter);
+    rc = ((int)a.m_magfilter) - ((int)b.m_magfilter);
     if (rc) break;
 
-    rc = ((int)m_wrapu) - ((int)other.m_wrapu);
+    rc = ((int)a.m_wrapu) - ((int)b.m_wrapu);
     if (rc) break;
 
-    rc = ((int)m_wrapv) - ((int)other.m_wrapv);
+    rc = ((int)a.m_wrapv) - ((int)b.m_wrapv);
     if (rc) break;
 
-    rc = ((int)m_wrapw) - ((int)other.m_wrapw);
+    rc = ((int)a.m_wrapw) - ((int)b.m_wrapw);
     if (rc) break;
 
-    rc = CompareXform(m_uvw, other.m_uvw);
+    rc = CompareXform(a.m_uvw, b.m_uvw);
     if (rc) break;
 
-    rc = m_border_color.Compare(other.m_border_color);
+    rc = a.m_border_color.Compare(b.m_border_color);
     if (rc) break;
 
-    rc = m_transparent_color.Compare(other.m_transparent_color);
+    rc = a.m_transparent_color.Compare(b.m_transparent_color);
     if (rc) break;
 
-    rc = m_bump_scale.Compare(other.m_bump_scale);
+    rc = ON_Interval::Compare(a.m_bump_scale,b.m_bump_scale);
     if (rc) break;
 
-    rc = CompareTextureDoubles( 1, &m_blend_constant_A, &other.m_blend_constant_A );
+    rc = CompareDouble( a.m_blend_constant_A, b.m_blend_constant_A );
     if (rc) break;
 
-    rc = CompareTextureDoubles( sizeof(m_blend_A)/sizeof(m_blend_A[0]), m_blend_A, other.m_blend_A);
+    rc = CompareDouble( a.m_blend_A0, b.m_blend_A0 );
+    if (rc) break;
+    rc = CompareDouble( a.m_blend_A1, b.m_blend_A1 );
+    if (rc) break;
+    rc = CompareDouble( a.m_blend_A2, b.m_blend_A2 );
+    if (rc) break;
+    rc = CompareDouble( a.m_blend_A3, b.m_blend_A3 );
     if (rc) break;
 
-    rc = CompareTextureDoubles( sizeof(m_blend_RGB)/sizeof(m_blend_RGB[0]), m_blend_RGB, other.m_blend_RGB);
+    rc = CompareDouble( a.m_blend_RGB0, b.m_blend_RGB0 );
+    if (rc) break;
+    rc = CompareDouble( a.m_blend_RGB1, b.m_blend_RGB1 );
+    if (rc) break;
+    rc = CompareDouble( a.m_blend_RGB2, b.m_blend_RGB2 );
+    if (rc) break;
+    rc = CompareDouble( a.m_blend_RGB3, b.m_blend_RGB3 );
     if (rc) break;
 
     break;
@@ -805,68 +1192,424 @@ int ON_Texture::Compare( const ON_Texture& other ) const
   return rc;
 }
 
-int ON_Material::Compare( const ON_Material& other ) const
+int ON_Material::Compare( const ON_Material& a, const ON_Material& b )
 {
-  // do NOT test m_material_index
+  int rc = CompareNameAndIds(a,b);
+  if (0 == rc)
+    rc = CompareAppearance(a,b);
+  return rc;
+}
 
-  int rc = ON_UuidCompare( &m_material_id, &other.m_material_id );
-  while(!rc)
-  {
-    rc = m_material_name.CompareNoCase( other.m_material_name );
-    if (rc) break;
+int ON_Material::CompareNameAndIds( const ON_Material& a, const ON_Material& b )
+{
+  // do NOT test index or id
 
-    rc = m_ambient.Compare(other.m_ambient);
-    if (rc) break;
+  const ON_UUID aid = a.Id();
+  const ON_UUID bid = b.Id();
+  int rc = ON_UuidCompare( &aid, &bid );
+  if (rc) return rc;
 
-    rc = m_diffuse.Compare( other.m_diffuse );
-    if (rc) break;
+  rc = a.Name().CompareOrdinal( static_cast< const wchar_t* >(b.Name()), false );
+  if (rc) return rc;
 
-    rc = m_diffuse.Compare( other.m_diffuse );
-    if (rc) break;
-
-    rc = m_emission.Compare( other.m_emission );
-    if (rc) break;
-
-    rc = m_specular.Compare( other.m_specular );
-    if (rc) break;
-
-    rc = m_reflection.Compare( other.m_reflection );
-    if (rc) break;
-
-    rc = m_transparent.Compare( other.m_transparent );
-    if (rc) break;
-
-    rc = CompareDouble(m_index_of_refraction,other.m_index_of_refraction);
-    if (rc) break;
-
-    rc = CompareDouble(m_reflectivity,other.m_reflectivity);
-    if (rc) break;
-
-    rc = CompareDouble(m_shine,other.m_shine);
-    if (rc) break;
-
-    rc = CompareDouble(m_transparency,other.m_transparency);
-    if (rc) break;
-
-    rc = ON_UuidCompare( &m_plugin_id, &other.m_plugin_id );
-    if (rc) break;
-
-    const int tcount = m_textures.Count();
-    rc = tcount - other.m_textures.Count();
-    int i;
-    for ( i = 0; i < tcount && !rc; i++ )
-    {
-      rc = m_textures[i].Compare( other.m_textures[i] );
-    }
-    if (rc) break;
-
-
-
-    break;
-  }
+  rc = ON_UuidCompare(&a.m_rdk_material_instance_id, &b.m_rdk_material_instance_id);
 
   return rc;  
 }
+
+
+int ON_Material::CompareColorAttributes( const ON_Material& a, const ON_Material& b )
+{
+  int rc = a.m_ambient.Compare(b.m_ambient);
+  if (rc) return rc;
+
+  rc = a.m_diffuse.Compare( b.m_diffuse );
+  if (rc) return rc;
+
+  rc = a.m_diffuse.Compare( b.m_diffuse );
+  if (rc) return rc;
+
+  rc = a.m_emission.Compare( b.m_emission );
+  if (rc) return rc;
+
+  rc = a.m_specular.Compare( b.m_specular );
+  if (rc) return rc;
+
+  rc = a.m_reflection.Compare( b.m_reflection );
+  if (rc) return rc;
+
+  rc = a.m_transparent.Compare( b.m_transparent );
+  if (rc) return rc;
+
+  rc = CompareDouble(a.m_transparency,b.m_transparency);
+  if (rc) return rc;
+
+  rc = ((int)a.m_bDisableLighting) - ((int)b.m_bDisableLighting);
+
+  return rc;  
+}
+
+
+int ON_Material::CompareReflectionAttributes( const ON_Material& a, const ON_Material& b )
+{
+  int rc = a.m_reflection.Compare( b.m_reflection );
+  if (0 != rc) return rc;
+
+  rc = CompareDouble(a.m_index_of_refraction,b.m_index_of_refraction);
+  if (0 != rc) return rc;
+
+  rc = CompareDouble(a.m_reflectivity,b.m_reflectivity);
+  if (0 != rc) return rc;
+
+  rc = CompareDouble(a.m_shine,b.m_shine);
+  if (0 != rc) return rc;
+
+  rc = (a.m_bFresnelReflections?1:0) - (b.m_bFresnelReflections?1:0);
+  if (0 != rc) return rc;
+  if ( a.m_bFresnelReflections )
+  {
+    rc = CompareDouble(a.m_fresnel_index_of_refraction,b.m_fresnel_index_of_refraction);
+    if (0 != rc) return rc;
+  }
+
+  rc = CompareDouble(a.m_reflection_glossiness,b.m_reflection_glossiness);
+  if (0 != rc) return rc;
+
+  rc = CompareDouble(a.m_refraction_glossiness,b.m_refraction_glossiness);
+
+
+  return rc;  
+}
+
+int ON_Material::CompareTextureAttributes( const ON_Material& a, const ON_Material& b )
+{
+  // do NOT test index or id
+
+  const int tcount = a.m_textures.Count();
+  int rc = tcount - b.m_textures.Count();
+  for ( int i = 0; i < tcount && 0 == rc; i++ )
+  {
+    rc = ON_Texture::Compare( a.m_textures[i], b.m_textures[i] );
+  }
+  if (0 == rc )
+    rc = ((int)a.m_bUseDiffuseTextureAlphaForObjectTransparencyTexture) - ((int)b.m_bUseDiffuseTextureAlphaForObjectTransparencyTexture);
+
+    
+  return rc;  
+}
+
+int ON_Material::CompareAppearance( const ON_Material& a, const ON_Material& b )
+{
+  int rc = CompareColorAttributes(a,b);
+  if ( 0 == rc )
+    rc = CompareReflectionAttributes(a,b);
+  if ( 0 == rc )
+    rc = CompareTextureAttributes(a,b);
+
+  if ( 0 == rc )
+    rc = ON_UuidCompare( &a.m_plugin_id, &b.m_plugin_id );
+
+  return rc;
+}
+
+
+
+
+ON_UUID ON_Material::RdkMaterialInstanceId() const
+{
+  return m_rdk_material_instance_id;
+}
+
+/*
+Description:
+Set this material's RDK material id.
+Parameters:
+rdk_material_id - [in]
+RDK material id value.
+Remarks:
+The RDK material id identifies a material definition managed by
+the RDK (rendering development kit).  Multiple materials in
+a Rhino or opennurbs model can reference the same RDK material.
+*/
+void ON_Material::SetRdkMaterialInstanceId(
+  ON_UUID rdk_material_instance_id
+  )
+{
+  m_rdk_material_instance_id = rdk_material_instance_id;
+}
+
+bool ON_Material::RdkMaterialInstanceIdIsNotNil() const
+{
+  return (!(ON_nil_uuid == m_rdk_material_instance_id));
+}
+
+bool ON_Material::RdkMaterialInstanceIdIsNil() const
+{
+  return (ON_nil_uuid == m_rdk_material_instance_id);
+}
+
+// NO ON_OBJECT_IMPLEMENT(ON_RdkMaterialInstanceIdObsoleteUserData, ON_ObsoleteUserData, ...)
+// because ON_RdkMaterialInstanceIdObsoleteUserData is derived from ON_ObsoleteUserData.
+
+// CRhRdkUserData class id valud
+//  = ON_RdkMaterialInstanceIdObsoleteUserData::ClassId()->Uuid()
+//  = AFA82772-1525-43dd-A63C-C84AC5806911
+// From CRhRdkUserData ON_OBJECT_IMPLEMENT macro
+//   file: http://subversion.mcneel.com/rhino/6/trunk/src4/rhino4/Plug-ins/RDK/RDK/RhRcmUserData.cpp
+//   revision: 102101
+//
+// {AFA82772-1525-43dd-A63C-C84AC5806911}
+const ON_UUID ON_RdkMaterialInstanceIdObsoleteUserData::m_archive_class_id_ctor =
+{ 0xAFA82772, 0x1525, 0x43dd, { 0xA6, 0x3C, 0xC8, 0x4A, 0xC5, 0x80, 0x69, 0x11 } };
+
+// CRhRdkUserData::m_userdata_uuid value
+//  = CRhRdkUserData::Uuid()
+//  = CRhRdkUserData::m_Uuid
+//  = B63ED079-CF67-416c-800D-22023AE1BE21
+// From
+//   file: http://subversion.mcneel.com/rhino/6/trunk/src4/rhino4/Plug-ins/RDK/RDK/RhRcmUserData.cpp
+//   revision: 102101
+//
+// {B63ED079-CF67-416c-800D-22023AE1BE21}
+const ON_UUID ON_RdkMaterialInstanceIdObsoleteUserData::m_archive_userdata_uuid_ctor =
+{ 0xb63ed079, 0xcf67, 0x416c, { 0x80, 0xd, 0x22, 0x2, 0x3a, 0xe1, 0xbe, 0x21 } };
+
+// CRhRdkUserData::m_application_uuid value 
+//  = CRhRdkRhinoPlugIn::RhinoPlugInUuid()
+//  = CRhRdkRhinoPlugIn::m_uuidRhinoPlugIn
+//  = 16592D58-4A2F-401D-BF5E-3B87741C1B1B
+// From 
+//  file: http://subversion.mcneel.com/rhino/6/trunk/src4/rhino4/Plug-ins/RDK/RDK/RhRcmRhinoPlugIn.cpp
+//  revision: 102101
+//
+// {16592D58-4A2F-401D-BF5E-3B87741C1B1B}
+const ON_UUID ON_RdkMaterialInstanceIdObsoleteUserData::m_archive_application_uuid_ctor =
+{ 0x16592D58, 0x4A2F, 0x401D, { 0xBF, 0x5E, 0x3B, 0x87, 0x74, 0x1C, 0x1B, 0x1B } };
+
+const unsigned int ON_RdkMaterialInstanceIdObsoleteUserData::m_userdata_copycount_ctor = 1;
+
+const ON_Xform ON_RdkMaterialInstanceIdObsoleteUserData::m_userdata_xform_ctor(ON_Xform::IdentityTransformation);
+
+ON_RdkMaterialInstanceIdObsoleteUserData::ON_RdkMaterialInstanceIdObsoleteUserData()
+: m_rdk_material_instance_id(ON_nil_uuid)
+{
+  ///////////////////////////////////////////////////////////
+  // ON_UserData field initialization:
+
+  // The values of m_userdata_uuid and m_application_uuid match those used by CRhRdkUserData.
+  m_userdata_uuid = ON_RdkMaterialInstanceIdObsoleteUserData::m_archive_userdata_uuid_ctor;
+  m_application_uuid = ON_RdkMaterialInstanceIdObsoleteUserData::m_archive_application_uuid_ctor;
+
+  // Values for the 3dm archive.
+  m_userdata_copycount = ON_RdkMaterialInstanceIdObsoleteUserData::m_userdata_copycount_ctor;
+  m_userdata_xform = ON_RdkMaterialInstanceIdObsoleteUserData::m_userdata_xform_ctor;
+
+  ///////////////////////////////////////////////////////////
+  // ON_ObsoleteUserData field initialization:
+  m_archive_class_uuid = ON_RdkMaterialInstanceIdObsoleteUserData::m_archive_class_id_ctor;
+}
+
+ON_RdkMaterialInstanceIdObsoleteUserData::~ON_RdkMaterialInstanceIdObsoleteUserData()
+{}
+
+
+ON_RdkMaterialInstanceIdObsoleteUserData::ON_RdkMaterialInstanceIdObsoleteUserData(const ON_RdkMaterialInstanceIdObsoleteUserData& src)
+: ON_ObsoleteUserData(src)
+, m_rdk_material_instance_id(src.m_rdk_material_instance_id)
+{}
+
+ON_RdkMaterialInstanceIdObsoleteUserData& ON_RdkMaterialInstanceIdObsoleteUserData::operator=(const ON_RdkMaterialInstanceIdObsoleteUserData& src)
+{
+  if (this != &src)
+  {
+    ON_ObsoleteUserData::operator=(src);
+    m_rdk_material_instance_id = src.m_rdk_material_instance_id;
+  }
+  return *this;
+}
+
+bool ON_RdkMaterialInstanceIdObsoleteUserData::GetDescription(ON_wString& description)
+{
+  description = "RDK material instance id as user data for writing pre V6 file formats.";
+  return true;
+}
+
+bool ON_RdkMaterialInstanceIdObsoleteUserData::WriteToArchive(
+  const class ON_BinaryArchive& archive,
+  const class ON_Object* parent_object
+  ) const
+{
+  return (ON_UuidIsNotNil(m_rdk_material_instance_id) && archive.Archive3dmVersion() <= 50);
+}
+
+bool ON_RdkMaterialInstanceIdObsoleteUserData::DeleteAfterWrite(
+  const ON_BinaryArchive& archive,
+  const ON_Object* parent_object
+  ) const
+{
+  // Returning true will cause the ON_BinaryArchive::WriteObject()
+  // plumbing to delete this user data.
+  return true;
+}
+
+bool ON_RdkMaterialInstanceIdObsoleteUserData::DeleteAfterRead(
+  const ON_BinaryArchive& archive,
+  ON_Object* parent_object
+  ) const
+{
+  // move the RDK material id value from the V5 user data to
+  // the V6 ON_Material.m_rdk_material_instance_id field.
+  ON_Material* mat = ON_Material::Cast(parent_object);
+  if (mat && mat->RdkMaterialInstanceIdIsNil())
+    mat->SetRdkMaterialInstanceId(m_rdk_material_instance_id);
+  
+  // Returning true will cause the ON_BinaryArchive::ReadObject()
+  // plumbing to delete this user data.
+  return true;
+}
+
+bool ON_RdkMaterialInstanceIdObsoleteUserData::IsRdkMaterialInstanceIdUserData(
+  ON_UUID class_id,
+  ON_UUID userdata_id,
+  ON_UUID app_id,
+  ON_Object* object
+  )
+{
+  return (
+    nullptr != ON_Material::Cast(object)
+    && class_id == ON_RdkMaterialInstanceIdObsoleteUserData::m_archive_class_id_ctor
+    && userdata_id == ON_RdkMaterialInstanceIdObsoleteUserData::m_archive_userdata_uuid_ctor
+    && app_id == ON_RdkMaterialInstanceIdObsoleteUserData::m_archive_application_uuid_ctor
+    );
+}
+
+static const char* ParsePastWhiteSpace(const char* s)
+{
+  for (char c = s ? *s++ : 0; 0 != c; c = *s++)
+  {
+    if (32 == c)
+      continue;
+    if (c >= 9 && c <= 13)
+      continue;
+    break;
+  }
+  return s;
+}
+
+static char ToUpper(char c)
+{
+  if (c >= 'a' && c <= 'z')
+    c -= 0x20;
+  return c;
+}
+
+static const char* ParsePast(const char* token, const char* s)
+{
+  if (0 == token || token[0] <= 32)
+    return 0;
+  
+  s = ParsePastWhiteSpace(s);
+  if (0 == s || s[0] <= 32)
+    return 0;
+  
+  for (/*empty init*/; ToUpper(*s) == ToUpper(*token); s++, token++)
+  {
+    if (0 == *s)
+      return s;
+  }
+  return 0;
+}
+
+bool ON_RdkMaterialInstanceIdObsoleteUserData::Read(
+  ON_BinaryArchive& archive
+  )
+{
+  m_rdk_material_instance_id = ON_nil_uuid;
+
+  bool rc = false;
+  for (;;)
+  {
+    int version = 0;
+    if (!archive.ReadInt(&version))
+      break;
+    if (2 != version)
+      break;
+
+    int s_length = 0;
+    if (!archive.ReadInt(&s_length))
+      break;
+    if (s_length < 0 || s_length > 1024)
+      break;
+    if (0 == s_length)
+    {
+      rc = true;
+      break;
+    }
+    
+    ON_String str((char)0, (int)s_length);
+    if (str.Length() < s_length)
+      break;
+    const char* s = str.Array();
+    if (0 == s)
+      break;
+
+    if (!archive.ReadByte(s_length, (void*)s))
+      break;
+
+    // parse the xml the CRhRdkUserData::Write() function
+    // put into V5 files and V6 files written before May 16, 2014.
+
+    s = ParsePast("<", s);
+    s = ParsePast("xml", s);
+    s = ParsePast(">", s);
+
+    s = ParsePast("<", s);
+    s = ParsePast("render-content-manager-data", s);
+    s = ParsePast(">", s);
+
+    s = ParsePast("<", s);
+    s = ParsePast("material", s);
+    s = ParsePast("instance-id", s);
+    s = ParsePast("=", s);
+
+    s = ParsePast("\"", s);
+    s = ParsePastWhiteSpace(s);
+    s = ON_ParseUuidString(s, &m_rdk_material_instance_id);
+    s = ParsePast("\"", s);
+
+    rc = (0 != s);
+    break;
+  }
+
+  return rc;
+}
+
+bool ON_RdkMaterialInstanceIdObsoleteUserData::Write(
+  ON_BinaryArchive& archive
+  ) const
+{
+  // write xml the CRhRdkUserData::Write() function
+  // put into V5 files and V6 files written before May 16, 2014.
+
+  char s__rdk_material_instance_id[37];
+  ON_String s =
+    "<xml>\n"
+    "<render-content-manager-data>\n"
+    "<material instance-id=\"";
+   s += ON_UuidToString(m_rdk_material_instance_id, s__rdk_material_instance_id);
+   s += 
+    "\" name=\"\" />\n"
+    "</render-content-manager-data>\n"
+    "</xml>";
+   const int s_length = (int)s.Length();
+   const char* s_array = s.Array();
+   bool rc
+     =  archive.WriteInt(2) // "2" was a version number used in V5 files
+     && archive.WriteInt(s_length)
+     && archive.WriteByte(s_length, s_array);
+   return rc;
+}
+
 
 ON_Color ON_Material::Ambient() const
 {
@@ -890,42 +1633,105 @@ ON_Color ON_Material::Specular() const
 
 void ON_Material::SetAmbient( ON_Color  c )
 {
-  m_ambient = c;
+  if (m_ambient != c)
+  {
+    m_ambient = c;
+    IncrementContentVersionNumber();
+  }
 }
 
 void ON_Material::SetDiffuse(  ON_Color c )
 {
-  m_diffuse = c ;
+  if (m_diffuse != c)
+  {
+    m_diffuse = c;
+    IncrementContentVersionNumber();
+  }
 }
 
 void ON_Material::SetEmission( ON_Color c )
 {
-  m_emission = c ;
+  if (m_emission != c)
+  {
+    m_emission = c;
+    IncrementContentVersionNumber();
+  }
 }
 
 void ON_Material::SetSpecular( ON_Color c )
 {
-  m_specular = c;
+  if (m_specular != c)
+  {
+    m_specular = c;
+    IncrementContentVersionNumber();
+  }
 }
 
-int ON_Material::MaterialIndex() const
+bool ON_Material::Shareable() const
 {
-  return m_material_index;
+  return m_bShareable;
 }
 
-void ON_Material::SetMaterialIndex( int i )
+void ON_Material::SetShareable(
+  bool bShareable
+  )
 {
-  m_material_index = i;
+  if (bShareable != m_bShareable)
+  {
+    m_bShareable = bShareable?true:false;
+    IncrementContentVersionNumber();
+  }
 }
 
-const wchar_t* ON_Material::MaterialName( ) const
+
+bool ON_Material::DisableLighting() const
 {
-	return m_material_name;
+  return m_bDisableLighting;
 }
 
-void ON_Material::SetMaterialName( const wchar_t* sMaterialName )
+void ON_Material::SetDisableLighting(
+  bool bDisableLighting
+  )
 {
-  m_material_name = sMaterialName;
+  if (bDisableLighting != m_bDisableLighting)
+  {
+    m_bDisableLighting = bDisableLighting?true:false;
+    IncrementContentVersionNumber();
+  }
+}
+
+
+
+bool ON_Material::UseDiffuseTextureAlphaForObjectTransparencyTexture() const
+{
+  return m_bUseDiffuseTextureAlphaForObjectTransparencyTexture;
+}
+
+void ON_Material::SetUseDiffuseTextureAlphaForObjectTransparencyTexture(
+  bool bUseDiffuseTextureAlphaForObjectTransparencyTexture
+  )
+{
+  if (bUseDiffuseTextureAlphaForObjectTransparencyTexture != m_bUseDiffuseTextureAlphaForObjectTransparencyTexture)
+  {
+    m_bUseDiffuseTextureAlphaForObjectTransparencyTexture = bUseDiffuseTextureAlphaForObjectTransparencyTexture?true:false;
+    IncrementContentVersionNumber();
+  }
+}
+  
+bool ON_Material::FresnelReflections() const
+{
+  return m_bFresnelReflections;
+}
+
+void ON_Material::SetFresnelReflections(
+  bool bFresnelReflections
+  )
+{
+  if (bFresnelReflections != m_bFresnelReflections)
+  {
+    m_bFresnelReflections = bFresnelReflections?true:false;
+    IncrementContentVersionNumber();
+  }
 }
 
 ////////////////////////////////////////////////////////////////
@@ -934,18 +1740,9 @@ void ON_Material::SetMaterialName( const wchar_t* sMaterialName )
 
 ON_OBJECT_IMPLEMENT(ON_Texture,ON_Object,"D6FF106D-329B-4f29-97E2-FD282A618020");
 
-ON_Texture::ON_Texture()
+bool ON_Texture::IsValid( ON_TextLog* text_log ) const
 {
-  Default(); // used to set defaults
-}
-
-ON_Texture::~ON_Texture()
-{
-}
-
-ON_BOOL32 ON_Texture::IsValid( ON_TextLog* text_log ) const
-{
-  if ( no_texture_type == m_type || force_32bit_texture_type == m_type )
+  if ( ON_Texture::TYPE::no_texture_type == m_type )
   {
     if ( text_log )
     {
@@ -970,16 +1767,21 @@ unsigned int ON_Texture::SizeOf() const
 {
   unsigned int sz = ON_Object::SizeOf();
   sz += sizeof(*this) - sizeof(ON_Object);
-  sz += m_filename.Length()*sizeof(wchar_t);
   return sz;
 }
 
 // overrides virtual ON_Object::Write
-ON_BOOL32 ON_Texture::Write(
-        ON_BinaryArchive& binary_archive
-      ) const
+bool ON_Texture::Write(
+  ON_BinaryArchive& binary_archive
+  ) const
 {
-  bool rc = binary_archive.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,0);
+  const int major_version = 1;
+  const int minor_version 
+    = binary_archive.Archive3dmVersion() >= 60
+    ? 1
+    : 0;
+
+  bool rc = binary_archive.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,major_version,minor_version);
   if (rc)
   {
 
@@ -990,23 +1792,26 @@ ON_BOOL32 ON_Texture::Write(
       if (!rc) break;
       rc = binary_archive.WriteInt(m_mapping_channel_id);
       if (!rc) break;
-      rc = binary_archive.WriteString(m_filename);
+      rc =
+        m_image_file_reference.FullPath().IsNotEmpty()
+        ? binary_archive.WriteString(m_image_file_reference.FullPath())
+        : binary_archive.WriteString(m_image_file_reference.RelativePath());
       if (!rc) break;
       rc = binary_archive.WriteBool(m_bOn);
       if (!rc) break;
-      rc = binary_archive.WriteInt(m_type);
+      rc = binary_archive.WriteInt(static_cast<unsigned int>(m_type));
       if (!rc) break;
-      rc = binary_archive.WriteInt(m_mode);
+      rc = binary_archive.WriteInt(static_cast<unsigned int>(m_mode));
       if (!rc) break;
-      rc = binary_archive.WriteInt(m_minfilter);
+      rc = binary_archive.WriteInt(static_cast<unsigned int>(m_minfilter));
       if (!rc) break;
-      rc = binary_archive.WriteInt(m_magfilter);
+      rc = binary_archive.WriteInt(static_cast<unsigned int>(m_magfilter));
       if (!rc) break;
-      rc = binary_archive.WriteInt(m_wrapu);
+      rc = binary_archive.WriteInt(static_cast<unsigned int>(m_wrapu));
       if (!rc) break;
-      rc = binary_archive.WriteInt(m_wrapv);
+      rc = binary_archive.WriteInt(static_cast<unsigned int>(m_wrapv));
       if (!rc) break;
-      rc = binary_archive.WriteInt(m_wrapw);
+      rc = binary_archive.WriteInt(static_cast<unsigned int>(m_wrapw));
       if (!rc) break;
       rc = binary_archive.WriteXform(m_uvw);
       if (!rc) break;
@@ -1020,13 +1825,32 @@ ON_BOOL32 ON_Texture::Write(
       if (!rc) break;
       rc = binary_archive.WriteDouble(m_blend_constant_A);
       if (!rc) break;
-      rc = binary_archive.WriteDouble(4,m_blend_A);
+      rc = binary_archive.WriteDouble(m_blend_A0);
+      if (!rc) break;
+      rc = binary_archive.WriteDouble(m_blend_A1);
+      if (!rc) break;
+      rc = binary_archive.WriteDouble(m_blend_A2);
+      if (!rc) break;
+      rc = binary_archive.WriteDouble(m_blend_A3);
       if (!rc) break;
       rc = binary_archive.WriteColor(m_blend_constant_RGB);
       if (!rc) break;
-      rc = binary_archive.WriteDouble(4,m_blend_RGB);
+      rc = binary_archive.WriteDouble(m_blend_RGB0);
+      if (!rc) break;
+      rc = binary_archive.WriteDouble(m_blend_RGB1);
+      if (!rc) break;
+      rc = binary_archive.WriteDouble(m_blend_RGB2);
+      if (!rc) break;
+      rc = binary_archive.WriteDouble(m_blend_RGB3);
       if (!rc) break;
       rc = binary_archive.WriteInt(m_blend_order);
+      if (!rc) break;
+
+      if ( minor_version <= 0 )
+        break;
+      
+      // version 1.1 added m_image_file_reference
+      rc = m_image_file_reference.Write(true,binary_archive);
       if (!rc) break;
 
       break;
@@ -1039,107 +1863,162 @@ ON_BOOL32 ON_Texture::Write(
   return rc;
 }
 
-ON_Texture::TYPE ON_Texture::TypeFromInt( int i )
+static ON_Texture::MAPPING_CHANNEL Internal_BuiltInMappingChannelFromUnsigned(
+  unsigned int built_in_mapping_channel_as_unsigned,
+  bool bEnableErrorMessage
+  )
 {
-  ON_Texture::TYPE type = no_texture_type;
-
-  switch((unsigned int)i)
+  switch (built_in_mapping_channel_as_unsigned)
   {
-  case no_texture_type:
-    type = no_texture_type;
-    break;
-  case bitmap_texture:
-    type = bitmap_texture;
-    break;
-  case bump_texture:
-    type = bump_texture;
-    break;
-  case emap_texture:
-    type = emap_texture;
-    break;
-  case transparency_texture:
-    type = transparency_texture;
-    break;
-  case force_32bit_texture_type:
-    type = force_32bit_texture_type;
-    break;
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MAPPING_CHANNEL::tc_channel);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MAPPING_CHANNEL::default_channel);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MAPPING_CHANNEL::screen_based_channel);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MAPPING_CHANNEL::wcs_channel);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MAPPING_CHANNEL::wcs_box_channel);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MAPPING_CHANNEL::environment_map_box_channel);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MAPPING_CHANNEL::environment_map_light_probe_channel);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MAPPING_CHANNEL::environment_map_spherical_channel);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MAPPING_CHANNEL::environment_map_cube_map_channel);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MAPPING_CHANNEL::environment_map_vcross_cube_map_channel);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MAPPING_CHANNEL::environment_map_hcross_cube_map_channel);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MAPPING_CHANNEL::environment_map_hemispherical_channel);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MAPPING_CHANNEL::environment_map_emap_channel);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MAPPING_CHANNEL::srfp_channel);
+  //ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MAPPING_CHANNEL::emap_channel);
   }
 
-  return type;
+  if (bEnableErrorMessage)
+  {
+    ON_ERROR("Invalid built_in_mapping_channel_as_unsigned value.");
+  }
+  return ON_Texture::MAPPING_CHANNEL::tc_channel;
 }
 
-ON_Texture::MODE ON_Texture::ModeFromInt( int i )
+ON_Texture::MAPPING_CHANNEL ON_Texture::BuiltInMappingChannelFromUnsigned(
+  unsigned int built_in_mapping_channel_as_unsigned
+  )
 {
-  ON_Texture::MODE mode = no_texture_mode;
-  switch((unsigned int)i)
-  {
-  case no_texture_mode:
-    mode = no_texture_mode;
-    break;
-  case modulate_texture:
-    mode = modulate_texture;
-    break;
-  case decal_texture:
-    mode = decal_texture;
-    break;
-  case blend_texture:
-    mode = blend_texture;
-    break;
-  case force_32bit_texture_mode:
-    mode = force_32bit_texture_mode;
-    break;
-  }
-  return mode;
-}
-
-ON_Texture::FILTER ON_Texture::FilterFromInt( int i )
-{
-  ON_Texture::FILTER filter = linear_filter;
-  switch((unsigned int)i)
-  {
-  case nearest_filter:
-    filter = nearest_filter;
-    break;
-  case linear_filter:
-    filter = linear_filter;
-    break;
-  case force_32bit_texture_filter:
-    filter = force_32bit_texture_filter;
-    break;
-  }
-  return filter;
-}
-
-ON_Texture::WRAP ON_Texture::WrapFromInt( int i )
-{
-  ON_Texture::WRAP wrap = repeat_wrap;
-
-  switch((unsigned int)i)
-  {
-  case repeat_wrap:
-    wrap = repeat_wrap;
-    break;
-  case clamp_wrap:
-    wrap = clamp_wrap;
-    break;
-  case force_32bit_texture_wrap:
-    wrap = force_32bit_texture_wrap;
-    break;
-  }
-
-  return wrap;
+  return Internal_BuiltInMappingChannelFromUnsigned(
+    built_in_mapping_channel_as_unsigned,
+    true
+    );
 }
 
 
-
-
-
-// overrides virtual ON_Object::Read
-ON_BOOL32 ON_Texture::Read(
-        ON_BinaryArchive& binary_archive
-      )
+const ON_SHA1_Hash ON_Texture::ContentHash() const
 {
-  Default();
+  ON_SHA1 sha1;
+  sha1.AccumulateSubHash(m_image_file_reference.FullPathHash());
+  sha1.AccumulateBool(m_bOn);
+  sha1.AccumulateUnsigned32(static_cast<unsigned int>(m_type));
+  sha1.AccumulateUnsigned32(static_cast<unsigned int>(m_mode));
+  sha1.AccumulateUnsigned32(static_cast<unsigned int>(m_minfilter));
+  sha1.AccumulateUnsigned32(static_cast<unsigned int>(m_magfilter));
+  sha1.AccumulateUnsigned32(static_cast<unsigned int>(m_wrapu));
+  sha1.AccumulateUnsigned32(static_cast<unsigned int>(m_wrapv));
+  sha1.AccumulateUnsigned32(static_cast<unsigned int>(m_wrapw));
+  sha1.AccumulateTransformation(m_uvw);
+  sha1.AccumulateUnsigned32(m_border_color);
+  sha1.AccumulateUnsigned32(m_transparent_color);
+  sha1.AccumulateId(m_transparency_texture_id);
+  sha1.AccumulateDouble(m_bump_scale.m_t[0]);
+  sha1.AccumulateDouble(m_bump_scale.m_t[1]);
+  sha1.AccumulateDouble(m_blend_constant_A);
+  sha1.AccumulateDouble(m_blend_A0);
+  sha1.AccumulateDouble(m_blend_A1);
+  sha1.AccumulateDouble(m_blend_A2);
+  sha1.AccumulateDouble(m_blend_A3);
+  sha1.AccumulateDouble(m_blend_constant_RGB);
+  sha1.AccumulateDouble(m_blend_RGB0);
+  sha1.AccumulateDouble(m_blend_RGB1);
+  sha1.AccumulateDouble(m_blend_RGB2);
+  sha1.AccumulateDouble(m_blend_RGB3);
+  sha1.AccumulateInteger32(m_blend_order);
+  return sha1.Hash();
+}
+
+
+bool ON_Texture::IsBuiltInMappingChannel(
+  unsigned int mapping_channel_id
+  )
+{
+  ON_Texture::MAPPING_CHANNEL mc = Internal_BuiltInMappingChannelFromUnsigned(mapping_channel_id,false);
+  return (static_cast<unsigned int>(mc) == mapping_channel_id);
+}
+
+void ON_Texture::SetBuiltInMappingChannel(
+  ON_Texture::MAPPING_CHANNEL built_in_mapping_channel_as_unsigned
+  )
+{
+  SetMappingChannel( static_cast<unsigned int>(built_in_mapping_channel_as_unsigned) );
+}
+
+void ON_Texture::SetMappingChannel(
+  unsigned int mapping_channel_id
+  )
+{
+  m_mapping_channel_id = mapping_channel_id;
+}
+
+ON_Texture::TYPE ON_Texture::TypeFromUnsigned( unsigned int type_as_unsigned )
+{
+  switch(type_as_unsigned)
+  {
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::TYPE::no_texture_type );
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::TYPE::bitmap_texture);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::TYPE::bump_texture);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::TYPE::emap_texture);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::TYPE::transparency_texture);
+  }
+
+  ON_ERROR("Invalid type_as_unsigned value.");
+  return ON_Texture::TYPE::no_texture_type;
+}
+
+ON_Texture::MODE ON_Texture::ModeFromUnsigned( unsigned int mode_as_unsigned )
+{
+  switch(mode_as_unsigned)
+  {
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MODE::no_texture_mode);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MODE::modulate_texture);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MODE::decal_texture);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::MODE::blend_texture);
+  }
+
+  ON_ERROR("Invalid mode_as_unsigned value.");
+  return ON_Texture::MODE::no_texture_mode;
+}
+
+ON_Texture::FILTER ON_Texture::FilterFromUnsigned( unsigned int filter_as_unsigned )
+{
+  switch(filter_as_unsigned)
+  {
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::FILTER::nearest_filter);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::FILTER::linear_filter);
+  }
+
+  ON_ERROR("Invalid filter_as_unsigned value.");
+  return ON_Texture::FILTER::linear_filter;
+}
+
+ON_Texture::WRAP ON_Texture::WrapFromUnsigned( unsigned int wrap_as_unsigned )
+{
+
+  switch(wrap_as_unsigned)
+  {
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::WRAP::repeat_wrap);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_Texture::WRAP::clamp_wrap);
+  }
+
+  ON_ERROR("Invalid wrap_as_unsigned value.");
+  return ON_Texture::WRAP::repeat_wrap;
+}
+
+bool ON_Texture::Read(
+  ON_BinaryArchive& binary_archive
+  )
+{
+  *this = ON_Texture::Default;
 
   int major_version = 0;
   int minor_version = 0;
@@ -1153,7 +2032,7 @@ ON_BOOL32 ON_Texture::Read(
     }
     else
     {
-      int i;
+      unsigned int i;
       for(;;)
       {
         // 1.0 values
@@ -1163,39 +2042,44 @@ ON_BOOL32 ON_Texture::Read(
         rc = binary_archive.ReadInt( &m_mapping_channel_id );
         if (!rc) break;
 
-        rc = binary_archive.ReadString(m_filename);
+        ON_wString filename;
+        rc = binary_archive.ReadString(filename);
         if (!rc) break;
+        if (ON_FileSystemPath::IsRelativePath(filename))
+          m_image_file_reference.SetRelativePath(filename);
+        else
+          m_image_file_reference.SetFullPath(filename,false);
 
         rc = binary_archive.ReadBool(&m_bOn);
         if (!rc) break;
 
         rc = binary_archive.ReadInt(&i);
         if (!rc) break;
-        m_type = ON_Texture::TypeFromInt(i);
+        m_type = ON_Texture::TypeFromUnsigned(i);
 
         rc = binary_archive.ReadInt(&i);
         if (!rc) break;
-        m_mode = ON_Texture::ModeFromInt(i);
+        m_mode = ON_Texture::ModeFromUnsigned(i);
 
         rc = binary_archive.ReadInt(&i);
         if (!rc) break;
-        m_minfilter = ON_Texture::FilterFromInt(i);
+        m_minfilter = ON_Texture::FilterFromUnsigned(i);
 
         rc = binary_archive.ReadInt(&i);
         if (!rc) break;
-        m_magfilter = ON_Texture::FilterFromInt(i);
+        m_magfilter = ON_Texture::FilterFromUnsigned(i);
 
         rc = binary_archive.ReadInt(&i);
         if (!rc) break;
-        m_wrapu = ON_Texture::WrapFromInt(i);
+        m_wrapu = ON_Texture::WrapFromUnsigned(i);
 
         rc = binary_archive.ReadInt(&i);
         if (!rc) break;
-        m_wrapv = ON_Texture::WrapFromInt(i);
+        m_wrapv = ON_Texture::WrapFromUnsigned(i);
 
         rc = binary_archive.ReadInt(&i);
         if (!rc) break;
-        m_wrapw = ON_Texture::WrapFromInt(i);
+        m_wrapw = ON_Texture::WrapFromUnsigned(i);
 
         rc = binary_archive.ReadXform(m_uvw);
         if (!rc) break;
@@ -1214,17 +2098,33 @@ ON_BOOL32 ON_Texture::Read(
 
         rc = binary_archive.ReadDouble(&m_blend_constant_A);
         if (!rc) break;
-        rc = binary_archive.ReadDouble(4,m_blend_A);
+        rc = binary_archive.ReadDouble(&m_blend_A0);
+        if (!rc) break;
+        rc = binary_archive.ReadDouble(&m_blend_A1);
+        if (!rc) break;
+        rc = binary_archive.ReadDouble(&m_blend_A2);
+        if (!rc) break;
+        rc = binary_archive.ReadDouble(&m_blend_A3);
         if (!rc) break;
         rc = binary_archive.ReadColor(m_blend_constant_RGB);
         if (!rc) break;
-        rc = binary_archive.ReadDouble(4,m_blend_RGB);
+        rc = binary_archive.ReadDouble(&m_blend_RGB0);
+        if (!rc) break;
+        rc = binary_archive.ReadDouble(&m_blend_RGB1);
+        if (!rc) break;
+        rc = binary_archive.ReadDouble(&m_blend_RGB2);
+        if (!rc) break;
+        rc = binary_archive.ReadDouble(&m_blend_RGB3);
         if (!rc) break;
 
         rc = binary_archive.ReadInt(&m_blend_order);
         if (!rc) break;
 
+        if ( minor_version <= 0 )
+          break;
 
+        rc = m_image_file_reference.Read(binary_archive);
+        if (!rc) break;
 
         break;
       }
@@ -1237,194 +2137,161 @@ ON_BOOL32 ON_Texture::Read(
 }
 
 
-void ON_Texture::Default()
+ON_OBJECT_IMPLEMENT(ON_TextureMapping,ON_ModelComponent,"32EC997A-C3BF-4ae5-AB19-FD572B8AD554");
+
+
+const ON_TextureMapping* ON_TextureMapping::FromModelComponentRef(
+  const class ON_ModelComponentReference& model_component_reference,
+  const ON_TextureMapping* none_return_value
+  )
 {
-  PurgeUserData();
-  m_texture_id = ON_nil_uuid;
-  m_mapping_channel_id = 0;
-  m_filename.Destroy();
-  m_filename_bRelativePath = false;
-  m_bOn = true;
-  m_type = bitmap_texture;
-  m_mode = modulate_texture;
-  m_minfilter = linear_filter;
-  m_magfilter = linear_filter;
-  m_wrapu = repeat_wrap;
-  m_wrapv = repeat_wrap;
-  m_wrapw = repeat_wrap;
-  m_uvw.Identity();
-  m_border_color = ON_UNSET_COLOR;
-  m_transparent_color = ON_UNSET_COLOR;
-  m_transparency_texture_id = ON_nil_uuid;
-  m_bump_scale.Set(0.0,1.0);
-  m_blend_constant_A = 1.0;
-  m_blend_A[0] = m_blend_A[1] = 1.0; m_blend_A[2] =  m_blend_A[3] = 0.0;
-  m_blend_constant_RGB.SetRGB(0,0,0);
-  m_blend_RGB[0] = m_blend_RGB[1] = 1.0; m_blend_RGB[2] = m_blend_RGB[3] = 0.0;
-  m_blend_order = 0;
-  m_runtime_ptr_id = ON_nil_uuid;
-  m_runtime_ptr = 0;
+  const ON_TextureMapping* p = ON_TextureMapping::Cast(model_component_reference.ModelComponent());
+  return (nullptr != p) ? p : none_return_value;
 }
 
-
-ON_OBJECT_IMPLEMENT(ON_TextureMapping,ON_Object,"32EC997A-C3BF-4ae5-AB19-FD572B8AD554");
-
-
-ON_TextureMapping::TYPE ON_TextureMapping::TypeFromInt(int i)
+ON_TextureMapping::TYPE ON_TextureMapping::TypeFromUnsigned(
+  unsigned int type_as_unsigned
+  )
 {
-  ON_TextureMapping::TYPE t;
-  switch(i)
+  switch (type_as_unsigned)
   {
-  case srfp_mapping:
-    t = srfp_mapping;
-    break;
-  case plane_mapping:
-    t = plane_mapping;
-    break;
-  case cylinder_mapping:
-    t = cylinder_mapping;
-    break;
-  case sphere_mapping:
-    t = sphere_mapping;
-    break;
-  case box_mapping:
-    t = box_mapping;
-    break;
-  case mesh_mapping_primitive:
-    t = mesh_mapping_primitive;
-    break;
-  case srf_mapping_primitive:
-    t = srf_mapping_primitive;
-    break;
-  case brep_mapping_primitive:
-    t = brep_mapping_primitive;
-    break;
-  default:
-    t = no_mapping;
-    break;
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_TextureMapping::TYPE::no_mapping);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_TextureMapping::TYPE::srfp_mapping);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_TextureMapping::TYPE::plane_mapping);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_TextureMapping::TYPE::cylinder_mapping);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_TextureMapping::TYPE::sphere_mapping);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_TextureMapping::TYPE::box_mapping);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_TextureMapping::TYPE::mesh_mapping_primitive);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_TextureMapping::TYPE::srf_mapping_primitive);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_TextureMapping::TYPE::brep_mapping_primitive);
   }
-  return t;
+
+  ON_ERROR("Invalid type_as_unsigned value.");
+  return ON_TextureMapping::TYPE::no_mapping;
 }
 
-ON_TextureMapping::PROJECTION ON_TextureMapping::ProjectionFromInt(int i)
+const ON_wString ON_TextureMapping::TypeToString(ON_TextureMapping::TYPE texture_mapping_type)
 {
-  ON_TextureMapping::PROJECTION p;
-  switch(i)
+  switch (texture_mapping_type)
   {
-  case clspt_projection:
-    p = clspt_projection;
-    break;
-  case ray_projection:
-    p = ray_projection;
-    break;
-  default:
-    p = no_projection;
-    break;
+  ON_ENUM_TO_WIDE_STRING_CASE(ON_TextureMapping::TYPE::no_mapping);
+  ON_ENUM_TO_WIDE_STRING_CASE(ON_TextureMapping::TYPE::srfp_mapping);
+  ON_ENUM_TO_WIDE_STRING_CASE(ON_TextureMapping::TYPE::plane_mapping);
+  ON_ENUM_TO_WIDE_STRING_CASE(ON_TextureMapping::TYPE::cylinder_mapping);
+  ON_ENUM_TO_WIDE_STRING_CASE(ON_TextureMapping::TYPE::sphere_mapping);
+  ON_ENUM_TO_WIDE_STRING_CASE(ON_TextureMapping::TYPE::box_mapping);
+  ON_ENUM_TO_WIDE_STRING_CASE(ON_TextureMapping::TYPE::mesh_mapping_primitive);
+  ON_ENUM_TO_WIDE_STRING_CASE(ON_TextureMapping::TYPE::srf_mapping_primitive);
+  ON_ENUM_TO_WIDE_STRING_CASE(ON_TextureMapping::TYPE::brep_mapping_primitive);
   }
-  return p;
+
+  ON_ERROR("Invalid texture_mapping_type value.");
+  return ON_wString::EmptyString;
 }
 
-ON_TextureMapping::TEXTURE_SPACE ON_TextureMapping::TextureSpaceFromInt(int i)
+
+ON_TextureMapping::PROJECTION ON_TextureMapping::ProjectionFromUnsigned(
+  unsigned int projection_as_unsigned
+  )
 {
-	ON_TextureMapping::TEXTURE_SPACE ts = single;
+  switch (projection_as_unsigned)
+  {
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_TextureMapping::PROJECTION::no_projection);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_TextureMapping::PROJECTION::clspt_projection);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_TextureMapping::PROJECTION::ray_projection);
+  }
 
-	switch(i)
-	{
-	case single:
-		ts = single;
-		break;
-	case divided:
-		ts = divided;
-		break;
-	}
-	return ts;
+  ON_ERROR("Invalid projection_as_unsigned value.");
+  return ON_TextureMapping::PROJECTION::no_projection;
 }
 
-ON_TextureMapping::ON_TextureMapping()
+const ON_wString ON_TextureMapping::ProjectionToString(ON_TextureMapping::PROJECTION texture_mapping_projection)
 {
-  m_mapping_primitive = 0;
-  Default();
+  switch (texture_mapping_projection)
+  {
+  ON_ENUM_TO_WIDE_STRING_CASE(ON_TextureMapping::PROJECTION::no_projection);
+  ON_ENUM_TO_WIDE_STRING_CASE(ON_TextureMapping::PROJECTION::clspt_projection);
+  ON_ENUM_TO_WIDE_STRING_CASE(ON_TextureMapping::PROJECTION::ray_projection);
+  }
+
+  ON_ERROR("Invalid texture_mapping_projection value.");
+  return ON_wString::EmptyString;
 }
+
+ON_TextureMapping::TEXTURE_SPACE ON_TextureMapping::TextureSpaceFromUnsigned(
+  unsigned int texture_space_as_unsigned
+  )
+{
+  switch (texture_space_as_unsigned)
+  {
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_TextureMapping::TEXTURE_SPACE::single);
+  ON_ENUM_FROM_UNSIGNED_CASE(ON_TextureMapping::TEXTURE_SPACE::divided);
+  }
+  
+  ON_ERROR("Invalid texture_space_as_unsigned value.");
+  return ON_TextureMapping::TEXTURE_SPACE::single;
+}
+
+const ON_wString ON_TextureMapping::SpaceToString(ON_TextureMapping::TEXTURE_SPACE texture_mapping_space)
+{
+  switch (texture_mapping_space)
+  {
+  ON_ENUM_TO_WIDE_STRING_CASE(ON_TextureMapping::TEXTURE_SPACE::single);
+  ON_ENUM_TO_WIDE_STRING_CASE(ON_TextureMapping::TEXTURE_SPACE::divided);
+  }
+  
+  ON_ERROR("Invalid texture_mapping_space value.");
+  return ON_wString::EmptyString;
+}
+
+ON_TextureMapping::ON_TextureMapping() ON_NOEXCEPT
+  : ON_ModelComponent(ON_ModelComponent::Type::TextureMapping)
+{}
 
 ON_TextureMapping::~ON_TextureMapping()
 {
-  if ( m_mapping_primitive )
-  {
-    delete m_mapping_primitive;
-    m_mapping_primitive = 0;
-  }
+  Internal_Destroy();
 }
 
-// The copy constructor and operator= overrides are needed
-// to ensure m_mapping_primitive is properly copied.
-ON_TextureMapping::ON_TextureMapping(const ON_TextureMapping& src)
-                  : ON_Object(src)
+ON_TextureMapping::ON_TextureMapping( const ON_TextureMapping& src)
+  : ON_ModelComponent(ON_ModelComponent::Type::TextureMapping,src)
 {
-  m_mapping_id    = src.m_mapping_id;
-  m_mapping_index = src.m_mapping_index;
-  m_mapping_name  = src.m_mapping_name;
-  m_type          = src.m_type;
-  m_projection    = src.m_projection;
-  m_bCapped		    = src.m_bCapped;
-	m_texture_space = src.m_texture_space;
-  m_Pxyz          = src.m_Pxyz;
-  m_Nxyz          = src.m_Nxyz;
-  m_uvw           = src.m_uvw;
-  m_mapping_primitive = ( src.m_mapping_primitive )
-                      ? src.m_mapping_primitive->Duplicate()
-                      : 0;
+  Internal_CopyFrom(src);
 }
 
 ON_TextureMapping& ON_TextureMapping::operator=(const ON_TextureMapping& src)
 {
   if ( this != &src )
   {
-    if ( m_mapping_primitive )
-    {
-      delete m_mapping_primitive;
-      m_mapping_primitive = 0;
-    }
-    ON_Object::operator=(src);
-    m_mapping_id    = src.m_mapping_id;
-    m_mapping_index = src.m_mapping_index;
-    m_mapping_name  = src.m_mapping_name;
-    m_type          = src.m_type;
-    m_projection    = src.m_projection;
-    m_bCapped			  = src.m_bCapped;
-		m_texture_space = src.m_texture_space;
-    m_Pxyz          = src.m_Pxyz;
-    m_Nxyz          = src.m_Nxyz;
-    m_uvw           = src.m_uvw;
-    if ( src.m_mapping_primitive )
-      m_mapping_primitive = src.m_mapping_primitive->Duplicate();
+    Internal_Destroy();
+    ON_ModelComponent::operator=(src);
+    Internal_CopyFrom(src);
   }
   return *this;
 }
 
-void ON_TextureMapping::Default()
+void ON_TextureMapping::Internal_Destroy()
 {
   PurgeUserData();
-  if ( m_mapping_primitive )
-  {
-    delete m_mapping_primitive;
-    m_mapping_primitive = 0;
-  }
 
-  m_mapping_id = ON_nil_uuid;
-  m_mapping_index = 0;
-  m_mapping_name.Destroy();
-  m_type = no_mapping;
-  m_projection = no_projection;
-  m_texture_space = single;
-  m_Pxyz.Identity();
-  m_Nxyz.Identity();
-  m_uvw.Identity();
-  m_bCapped = false;
+  m_mapping_primitive.reset();
 }
 
-ON_BOOL32 ON_TextureMapping::IsValid( ON_TextLog* text_log ) const
+void ON_TextureMapping::Internal_CopyFrom(const ON_TextureMapping& src)
 {
-  if ( m_type != ON_TextureMapping::TypeFromInt(m_type) )
+  m_type				= src.m_type;
+  m_projection			= src.m_projection;
+  m_bCapped				= src.m_bCapped;
+  m_texture_space		= src.m_texture_space;
+  m_Pxyz				= src.m_Pxyz;
+  m_Nxyz				= src.m_Nxyz;
+  m_uvw					= src.m_uvw;
+  m_mapping_primitive	= src.m_mapping_primitive;
+}
+
+bool ON_TextureMapping::IsValid( ON_TextLog* text_log ) const
+{
+  if ( m_type != ON_TextureMapping::TypeFromUnsigned( static_cast<unsigned int>(m_type) ) )
   {
     if ( text_log )
     {
@@ -1433,7 +2300,7 @@ ON_BOOL32 ON_TextureMapping::IsValid( ON_TextLog* text_log ) const
     return false;
   }
 
-  if ( m_projection != ON_TextureMapping::ProjectionFromInt(m_projection) )
+  if ( m_projection != ON_TextureMapping::ProjectionFromUnsigned( static_cast<unsigned int>(m_projection) ) )
   {
     if ( text_log )
     {
@@ -1442,7 +2309,7 @@ ON_BOOL32 ON_TextureMapping::IsValid( ON_TextLog* text_log ) const
     return false;
   }
 
-  if (m_texture_space != ON_TextureMapping::TextureSpaceFromInt(m_texture_space))
+  if (m_texture_space != ON_TextureMapping::TextureSpaceFromUnsigned( static_cast<unsigned int>(m_texture_space)))
   {
 	  if (text_log)
 	  {
@@ -1456,74 +2323,30 @@ ON_BOOL32 ON_TextureMapping::IsValid( ON_TextLog* text_log ) const
 
 void ON_TextureMapping::Dump( ON_TextLog& text_log ) const
 {
-  text_log.Print("Texture mapping id: "); text_log.Print(m_mapping_id); text_log.Print("\n");
+  ON_ModelComponent::Dump(text_log);
+
   text_log.PushIndent();
 
-  text_log.Print("type: ");
-  switch(m_type)
-  {
-  case no_mapping:
-    text_log.Print("no mapping\n");
-    break;
-  case plane_mapping:
-    text_log.Print("plane mapping\n");
-    break;
-  case cylinder_mapping:
-    text_log.Print("cylinder mapping\n");
-    break;
-  case sphere_mapping:
-    text_log.Print("sphere mapping\n");
-    break;
-	case box_mapping:
-    text_log.Print("box mapping\n");
-    break;
-  default:
-    text_log.Print("%d\n",m_type);
-    break;
-  }
+  const ON_wString type(ON_TextureMapping::TypeToString(m_type));
+  text_log.Print("m_type = %ls\n",static_cast<const wchar_t*>(type));
 
-  text_log.Print("projection: ");
-  switch(m_projection)
-  {
-  case no_projection:
-    text_log.Print("no projection\n");
-    break;
-  case clspt_projection:
-    text_log.Print("closest point to mesh vertex\n");
-    break;
-  case ray_projection:
-    text_log.Print("mesh normal ray intersection\n");
-    break;
-  default:
-    text_log.Print("%d\n",m_projection);
-    break;
-  }
+  const ON_wString projection(ON_TextureMapping::ProjectionToString(m_projection));
+  text_log.Print("m_projection = %ls\n",static_cast<const wchar_t*>(projection));
 
-	text_log.Print("texture_space: ");
-  switch(m_texture_space)
-  {
-  case single:
-    text_log.Print("single texture space\n");
-    break;
-  case clspt_projection:
-    text_log.Print("divided texture space\n");
-    break;
-  default:
-    text_log.Print("%d\n",m_texture_space);
-    break;
-  }
+  const ON_wString texture_space(ON_TextureMapping::SpaceToString(m_texture_space));
+  text_log.Print("m_texture_space = %ls\n",static_cast<const wchar_t*>(texture_space));
 
-  text_log.Print("XYZ point transformation:\n");
+  text_log.Print("m_Pxyz =\n");
   text_log.PushIndent();
   text_log.Print(m_Pxyz);
   text_log.PopIndent();
 
-  text_log.Print("XYZ normal transformation:\n");
+  text_log.Print("m_Nxyz =\n");
   text_log.PushIndent();
   text_log.Print(m_Nxyz);
   text_log.PopIndent();
 
-  text_log.Print("UVW transformation:\n");
+  text_log.Print("m_uvw =\n");
   text_log.PushIndent();
   text_log.Print(m_uvw);
   text_log.PopIndent();
@@ -1538,12 +2361,112 @@ unsigned int ON_TextureMapping::SizeOf() const
   return sz;
 }
 
+
+ON_Xform ON_Texture::GetPictureShrinkSurfaceTransformation(
+  const class ON_Brep* original,
+  const class ON_Brep* shrunk,
+  const ON_Xform* error_return
+)
+{
+  const class ON_Surface* original_srf 
+    = (nullptr != original && 1 == original->m_F.Count())
+    ? original->m_F[0].SurfaceOf()
+    : nullptr;
+  const class ON_Surface* shrunk_srf 
+    = (nullptr != shrunk && 1 == shrunk->m_F.Count())
+    ? shrunk->m_F[0].SurfaceOf()
+    : nullptr;
+  return ON_Texture::GetPictureShrinkSurfaceTransformation(
+    original_srf,
+    shrunk_srf,
+    error_return
+  );
+}
+
+ON_Xform ON_Texture::GetPictureShrinkSurfaceTransformation(
+  const class ON_Surface* original,
+  const class ON_Surface* shrunk,
+  const ON_Xform* error_return
+)
+{
+  ON_Interval original_udomain;
+  ON_Interval original_vdomain; 
+  ON_Interval shrunk_udomain;
+  ON_Interval shrunk_vdomain;
+  if (nullptr != original)
+  {
+    original_udomain = original->Domain(0);
+    original_vdomain = original->Domain(1);
+  }
+  if (nullptr != shrunk)
+  {
+    shrunk_udomain = shrunk->Domain(0);
+    shrunk_vdomain = shrunk->Domain(1);
+  }
+  return ON_Texture::GetPictureShrinkSurfaceTransformation(
+    original_udomain, original_vdomain,
+    shrunk_udomain, shrunk_vdomain,
+    error_return
+  );
+}
+
+ON_Xform ON_Texture::GetPictureShrinkSurfaceTransformation(
+  const class ON_Interval& original_udomain,
+  const class ON_Interval& original_vdomain,
+  const class ON_Interval& shrunk_udomain,
+  const class ON_Interval& shrunk_vdomain,
+  const ON_Xform* error_return
+)
+{
+  if (nullptr == error_return)
+    error_return = &ON_Xform::Nan;
+
+  if (false == original_udomain.IsIncreasing())
+    return *error_return;
+  if (false == original_vdomain.IsIncreasing())
+    return *error_return;
+
+  if (false == shrunk_udomain.IsIncreasing())
+    return *error_return;
+  if (false == shrunk_vdomain.IsIncreasing())
+    return *error_return;
+
+  if (false == original_udomain.Includes(shrunk_udomain, false))
+    return *error_return;
+  if (false == original_vdomain.Includes(shrunk_vdomain, false))
+    return *error_return;
+  if (false == original_udomain.Includes(shrunk_udomain, true) && false == original_vdomain.Includes(shrunk_vdomain, true))
+    return *error_return;
+
+  const ON_3dPoint p0(original_udomain.NormalizedParameterAt(shrunk_udomain[0]), original_vdomain.NormalizedParameterAt(shrunk_vdomain[0]),0.0);
+  const ON_3dPoint p1(original_udomain.NormalizedParameterAt(shrunk_udomain[1]), original_vdomain.NormalizedParameterAt(shrunk_vdomain[1]),0.0);
+  if (!(0.0 <= p0.x && p0.x < p1.x && p1.x <= 1.0))
+    return *error_return;
+  if (!(0.0 <= p0.y && p0.y < p1.y && p1.y <= 1.0))
+    return *error_return;
+
+  const double sx = shrunk_udomain.Length() / original_udomain.Length();
+  if (!(sx > 0.0 && sx <= 1.0))
+    return *error_return;
+  const double sy = shrunk_vdomain.Length() / original_vdomain.Length();
+  if (!(sx > 0.0 && sx <= 1.0))
+    return *error_return;
+
+  // The new brep has a smaller surface.
+  // Adust the texture transform to use the proper subset of the old picture image texture.
+  ON_Xform x
+    = ON_Xform::TranslationTransformation(p0 - ON_3dPoint::Origin)
+    * ON_Xform::ScaleTransformation(ON_3dPoint::Origin, sx, sy, 1.0);
+
+  return x;
+}
+
 bool ON_TextureMapping::ReverseTextureCoordinate( int dir )
 {
   bool rc = false;
   if ( 0 <= dir && dir <= 3 )
   {
-    ON_Xform x(1.0);
+    ON_Xform x(ON_Xform::IdentityTransformation);
     x.m_xform[dir][dir] = -1.0;
     x.m_xform[dir][3] = 1.0;
     m_uvw = x*m_uvw;
@@ -1557,7 +2480,7 @@ bool ON_TextureMapping::SwapTextureCoordinate( int i, int j )
   bool rc = false;
   if (i!=j && 0 <= i && i <= 3 && 0 <= j && j <= 3)
   {
-    ON_Xform x(1.0);
+    ON_Xform x(ON_Xform::IdentityTransformation);
     x.m_xform[i][i] = x.m_xform[j][j] = 0.0;
     x.m_xform[i][j] = x.m_xform[j][i] = 1.0;
     m_uvw = x*m_uvw;
@@ -1571,7 +2494,7 @@ bool ON_TextureMapping::TileTextureCoordinate( int dir, double count, double off
   bool rc = false;
   if ( 0 <= dir && dir <= 3 && 0.0 != count && ON_IsValid(count) && ON_IsValid(offset) )
   {
-    ON_Xform x(1.0);
+    ON_Xform x(ON_Xform::IdentityTransformation);
     x.m_xform[dir][dir] = count;
     x.m_xform[dir][3] = offset;
     m_uvw = x*m_uvw;
@@ -1586,7 +2509,7 @@ bool ON_Texture::ReverseTextureCoordinate( int dir )
   bool rc = false;
   if ( 0 <= dir && dir <= 3 )
   {
-    ON_Xform x(1.0);
+    ON_Xform x(ON_Xform::IdentityTransformation);
     x.m_xform[dir][dir] = -1.0;
     x.m_xform[dir][3] = 1.0;
     m_uvw = x*m_uvw;
@@ -1600,7 +2523,7 @@ bool ON_Texture::SwapTextureCoordinate( int i, int j )
   bool rc = false;
   if (i!=j && 0 <= i && i <= 3 && 0 <= j && j <= 3)
   {
-    ON_Xform x(1.0);
+    ON_Xform x(ON_Xform::IdentityTransformation);
     x.m_xform[i][i] = x.m_xform[j][j] = 0.0;
     x.m_xform[i][j] = x.m_xform[j][i] = 1.0;
     m_uvw = x*m_uvw;
@@ -1614,7 +2537,7 @@ bool ON_Texture::TileTextureCoordinate( int dir, double count, double offset )
   bool rc = false;
   if ( 0 <= dir && dir <= 3 && 0.0 != count && ON_IsValid(count) && ON_IsValid(offset) )
   {
-    ON_Xform x(1.0);
+    ON_Xform x(ON_Xform::IdentityTransformation);
     x.m_xform[dir][dir] = count;
     x.m_xform[dir][3] = offset;
     m_uvw = x*m_uvw;
@@ -1766,7 +2689,7 @@ int ON_TextureMapping::EvaluatePlaneMapping(
 
   ON_3dPoint rst(m_Pxyz*P);
 
-  if ( ray_projection == m_projection )
+  if ( ON_TextureMapping::PROJECTION::ray_projection == m_projection )
   {
     ON_3dVector n(m_Nxyz*N);
     if ( fabs(rst.z) < fabs(n.z)*on__overflow_tol )
@@ -1806,7 +2729,7 @@ int ON_TextureMapping::EvaluateSphereMapping(
 	const double r = ((const ON_3dVector*)(&rst.x))->Length();
 	double t0, t1;
 	
-	if ( ray_projection == m_projection )
+	if ( ON_TextureMapping::PROJECTION::ray_projection == m_projection )
 	{
 		ON_3dVector n(m_Nxyz*N);
 		// Shoot a ray from P in the direction N and see if it 
@@ -1880,7 +2803,7 @@ int ON_TextureMapping::EvaluateCylinderMapping(
 	PROJECTION mapping_proj = m_projection;
 	
 	side0 = 0;
-	if ( ON_TextureMapping::ray_projection == mapping_proj )
+	if ( ON_TextureMapping::PROJECTION::ray_projection == mapping_proj )
 	{
 		ON_3dVector n(m_Nxyz*N);
 		t = 0.0;
@@ -2006,7 +2929,7 @@ int ON_TextureMapping::EvaluateCylinderMapping(
       rst.x = -rst.x; 
     }
 
-		if ( ON_TextureMapping::divided == m_texture_space )
+		if ( ON_TextureMapping::TEXTURE_SPACE::divided == m_texture_space )
 		{
 		  if ( r >= 1.0-ON_SQRT_EPSILON )
 		  {
@@ -2027,7 +2950,7 @@ int ON_TextureMapping::EvaluateCylinderMapping(
 		rst.y = 0.5*rst.y + 0.5;
     if ( rst.y < 0.0) rst.y = 0.0; else if (rst.y > 1.0) rst.y = 1.0;
 
-		if ( ON_TextureMapping::divided == m_texture_space )
+		if ( ON_TextureMapping::TEXTURE_SPACE::divided == m_texture_space )
 		{
       // bottom uses 4/6 <= x <= 5/6 region of the texture map.
       // top uses 5/6 <= x <= 1 region of the texture map.
@@ -2048,7 +2971,7 @@ int ON_TextureMapping::EvaluateCylinderMapping(
 		else if (rst.x > 1.0 )
 			rst.x = 1.0;
 
-    if ( ON_TextureMapping::divided == m_texture_space )
+    if ( ON_TextureMapping::TEXTURE_SPACE::divided == m_texture_space )
     {
       // side uses 0 <= x <= 2/3 region of the texture map
       rst.x *= 2.0;
@@ -2101,7 +3024,7 @@ int ON_TextureMapping::EvaluateBoxMapping(
   //  5 =  bottom side (z=-1)
   //  6 =  top side (z=+1)
 	
-  if ( ON_TextureMapping::ray_projection == m_projection )
+  if ( ON_TextureMapping::PROJECTION::ray_projection == m_projection )
 	{
 		
 		if ( m_bCapped )
@@ -2211,7 +3134,7 @@ int ON_TextureMapping::EvaluateBoxMapping(
   rst.y = 0.5*rst.y + 0.5;
 	rst.z = 0.0;
 	
-	if( divided == m_texture_space)
+	if( ON_TextureMapping::TEXTURE_SPACE::divided == m_texture_space)
 	{
     rst.x = (shift + rst.x)/(m_bCapped ? 6.0 : 4.0);
 	}
@@ -2220,6 +3143,7 @@ int ON_TextureMapping::EvaluateBoxMapping(
   
   return side0;
 }
+
 
 int ON_TextureMapping::Evaluate(
         const ON_3dPoint& P,
@@ -2231,7 +3155,7 @@ int ON_TextureMapping::Evaluate(
 {
   int rc;
   ON_3dPoint Q = P*P_xform;
-  if ( ON_TextureMapping::ray_projection == m_projection )
+  if ( ON_TextureMapping::PROJECTION::ray_projection == m_projection )
   {
     // need a transformed normal
     ON_3dVector V = N_xform*N;
@@ -2256,29 +3180,29 @@ int ON_TextureMapping::Evaluate(
 
 	switch(m_type)
 	{
-	case srfp_mapping:
+	case ON_TextureMapping::TYPE::srfp_mapping:
 		*T = m_uvw * P; // Do NOT apply m_Pxyz here.
     rc = 1;
 		break;
-	case sphere_mapping:
+	case ON_TextureMapping::TYPE::sphere_mapping:
 		rc = EvaluateSphereMapping(P,N,T);
 		break;
-	case cylinder_mapping:
+	case ON_TextureMapping::TYPE::cylinder_mapping:
 		rc = EvaluateCylinderMapping(P,N,T);
 		break;
-	case box_mapping:
+	case ON_TextureMapping::TYPE::box_mapping:
 		rc = EvaluateBoxMapping(P,N,T);
 		break;
 
-	case mesh_mapping_primitive:
+	case ON_TextureMapping::TYPE::mesh_mapping_primitive:
     rc = 0;
 		break;
 
-	case srf_mapping_primitive:
+	case ON_TextureMapping::TYPE::srf_mapping_primitive:
     rc = 0;
 		break;
 
-	case brep_mapping_primitive:
+	case ON_TextureMapping::TYPE::brep_mapping_primitive:
     rc = 0;
 		break;
 
@@ -2289,14 +3213,44 @@ int ON_TextureMapping::Evaluate(
   return rc;
 }
 
+const ON_Object* ON_TextureMapping::CustomMappingPrimitive(void) const
+{
+	return m_mapping_primitive.get();
+}
+
+//Returns a valid mesh if the custom mapping primitive is a mesh.  Otherwise nullptr.
+//Implementation is return ON_Mesh::Cast(CustomMappingPrimitive());
+const ON_Mesh* ON_TextureMapping::CustomMappingMeshPrimitive(void) const
+{
+	return ON_Mesh::Cast(CustomMappingPrimitive());
+}
+
+//Returns a valid brep if the custom mapping primitive is a brep.  Otherwise nullptr.
+//Implementation is return ON_Brep::Cast(CustomMappingPrimitive());
+const ON_Brep* ON_TextureMapping::CustomMappingBrepPrimitive(void) const
+{
+	return ON_Brep::Cast(CustomMappingPrimitive());
+}
+//Returns a valid surface if the custom mapping primitive is a surface.  Otherwise nullptr.
+//Implementation is return ON_Surface::Cast(CustomMappingPrimitive());
+const ON_Surface* ON_TextureMapping::CustomMappingSurfacePrimitive(void) const
+{
+	return ON_Surface::Cast(CustomMappingPrimitive());
+}
+
+void ON_TextureMapping::SetCustomMappingPrimitive(ON_Object* p)
+{
+	m_mapping_primitive.reset(p);
+}
+
 ON__UINT32 ON_TextureMapping::MappingCRC() const
 {
   // include any member that can change values returned by Evaluate
   ON__UINT32 crc32 = 0x12345678;
   crc32 = ON_CRC32(crc32,sizeof(m_type),&m_type);
-  if ( ON_TextureMapping::srfp_mapping != m_type )
+  if ( ON_TextureMapping::TYPE::srfp_mapping != m_type )
   {
-    // As of 21 June 2006 m_Pxyz cannot effect srfp_mapping,
+    // As of 21 June 2006 m_Pxyz cannot effect ON_TextureMapping::TYPE::srfp_mapping,
     // so it shouldn't be included in the CRC for srfp_mappings.
     crc32 = ON_CRC32(crc32,sizeof(m_projection),    &m_projection);
     crc32 = ON_CRC32(crc32,sizeof(m_texture_space), &m_texture_space);
@@ -2304,13 +3258,13 @@ ON__UINT32 ON_TextureMapping::MappingCRC() const
     crc32 = ON_CRC32(crc32,sizeof(m_Pxyz),          &m_Pxyz);
     // do not include m_Nxyz here - it won't help and may hurt
 
-	  if ( 0 != m_mapping_primitive )
+	  if ( m_mapping_primitive )
 	  {
       switch( m_type )
       {
-      case ON_TextureMapping::mesh_mapping_primitive:
+      case ON_TextureMapping::TYPE::mesh_mapping_primitive:
         {
-          const ON_Mesh* mesh = ON_Mesh::Cast(m_mapping_primitive);
+          const ON_Mesh* mesh = CustomMappingMeshPrimitive();
           if ( 0 == mesh )
             break;
           crc32 = mesh->DataCRC(crc32);
@@ -2327,9 +3281,9 @@ ON__UINT32 ON_TextureMapping::MappingCRC() const
         }
         break;
 
-      case ON_TextureMapping::brep_mapping_primitive:
+      case ON_TextureMapping::TYPE::brep_mapping_primitive:
         {
-          const ON_Brep* brep = ON_Brep::Cast(m_mapping_primitive);
+          const ON_Brep* brep = CustomMappingBrepPrimitive();
           if ( 0 == brep )
             break;
           crc32 = brep->DataCRC(crc32);
@@ -2344,22 +3298,21 @@ ON__UINT32 ON_TextureMapping::MappingCRC() const
         }
         break;
 
-      case ON_TextureMapping::srf_mapping_primitive:
+      case ON_TextureMapping::TYPE::srf_mapping_primitive:
         {
-          const ON_Surface* surface = ON_Surface::Cast(m_mapping_primitive);
+          const ON_Surface* surface = CustomMappingSurfacePrimitive();
           if ( 0 == surface )
             break;
           crc32 = surface->DataCRC(crc32);
         }
         break;
 
-      case ON_TextureMapping::no_mapping:
-      case ON_TextureMapping::srfp_mapping:
-      case ON_TextureMapping::plane_mapping:
-      case ON_TextureMapping::cylinder_mapping:
-      case ON_TextureMapping::sphere_mapping:
-      case ON_TextureMapping::box_mapping:
-      case ON_TextureMapping::force_32bit_mapping_projection:
+      case ON_TextureMapping::TYPE::no_mapping:
+      case ON_TextureMapping::TYPE::srfp_mapping:
+      case ON_TextureMapping::TYPE::plane_mapping:
+      case ON_TextureMapping::TYPE::cylinder_mapping:
+      case ON_TextureMapping::TYPE::sphere_mapping:
+      case ON_TextureMapping::TYPE::box_mapping:
       default:
         break;
       }
@@ -2373,15 +3326,15 @@ ON__UINT32 ON_TextureMapping::MappingCRC() const
 
 bool ON_TextureMapping::RequiresVertexNormals() const
 {
-  if ( ON_TextureMapping::srfp_mapping == m_type )
+  if ( ON_TextureMapping::TYPE::srfp_mapping == m_type )
     return false;
 
-	if(m_projection == ray_projection) 
+	if(m_projection == ON_TextureMapping::PROJECTION::ray_projection) 
     return true;
 
-  if(m_type == box_mapping) 
+  if(m_type == ON_TextureMapping::TYPE::box_mapping) 
     return true;
-	if(m_type == cylinder_mapping && m_bCapped) 
+	if(m_type == ON_TextureMapping::TYPE::cylinder_mapping && m_bCapped) 
     return true;
 
 	return false;
@@ -2389,7 +3342,7 @@ bool ON_TextureMapping::RequiresVertexNormals() const
 
 bool ON_TextureMapping::IsPeriodic(void) const
 {
-	return (m_type == sphere_mapping || m_type == cylinder_mapping);
+	return (m_type == ON_TextureMapping::TYPE::sphere_mapping || m_type == ON_TextureMapping::TYPE::cylinder_mapping);
 }
 
 bool ON_TextureMapping::HasMatchingTextureCoordinates( 
@@ -2421,11 +3374,11 @@ bool ON_TextureMapping::HasMatchingTextureCoordinates(
 
     // zero transformations indicate the mapping
     // values are independent of the 3d location
-    // of the mesh.  The srfp_mapping != m_type
+    // of the mesh.  The ON_TextureMapping::TYPE::srfp_mapping != m_type
     // check is used because these mappings are
     // alwasy independent of 3d location but
     // the transformations are often set.
-    if ( ON_TextureMapping::srfp_mapping != m_type
+    if ( ON_TextureMapping::TYPE::srfp_mapping != m_type
          && mesh_xform 
          && mesh_xform->IsValid()
          && !mesh_xform->IsZero() 
@@ -2634,7 +3587,7 @@ bool ON_TextureMapping::GetTextureCoordinates(
 
 	bool rc = false;
 
-  if ( ON_TextureMapping::srfp_mapping == m_type )
+  if ( ON_TextureMapping::TYPE::srfp_mapping == m_type )
   {
     // uv textures from surface parameterization
     T.Reserve(vcnt);
@@ -2664,7 +3617,7 @@ bool ON_TextureMapping::GetTextureCoordinates(
       memset(Tsd,0,vcnt*sizeof(Tsd[0]));
     }
 
-    ON_Xform P_xform(1.0), N_xform(1.0);
+    ON_Xform P_xform(ON_Xform::IdentityTransformation), N_xform(ON_Xform::IdentityTransformation);
     const double* PT = 0;
     const double* NT = 0;
     if ( mesh_xform )
@@ -2689,15 +3642,17 @@ bool ON_TextureMapping::GetTextureCoordinates(
     double w;
     int sd;
 
-		if (clspt_projection == m_projection && ON_TextureMapping::mesh_mapping_primitive == m_type && NULL != m_mapping_primitive)
+		if (ON_TextureMapping::PROJECTION::clspt_projection == m_projection 
+      && (ON_TextureMapping::TYPE::mesh_mapping_primitive == m_type || ON_TextureMapping::TYPE::brep_mapping_primitive == m_type)
+      && nullptr != m_mapping_primitive)
 		{
       rc = false;
 		}
 		else if ( mesh_N &&
-          (   ray_projection == m_projection 
-           || ON_TextureMapping::box_mapping == m_type 
-           || ON_TextureMapping::cylinder_mapping == m_type
-           || ON_TextureMapping::mesh_mapping_primitive == m_type
+          (   ON_TextureMapping::PROJECTION::ray_projection == m_projection 
+           || ON_TextureMapping::TYPE::box_mapping == m_type 
+           || ON_TextureMapping::TYPE::cylinder_mapping == m_type
+           || ON_TextureMapping::TYPE::mesh_mapping_primitive == m_type
 		   )
         )
   	{
@@ -2836,13 +3791,21 @@ bool ON_TextureMapping::GetTextureCoordinates(
     }
   }
 
-  if ( ON_TextureMapping::srfp_mapping == m_type )
+  if ( ON_TextureMapping::TYPE::srfp_mapping == m_type )
   {
-    // uv textures from surface parameterization
-    T.Reserve(mesh.m_V.Count());
-    T.SetCount(mesh.m_V.Count());
-    T.Zero();
-    rc = GetSPTCHelper(mesh,*this,&T[0].x,2);
+    if (mesh.HasSurfaceParameters())
+    {
+      // uv textures from surface parameterization
+      T.Reserve(mesh.m_V.Count());
+      T.SetCount(mesh.m_V.Count());
+      T.Zero();
+      rc = GetSPTCHelper(mesh, *this, &T[0].x, 2);
+    }
+    else
+    {
+      //In this case, we're just going to leave the TC array in place
+      rc = false;
+    }
   }
   else
   {
@@ -2925,7 +3888,7 @@ public:
   int m_tci;
 
   ON_Mesh& m_mesh;
-  ON_3dPointArray* m_mesh_dV;
+  ON_3dPointArray* m_mesh_dV = nullptr;
   bool m_bHasVertexNormals;
   bool m_bHasVertexTextures;
   bool m_bHasVertexColors;
@@ -3003,11 +3966,9 @@ ON__CChangeTextureCoordinateHelper::ON__CChangeTextureCoordinateHelper(
 
   m_mesh.m_V.Reserve(vcnt+newvcnt);
 
-  if (    m_mesh.HasDoublePrecisionVertices() 
-       && m_mesh.DoublePrecisionVerticesAreValid() 
-     )
+  if ( m_mesh.HasDoublePrecisionVertices() )
   {
-    m_mesh_dV = &m_mesh.DoublePrecisionVertices();
+    m_mesh_dV = &m_mesh.m_dV;
     m_mesh_dV->Reserve(vcnt+newvcnt);
   }
   else
@@ -3067,10 +4028,8 @@ ON__CChangeTextureCoordinateHelper::ON__CChangeTextureCoordinateHelper(
 
 ON__CChangeTextureCoordinateHelper::~ON__CChangeTextureCoordinateHelper()
 {
-  if ( 0 != m_mesh_dV )
+  if ( nullptr != m_mesh_dV )
   {
-    m_mesh.SetDoublePrecisionVerticesAsValid();
-    m_mesh.SetSinglePrecisionVerticesAsValid();
     m_mesh_dV = 0;
   }
 }
@@ -3162,7 +4121,7 @@ int ON__CChangeTextureCoordinateHelper::DupVertex(int vi)
   {
     // Note:  This m_TC[] is the subset of m_mesh.m_TC[]
     //        that need to be duped.  The constructor
-    //        insures that m_TC[i] is not NULL and
+    //        insures that m_TC[i] is not nullptr and
     //        has the right count and capacity.
     //
     //        DO NOT REFERENCE m_mesh.m_TC[] in this block.
@@ -3301,7 +4260,7 @@ bool EvBoxSideTextureCoordinateHelper2(
   //  5 =  bottom side (z=-1)
   //  6 =  top side (z=+1)
 	
-  if ( ON_TextureMapping::ray_projection == box_mapping.m_projection )
+  if ( ON_TextureMapping::PROJECTION::ray_projection == box_mapping.m_projection )
 	{
     double s;
     if ( side == IntersectBoxSideRayHelper(side, rst, n, &s) )
@@ -3359,7 +4318,7 @@ bool EvBoxSideTextureCoordinateHelper2(
   rst.y = 0.5*rst.y + 0.5;
 	rst.z = 0.0;
 	
-	if( ON_TextureMapping::divided == box_mapping.m_texture_space)
+	if( ON_TextureMapping::TEXTURE_SPACE::divided == box_mapping.m_texture_space)
 	{
     rst.x = (shift + rst.x)/(box_mapping.m_bCapped ? 6.0 : 4.0);
 	}
@@ -3389,7 +4348,7 @@ bool EvBoxSideTextureCoordinateHelper1(
                             ? mesh.m_N.Array()
                             : 0;
 
-  ON_Xform P_xform(1.0), N_xform(1.0);
+  ON_Xform P_xform(ON_Xform::IdentityTransformation), N_xform(ON_Xform::IdentityTransformation);
   const double* PT = 0;
   const double* NT = 0;
   if ( mesh_xform )
@@ -3413,7 +4372,7 @@ bool EvBoxSideTextureCoordinateHelper1(
   const float* f;
   double w;
 
-  if ( mesh_N && ON_TextureMapping::ray_projection == box_mapping.m_projection )
+  if ( mesh_N && ON_TextureMapping::PROJECTION::ray_projection == box_mapping.m_projection )
 	{
 		// calculation uses mesh vertex normal
     if ( PT && NT )
@@ -3630,11 +4589,11 @@ void AdjustMeshPeriodicTextureCoordinatesHelper(
 
   // see if any texture coordinate adjustment is necessary
   const ON_TextureMapping::TYPE mapping_type = mapping.m_type;
-  const bool bSphereCheck = ( ON_TextureMapping::sphere_mapping == mapping_type );
-  const bool bCylinderCheck = (Tsd && ON_TextureMapping::cylinder_mapping == mapping_type);
-  const bool bBoxCheck = (Tsd && ON_TextureMapping::box_mapping == mapping_type);
+  const bool bSphereCheck = ( ON_TextureMapping::TYPE::sphere_mapping == mapping_type );
+  const bool bCylinderCheck = (Tsd && ON_TextureMapping::TYPE::cylinder_mapping == mapping_type);
+  const bool bBoxCheck = (Tsd && ON_TextureMapping::TYPE::box_mapping == mapping_type);
 
-  if ( bBoxCheck && ON_TextureMapping::single == mapping.m_texture_space )
+  if ( bBoxCheck && ON_TextureMapping::TEXTURE_SPACE::single == mapping.m_texture_space )
   {
     AdjustSingleBoxTextureCoordinatesHelper( mesh, mesh_xform, mesh_T, mesh_T_stride, Tsd, mapping );
     return;
@@ -3860,28 +4819,28 @@ void AdjustMeshPeriodicTextureCoordinatesHelper(
   int newvcnt = 0;
   for ( ftci = 0; ftci < ftc_count; ftci++ )
   {
-    ON__CMeshFaceTC& ftc = ftc_list[ftci];
-    Fvi = F[ftc.fi].vi;
-    if ( ftc.Tx[0] != Tx[Fvi[0]] )
+    ON__CMeshFaceTC& ftc_local = ftc_list[ftci];
+    Fvi = F[ftc_local.fi].vi;
+    if ( ftc_local.Tx[0] != Tx[Fvi[0]] )
     {
-      ftc.bSetT[0] = true;
+      ftc_local.bSetT[0] = true;
       newvcnt++;
     }
-    if ( ftc.Tx[1] != Tx[Fvi[1]] )
+    if ( ftc_local.Tx[1] != Tx[Fvi[1]] )
     {
-      ftc.bSetT[1] = true;
+      ftc_local.bSetT[1] = true;
       newvcnt++;
     }
-    if ( ftc.Tx[2] != Tx[Fvi[2]] )
+    if ( ftc_local.Tx[2] != Tx[Fvi[2]] )
     {
-      ftc.bSetT[2] = true;
+      ftc_local.bSetT[2] = true;
       newvcnt++;
     }
     if ( Fvi[2] != Fvi[3] )
     {
-      if ( ftc.Tx[3] != Tx[Fvi[3]] )
+      if ( ftc_local.Tx[3] != Tx[Fvi[3]] )
       {
-        ftc.bSetT[3] = true;
+        ftc_local.bSetT[3] = true;
         newvcnt++;
       }
     }
@@ -3891,7 +4850,7 @@ void AdjustMeshPeriodicTextureCoordinatesHelper(
     return;
 
 
-  F = 0; // Setting them to NULL makes sure anybody who
+  F = 0; // Setting them to nullptr makes sure anybody who
          // tries to use them below will crash.
 
   // reserve room for new vertex information
@@ -3900,24 +4859,24 @@ void AdjustMeshPeriodicTextureCoordinatesHelper(
   // add vertices and update mesh faces
   for ( ftci = 0; ftci < ftc_count; ftci++ )
   {
-    const ON__CMeshFaceTC& ftc = ftc_list[ftci];
-    int* meshFvi = mesh.m_F[ftc.fi].vi;
+    const ON__CMeshFaceTC& ftc_local = ftc_list[ftci];
+    int* meshFvi = mesh.m_F[ftc_local.fi].vi;
 
-    if ( ftc.bSetT[0] )
+    if ( ftc_local.bSetT[0] )
     {
-      helper.ChangeTextureCoordinate(meshFvi,0,ftc.Tx[0],ON_UNSET_FLOAT,mesh_T,mesh_T_stride);
+      helper.ChangeTextureCoordinate(meshFvi,0,ftc_local.Tx[0],ON_UNSET_FLOAT,mesh_T,mesh_T_stride);
     }
-    if ( ftc.bSetT[1] )
+    if ( ftc_local.bSetT[1] )
     {
-      helper.ChangeTextureCoordinate(meshFvi,1,ftc.Tx[1],ON_UNSET_FLOAT,mesh_T,mesh_T_stride);
+      helper.ChangeTextureCoordinate(meshFvi,1,ftc_local.Tx[1],ON_UNSET_FLOAT,mesh_T,mesh_T_stride);
     }
-    if ( ftc.bSetT[2] )
+    if ( ftc_local.bSetT[2] )
     {
-      helper.ChangeTextureCoordinate(meshFvi,2,ftc.Tx[2],ON_UNSET_FLOAT,mesh_T,mesh_T_stride);
+      helper.ChangeTextureCoordinate(meshFvi,2,ftc_local.Tx[2],ON_UNSET_FLOAT,mesh_T,mesh_T_stride);
     }
-    if ( ftc.bSetT[3] )
+    if ( ftc_local.bSetT[3] )
     {
-      helper.ChangeTextureCoordinate(meshFvi,3,ftc.Tx[3],ON_UNSET_FLOAT,mesh_T,mesh_T_stride);
+      helper.ChangeTextureCoordinate(meshFvi,3,ftc_local.Tx[3],ON_UNSET_FLOAT,mesh_T,mesh_T_stride);
     }
   }
 }
@@ -3931,23 +4890,23 @@ bool SeamCheckHelper( const ON_TextureMapping& mp,
   bool bSeamCheck = false;
   switch(mp.m_type)
   {
-    case ON_TextureMapping::box_mapping:
-      if ( ON_TextureMapping::divided == mp.m_texture_space )
+    case ON_TextureMapping::TYPE::box_mapping:
+      if ( ON_TextureMapping::TEXTURE_SPACE::divided == mp.m_texture_space )
       {
         if ( mp.m_bCapped )
           two_pi_tc = 2.0/3.0;
         Tsd = &Tside;
         bSeamCheck = true;
       }
-      else if ( ON_TextureMapping::single == mp.m_texture_space )
+      else if ( ON_TextureMapping::TEXTURE_SPACE::single == mp.m_texture_space )
       {
         Tsd = &Tside;
         bSeamCheck = true;
       }
       break;
 
-    case ON_TextureMapping::cylinder_mapping:
-      if ( ON_TextureMapping::divided == mp.m_texture_space )
+    case ON_TextureMapping::TYPE::cylinder_mapping:
+      if ( ON_TextureMapping::TEXTURE_SPACE::divided == mp.m_texture_space )
       {
         two_pi_tc = 2.0/3.0;
         Tsd = &Tside;
@@ -3955,7 +4914,7 @@ bool SeamCheckHelper( const ON_TextureMapping& mp,
       bSeamCheck = true;
       break;
 
-    case ON_TextureMapping::sphere_mapping:
+    case ON_TextureMapping::TYPE::sphere_mapping:
       bSeamCheck = true;
       break;
 
@@ -3989,13 +4948,13 @@ const ON_TextureCoordinates* ON_Mesh::SetCachedTextureCoordinates(
   ON_SimpleArray<int>* Tsd = 0;
   bool bSeamCheck = SeamCheckHelper( mp, two_pi_tc, Tside, Tsd ) && HasSharedVertices(*this);
   if ( bSeamCheck )
-    mp.m_uvw.Identity();
+    mp.m_uvw = ON_Xform::IdentityTransformation;
 
   ON_TextureCoordinates* TC = 0;
   {
     for ( int i = 0; i < m_TC.Count(); i++ )
     {
-      if ( m_TC[i].m_tag.m_mapping_id == mapping.m_mapping_id )
+      if ( m_TC[i].m_tag.m_mapping_id == mapping.Id() )
       {
         TC = &m_TC[i];
         break;
@@ -4077,7 +5036,7 @@ bool ON_Mesh::SetTextureCoordinates(
 
   bool bSeamCheck = SeamCheckHelper( mp, two_pi_tc, Tside, Tsd ) && HasSharedVertices(*this);
   if ( bSeamCheck )
-    mp.m_uvw.Identity();
+    mp.m_uvw = ON_Xform::IdentityTransformation;
 
   // Use mp instead of mapping to call GetTextureCoordinates()
   // because m_uvw must be the identity if we have seams.
@@ -4137,7 +5096,7 @@ void ON_MappingChannel::Default()
   memset(this,0,sizeof(*this));
   m_mapping_channel_id = 1;
   m_mapping_index = -1;
-  m_object_xform.Identity();
+  m_object_xform = ON_Xform::IdentityTransformation;
 }
 
 int ON_MappingChannel::Compare( const ON_MappingChannel& other ) const
@@ -4191,7 +5150,7 @@ bool ON_MappingChannel::Read( ON_BinaryArchive& archive )
         // channels with zero transformations.  This
         // if clause finds those and sets them to the
         // identity.
-        m_object_xform.Identity();
+        m_object_xform = ON_Xform::IdentityTransformation;
       }
     }
 
@@ -4317,6 +5276,13 @@ bool ON_MaterialRef::Read( ON_BinaryArchive& archive )
       rc = false;
   }
   return rc;
+}
+
+void ON_MaterialRef::SetMaterialSource(
+  ON::object_material_source material_source
+  )
+{
+  m_material_source = (unsigned char)material_source;
 }
 
 ON::object_material_source ON_MaterialRef::MaterialSource() const
@@ -4550,6 +5516,16 @@ const ON_MappingRef* ON_ObjectRenderingAttributes::MappingRef(
         return mr;
     }    
   }
+
+  //ALB 2013.12.03
+  //Fixes http://mcneel.myjetbrains.com/youtrack/issue/RH-5730
+  //I'm sick of this bug being considered irrelavent, and since I've decided to go out of my way to 
+  //Sort out as many mapping problems as I can, I'm fixing this one like this.
+  if (m_mappings.Count() > 0)
+  {
+	  return &m_mappings[0];
+  }
+
   return 0;
 }
 
@@ -4646,7 +5622,7 @@ bool ON_ObjectRenderingAttributes::AddMappingChannel(
     mc.m_mapping_channel_id = mapping_channel_id;
     mc.m_mapping_id = mapping_id;
     mc.m_mapping_index = -1; // 27th October 2011 John Croudy - constructor is not called by AppendNew().
-    mc.m_object_xform.Identity();
+    mc.m_object_xform = ON_Xform::IdentityTransformation;
     return true;
   }
 
@@ -4738,7 +5714,7 @@ bool ON_MappingRef::AddMappingChannel(
   mc.m_mapping_channel_id = mapping_channel_id;
   mc.m_mapping_id         = mapping_id;
   mc.m_mapping_index      = -1; // 27th October 2011 John Croudy - constructor is not called by AppendNew().
-  mc.m_object_xform.Identity();
+  mc.m_object_xform = ON_Xform::IdentityTransformation;
 
   return true;
 }
@@ -4896,9 +5872,14 @@ bool ON_ObjectRenderingAttributes::Read( ON_BinaryArchive& archive )
 
 bool ON_TextureMapping::SetSurfaceParameterMapping(void)
 {
-  Default();
-	m_type = srfp_mapping;
-  ON_CreateUuid(m_mapping_id);
+  // The nullptr check is wierd.
+  // Speculation: A reference was null and somebody added this
+  // as a hack to prevent a crash.
+  if ( false == ON_IsNullPtr(this) )
+  {
+    *this = ON_TextureMapping::SurfaceParameterTextureMapping;
+    SetId(); // new id
+  }
 	return true;
 }
 
@@ -4910,7 +5891,7 @@ bool ON_TextureMapping::SetPlaneMapping(
           const ON_Interval& dz
           )
 {
-  Default();
+  *this = ON_TextureMapping::Unset;
 
   // Don't call plane.IsValid(), because the plane
   // equation does not matter and many developers
@@ -4994,8 +5975,8 @@ bool ON_TextureMapping::SetPlaneMapping(
   m_Nxyz.m_xform[3][2] = 0.0;
   m_Nxyz.m_xform[3][3] = 1.0;
 
-  m_type = plane_mapping;
-  ON_CreateUuid(m_mapping_id);
+  m_type = ON_TextureMapping::TYPE::plane_mapping;
+  SetId();
 
 #if defined(ON_DEBUG)
   {
@@ -5041,7 +6022,7 @@ bool ON_TextureMapping::SetBoxMapping(const ON_Plane& plane,
   if (rc)
   {
     m_bCapped = bCapped;
-    m_type = ON_TextureMapping::box_mapping;
+    m_type = ON_TextureMapping::TYPE::box_mapping;
   }
   return rc;
 }
@@ -5074,7 +6055,7 @@ bool ON_TextureMapping::SetCylinderMapping(const ON_Cylinder& cylinder, bool bIs
   bool rc = SetBoxMapping(cylinder.circle.plane,dr,dr,dh,bIsCapped);
   if (rc)
   {
-	  m_type = cylinder_mapping;
+	  m_type = ON_TextureMapping::TYPE::cylinder_mapping;
   }
 
 	return rc;
@@ -5086,7 +6067,7 @@ bool ON_TextureMapping::SetSphereMapping(const ON_Sphere& sphere)
   bool rc = SetBoxMapping(sphere.plane,dr,dr,dr,false);
   if (rc)
   {
-	  m_type = sphere_mapping;
+	  m_type = ON_TextureMapping::TYPE::sphere_mapping;
   }
 	return rc;
 }

@@ -16,6 +16,16 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
+#include "opennurbs_zlib.h"
+
 struct ON_ZlibImplementation
 {
   z_stream m_strm;
@@ -652,3 +662,60 @@ ON__UINT32 ON_UncompressStream::OutCRC() const
   return m_out_crc;
 }
 
+
+class ON_UncompressBuffer_Context
+{
+public:
+  ON_UncompressBuffer_Context(
+    size_t sizeof_uncompressed_buffer,
+    const void* uncompressed_buffer
+    )
+    : m_dst((sizeof_uncompressed_buffer > 0) ? ((unsigned char*)uncompressed_buffer) : nullptr)
+    , m_dst_end((nullptr != m_dst) ? (m_dst + sizeof_uncompressed_buffer) : nullptr)
+  {}
+
+  unsigned char* m_dst = nullptr;
+  unsigned char* m_dst_end = nullptr;
+  static bool Callback(void* context, ON__UINT32 size, const void* buffer)
+  {
+    ON_UncompressBuffer_Context* p = (ON_UncompressBuffer_Context*)context;
+    unsigned char* dst = p->m_dst;
+    unsigned char* dst_end = p->m_dst_end;
+    const unsigned char* src = (size > 0) ? ((const unsigned char*)buffer) : nullptr;
+    const unsigned char* src_end = (nullptr != src) ? (src + size) : nullptr;
+    while (dst < dst_end && src < src_end)
+    {
+      *dst++ = *src++;
+    }
+    p->m_dst = dst;
+    return (src == src_end);
+  }
+private:
+  ON_UncompressBuffer_Context() = delete;
+  ON_UncompressBuffer_Context(const ON_UncompressBuffer_Context&) = delete;
+  ON_UncompressBuffer_Context& operator=(const ON_UncompressBuffer_Context&) = delete;
+};
+
+size_t ON_UncompressBuffer(
+  size_t sizeof_compressed_buffer,
+  const void* compressed_buffer,
+  size_t sizeof_uncompressed_buffer,
+  void* uncompressed_buffer
+  )
+{
+  unsigned char* dst((sizeof_uncompressed_buffer > 0) ? ((unsigned char*)uncompressed_buffer) : nullptr);
+  ON_UncompressBuffer_Context context(sizeof_uncompressed_buffer, dst);
+  ON_UncompressStream unzipper;
+  bool rc = unzipper.SetCallback(ON_UncompressBuffer_Context::Callback, &context);
+  if (rc)
+  {
+    rc = unzipper.Begin();
+    if (rc)
+    {
+      rc = unzipper.In(sizeof_compressed_buffer, compressed_buffer);
+      if (!unzipper.End())
+        rc = false;
+    }
+  }
+  return rc ? (context.m_dst - dst) : 0;
+}

@@ -24,10 +24,9 @@
 //
 ////////////////////////////////////////////////////////////////////////
 
-// uncomment the "ON_DLL_IMPORTS" define to use opennurbs as a Windows DLL
-//#define ON_DLL_IMPORTS
-#include "../opennurbs.h"
-#include "../examples_linking_pragmas.h"
+#include "../opennurbs_public_examples.h"
+
+#include "../example_userdata/example_ud.h"
 
 static bool Dump3dmFileHelper( 
         const wchar_t* sFileName, // full name of file
@@ -42,11 +41,11 @@ static bool Dump3dmFileHelper(
     return false;
   }
 
-  ON_BinaryFile file( ON::read3dm, fp );
+  ON_BinaryFile file( ON::archive_mode::read3dm, fp );
 
   int version = 0;
   ON_String comment_block;
-  ON_BOOL32 rc = file.Read3dmStartSection( &version, comment_block );
+  bool rc = file.Read3dmStartSection( &version, comment_block );
   if (!rc) {
     dump.Print("**ERROR** Read3dmStartSection() failed\n");
     return false;
@@ -101,7 +100,7 @@ static bool ReadFileHelper(
   dump.PushIndent();
 
   // create achive object from file pointer
-  ON_BinaryFile archive( ON::read3dm, archive_fp );
+  ON_BinaryFile archive( ON::archive_mode::read3dm, archive_fp );
 
   // read the contents of the file into "model"
   bool rc = model.Read( archive, &dump );
@@ -115,16 +114,6 @@ static bool ReadFileHelper(
   else
     dump.Print("Errors during reading.\n");
 
-  // see if everything is in good shape
-  if ( model.IsValid(&dump) )
-  {
-    dump.Print("Model is valid.\n");
-  }
-  else
-  {
-    dump.Print("Model is not valid.\n");
-  }
-
   // create a text dump of the model
   if ( bVerboseTextDump )
   {
@@ -132,9 +121,6 @@ static bool ReadFileHelper(
     model.Dump(dump);
     dump.PopIndent();
   }
-
-  // destroy this model
-  model.Destroy();
 
   dump.PopIndent();
 
@@ -163,19 +149,26 @@ static int ReadDirectoryHelper(
 
     // read files in this directory
     ON_FileIterator file_it;
-    for ( const wchar_t* file_name = file_it.FirstFile( directory_name, file_name_filter );
-          0 != file_name;
-          file_name = file_it.NextFile()
+    bool bFoundDirectory = false;
+    for ( bool bHaveFileSystemItem = (file_it.Initialize( directory_name, file_name_filter ) && file_it.FirstItem());
+          bHaveFileSystemItem;
+          bHaveFileSystemItem = file_it.NextItem()
         )
     {
-      if ( file_it.CurrentFileIsDirectory() )
+      if (file_it.CurrentItemIsDirectory())
+      {
+        bFoundDirectory = true;
+        continue;
+      }
+
+      if ( false == file_it.CurrentItemIsFile() )
         continue;      
       
-      if ( file_it.CurrentFileIsHidden() )
+      if ( file_it.CurrentItemIsHidden() )
         continue;
 
-      ON_wString full_path;
-      if ( !file_it.GetCurrentFullPathFileName(full_path) )
+      ON_wString full_path(file_it.CurrentItemFullPathName());
+      if ( full_path.IsEmpty() )
         continue;
       
       if ( !ON::IsOpenNURBSFile(full_path) )
@@ -186,22 +179,22 @@ static int ReadDirectoryHelper(
     }
 
     // read files in subdirectories
-    if ( directory_depth < maximum_directory_depth )
+    if ( bFoundDirectory && directory_depth < maximum_directory_depth )
     {
       ON_FileIterator dir_it;
-      for ( const wchar_t* subdirectory_name = dir_it.FirstFile( directory_name, 0 );
-            0 != subdirectory_name;
-            subdirectory_name = dir_it.NextFile()
+      for ( bool bHaveFileSystemItem = (dir_it.Initialize( directory_name, nullptr ) && dir_it.FirstItem());
+            bHaveFileSystemItem;
+            bHaveFileSystemItem = dir_it.NextItem()
           )
       {
-        if ( false == dir_it.CurrentFileIsDirectory() )
+        if ( false == dir_it.CurrentItemIsDirectory() )
           continue;
 
-        if ( dir_it.CurrentFileIsHidden() )
+        if ( dir_it.CurrentItemIsHidden() )
           continue;
 
-        ON_wString full_path;
-        if ( !dir_it.GetCurrentFullPathFileName(full_path) )
+        ON_wString full_path(dir_it.CurrentItemFullPathName());
+        if ( full_path.IsEmpty() )
           continue;
       
         file_count += ReadDirectoryHelper(
@@ -249,6 +242,29 @@ static void print_help(const char* example_read_exe_name)
   printf("  example_files/ directory and subdirectories.\n");
 }
 
+
+#if defined(ON_COMPILER_MSC)
+
+// When you run a C program, you can use either of the two wildcards
+// the question mark (?) and the asterisk (*) to specify filename
+// and path arguments on the command line.
+// By default, wildcards are not expanded in command-line arguments. 
+// You can replace the normal argument vector argv loading routine with 
+// a version that does expand wildcards by linking with the setargv.obj or wsetargv.obj file. 
+// If your program uses a main function, link with setargv.obj. 
+// If your program uses a wmain function, link with wsetargv.obj. 
+// Both of these have equivalent behavior.
+// To link with setargv.obj or wsetargv.obj, use the /link option. 
+//
+// For example:
+// cl example.c /link setargv.obj
+// The wildcards are expanded in the same manner as operating system commands.
+// (See your operating system user's guide if you are unfamiliar with wildcards.)
+
+// example_read.vcxproj linkin options include setargv.obj.
+
+#endif
+
 int main( int argc, const char *argv[] )
 {
   // If you are using OpenNURBS as a Windows DLL, then you MUST use
@@ -259,8 +275,15 @@ int main( int argc, const char *argv[] )
   const char* example_read_exe_name = 0;
   if ( argc >= 1 && 0 != argv && 0 != argv[0] && 0 != argv[0][0] )
   {
-    on_splitpath(argv[0],0,0,&example_read_exe_name,0);
+    on_splitpath(
+      argv[0],
+      nullptr, // drive
+      nullptr, // director,
+      &example_read_exe_name,
+      nullptr // extension
+      );
   }
+
   if ( 0 == example_read_exe_name || 0 == example_read_exe_name[0] )
   {
 #if defined(ON_OS_WINDOWS)

@@ -25,23 +25,30 @@
 class ON_CLASS ON_BoundingBox
 {
 public:
-  static const ON_BoundingBox EmptyBoundingBox; // ((1.0,0,0,0,0),(-1.0,0.0,0.0))
+  static const ON_BoundingBox EmptyBoundingBox; // ((1.0,0.0,0.0),(-1.0,0.0,0.0))
+  static const ON_BoundingBox UnsetBoundingBox; // all coordinates are ON_UNSET_VALUE
+  static const ON_BoundingBox NanBoundingBox;   // all coordinates are ON_DBL_QNAN
 
-  ON_BoundingBox(); // creates EmptyBox
+  ON_BoundingBox() ON_NOEXCEPT; // creates EmptyBoundingBox
+  ~ON_BoundingBox() = default;
+  ON_BoundingBox(const ON_BoundingBox&) = default;
+  ON_BoundingBox& operator=(const ON_BoundingBox&) = default;
 
-	ON_BoundingBox(
+	explicit ON_BoundingBox(
     const ON_3dPoint&, // min corner of axis aligned bounding box
     const ON_3dPoint&  // max corner of axis aligned bounding box
     );
-  ~ON_BoundingBox();
 
 
+  // OBSOLETE
   // temporary - use ON_ClippingRegion - this function will be removed soon.
   int IsVisible( 
     const ON_Xform& bbox2c
     ) const;
 
-  void Destroy(); // invalidates bounding box
+
+  // OBSOLETE
+  void Destroy(); // set this = ON_BoundingBox::EmptyBoundingBox
 
   // operator[] returns min if index <= 0 and max if indes >= 1
   ON_3dPoint& operator[](int);
@@ -79,7 +86,17 @@ public:
     ON_Line edges[12]  // returns list of 12 edge segments
     ) const;
 
+  // OBSOLETE IsValid() = IsNotEmpty()
   bool IsValid() const; // empty boxes are not valid
+
+  bool IsSet() const;        // every coordinate is a finite, valid double, not ON_UNSET_VALUE and not ON_UNSET_POSITIVE_VALUE
+  bool IsUnset() const;      // some coordinate is ON_UNSET_VALUE or ON_UNSET_POSITIVE_VALUE
+  bool IsNan() const;        // some coordinate is a NAN
+  bool IsUnsetOrNan() const; // = IsUnset() or IsNan()
+
+  bool IsEmpty() const;      // (m_min.x > m_max.x || m_min.y > m_max.y || m_min.z > m_max.z) && IsSet();
+  bool IsNotEmpty() const;   // (m_min.x <= m_max.x && m_min.y <= m_max.y && m_min.z <= m_max.z) && IsSet()
+  bool IsPoint() const;      // (m_min.x == m_max.x && m_min.y == m_max.y && m_min.z == m_max.z) && IsSet()
   
   void Dump(class ON_TextLog&) const;
   
@@ -119,7 +136,7 @@ public:
   // If bGrowBox is true, the existing box is expanded, otherwise it is only set to the current point list
   bool Set(     
     int dim,
-    int is_rat,
+    bool is_rat,
     int count,
     int stride,
     const double* point_array,
@@ -153,7 +170,7 @@ public:
 
   bool Set(     
     int dim,
-    int is_rat,
+    bool is_rat,
     int count,
     int stride,
     const float* point_array,
@@ -490,8 +507,8 @@ public:
 
 	bool Intersection(				//Returns true when intersect is non-empty. 
 				 const ON_Line&,		//Infinite Line segment to intersect with 
-				 double* =NULL ,			// t0  parameter of first intersection point
-				 double* =NULL       // t1  parameter of last intersection point (t0<=t1)   
+				 double* =nullptr ,			// t0  parameter of first intersection point
+				 double* =nullptr       // t1  parameter of last intersection point (t0<=t1)   
 				 ) const;			 
 
   /* 
@@ -526,7 +543,7 @@ public:
          const ON_BoundingBox&, 
          const ON_BoundingBox&
          );
-                  
+                 
   /* 
   Description:
     Test to see if "this" and other_bbox are disjoint (do not intersect).
@@ -547,15 +564,177 @@ public:
   ON_3dPoint m_max;
 };
 
+/*
+Returns:
+  True if lhs and rhs are identical.
+*/
+ON_DECL
+bool operator==( const ON_BoundingBox& lhs, const ON_BoundingBox& rhs );
+
+/*
+Returns:
+  True if lhs and rhs are not equal.
+*/
+ON_DECL
+bool operator!=( const ON_BoundingBox& lhs, const ON_BoundingBox& rhs );
+
+class ON_CLASS ON_BoundingBoxAndHash
+{
+public:
+  ON_BoundingBoxAndHash() = default;
+  ~ON_BoundingBoxAndHash() = default;
+  ON_BoundingBoxAndHash(const ON_BoundingBoxAndHash&) = default;
+  ON_BoundingBoxAndHash& operator=(const ON_BoundingBoxAndHash&) = default;
+
+public:
+  // This hash depends on the context and is a hash
+  // of the information used to calculte the bounding box.
+  // It is not the hash of the box values
+
+  void Set(
+    const ON_BoundingBox& bbox,
+    const ON_SHA1_Hash& hash
+  );
+
+  const ON_BoundingBox& BoundingBox() const;
+
+  const ON_SHA1_Hash& Hash() const;
+
+  /*
+  Returns:
+   True if bounding box IsSet() is true and hash is not EmptyContentHash.
+  */
+  bool IsSet() const;
+
+  bool Write(
+    class ON_BinaryArchive& archive
+  ) const;
+
+  bool Read(
+    class ON_BinaryArchive& archive
+  );
+
+ private:
+  ON_BoundingBox m_bbox = ON_BoundingBox::UnsetBoundingBox;
+  ON_SHA1_Hash m_hash = ON_SHA1_Hash::EmptyContentHash;
+};
+
+/*
+A class that caches 8 bounding box - hash pairs and keeps the most frequently
+used bounding boxes.
+*/
+class ON_CLASS ON_BoundingBoxCache
+{
+public:
+  ON_BoundingBoxCache() = default;
+  ~ON_BoundingBoxCache() = default;
+  ON_BoundingBoxCache(const ON_BoundingBoxCache&) = default;
+  ON_BoundingBoxCache& operator=(const ON_BoundingBoxCache&) = default;
+
+public:
+  /*
+  Description:
+    Add a bounding box that can be found from a hash value.
+  Parameters:
+    bbox - [in]
+    hash - [in]
+      A hash of the information needed to create this bounding box.
+  */
+  void AddBoundingBox(
+    const ON_BoundingBox& bbox,
+    const ON_SHA1_Hash& hash
+  );
+
+  void AddBoundingBox(
+    const ON_BoundingBoxAndHash& bbox_and_hash
+  );
+
+  /*
+  Description:
+    Get a cached bounding box.
+  Parameters:
+    hash - [in]
+    bbox - [out]
+      If the hash identifies a bounding box in the cache, then
+      that bounding box is returned. Otherwise ON_BoundingBox::NanBoundingBox
+      is returned.
+  Returns:
+    true - cached bounding box returned
+    false - bounding box not in cache.
+  */
+  bool GetBoundingBox(
+    const ON_SHA1_Hash& hash,
+    ON_BoundingBox& bbox
+  ) const;
+
+  /*
+  Description:
+    Remove a bounding box that can be found from a hash value.
+  Parameters:
+    hash - [in]
+  Returns:
+    true - hash was in the cache and removed.
+    false - hash was not in the cache.
+  Remarks:
+    If the hash values you are using are correctly computed and include
+    all information that the bouding box depends on, then
+    you never need to remove bounding boxes. Unused ones will get
+    removed as new ones are added.
+  */
+  bool RemoveBoundingBox(
+    const ON_SHA1_Hash& hash
+  );
+
+  /*
+  Description:
+    Removes all bounding boxes.
+  Remarks:
+    If the hash values you are using are correctly computed and include
+    all information that the bouding box depends on, then
+    you never need to remove bounding boxes. Unused ones will get
+    removed as new ones are added.
+    If the hash does not include all information required to compute
+    the bounding boxes, then call RemoveAllBoundingBoxes() when the
+    non-hashed information changes.
+  */
+  void RemoveAllBoundingBoxes();
+
+  /*
+  Returns:
+    Number of cached boxes.
+  */
+  unsigned int BoundingBoxCount() const;
+
+  bool Write(
+    class ON_BinaryArchive& archive
+  ) const;
+
+  bool Read(
+    class ON_BinaryArchive& archive
+  );
+
+private:
+  // number of boxes set in m_cache[]
+  unsigned int m_count = 0; 
+
+  // capacity of m_cache[] - set when needed
+  unsigned int m_capacity = 0;
+
+  // Bounding box cache. Most recently used boxes are first.
+  mutable ON_BoundingBoxAndHash m_cache[8];
+
+  /*
+  Returns:
+    m_cache[] array index of box with the hash.
+    ON_UNSET_UINT_INDEX if hash is not present in m_cache[] array.
+  */
+  unsigned int Internal_CacheIndex(const ON_SHA1_Hash& hash) const;
+};
+
 #if defined(ON_DLL_TEMPLATE)
 
-// This stuff is here because of a limitation in the way Microsoft
-// handles templates and DLLs.  See Microsoft's knowledge base 
-// article ID Q168958 for details.
-#pragma warning( push )
-#pragma warning( disable : 4231 )
 ON_DLL_TEMPLATE template class ON_CLASS ON_SimpleArray<ON_BoundingBox>;
-#pragma warning( pop )
+ON_DLL_TEMPLATE template class ON_CLASS ON_SimpleArray<ON_BoundingBoxAndHash>;
 
 #endif
 
@@ -573,7 +752,7 @@ Parameters:
    If the input bbox is valid and bGrowBox is true,
    then the output bbox is the union of the input
    bbox and the bounding box of the point list.
- xform - [in] (default = NULL)
+ xform - [in] (default = nullptr)
    If not null, the bounding box of the transformed
    points is calculated.  The points are not modified.
 Returns:
@@ -582,7 +761,7 @@ Returns:
 ON_DECL
 bool ON_GetPointListBoundingBox(
     int dim,
-    int is_rat,
+    bool is_rat,
     int count,
     int stride,
     const double* point_list,
@@ -594,7 +773,7 @@ bool ON_GetPointListBoundingBox(
 ON_DECL
 bool ON_GetPointListBoundingBox(
     int dim,
-    int is_rat,
+    bool is_rat,
     int count,
     int stride,
     const float* point_list,
@@ -606,7 +785,7 @@ bool ON_GetPointListBoundingBox(
 ON_DECL
 bool ON_GetPointListBoundingBox(
     int dim,
-    int is_rat,
+    bool is_rat,
     int count,
     int stride,
     const double* point_list,
@@ -618,7 +797,7 @@ bool ON_GetPointListBoundingBox(
 ON_DECL
 ON_BoundingBox ON_PointListBoundingBox(
     int dim,
-    int is_rat,
+    bool is_rat,
     int count,
     int stride,
     const double* point_list
@@ -627,7 +806,7 @@ ON_BoundingBox ON_PointListBoundingBox(
 ON_DECL
 bool ON_GetPointListBoundingBox(
     int dim,
-    int is_rat,
+    bool is_rat,
     int count,
     int stride,
     const float* point_list,
@@ -639,7 +818,7 @@ bool ON_GetPointListBoundingBox(
 ON_DECL
 ON_BoundingBox ON_PointListBoundingBox( // low level workhorse function
     int dim,
-    int is_rat,
+    bool is_rat,
     int count,
     int stride,
     const float* point_list
@@ -648,7 +827,7 @@ ON_BoundingBox ON_PointListBoundingBox( // low level workhorse function
 ON_DECL
 bool ON_GetPointGridBoundingBox(
         int dim,
-        int is_rat,
+        bool is_rat,
         int point_count0, int point_count1,
         int point_stride0, int point_stride1,
         const double* point_grid,
@@ -660,7 +839,7 @@ bool ON_GetPointGridBoundingBox(
 ON_DECL
 ON_BoundingBox ON_PointGridBoundingBox(
         int dim,
-        int is_rat,
+        bool is_rat,
         int point_count0, int point_count1,
         int point_stride0, int point_stride1,
         const double* point_grid

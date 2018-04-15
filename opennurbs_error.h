@@ -21,20 +21,16 @@
 // Macros used to log errors and warnings.  The ON_Warning() and ON_Error()
 // functions are defined in opennurbs_error.cpp.
 */
+#define ON_ERROR(msg) ON_ErrorEx(__FILE__,__LINE__,OPENNURBS__FUNCTION__,msg)
+#define ON_WARNING(msg) ON_WarningEx(__FILE__,__LINE__,OPENNURBS__FUNCTION__,msg)
+#define ON_ASSERT_OR_RETURN(cond,returncode) do{if (!(cond)) {ON_ErrorEx(__FILE__,__LINE__,OPENNURBS__FUNCTION__, #cond " is false");return(returncode);}}while(0)
+#define ON_ASSERT_OR_RETURNVOID(cond) do{if (!(cond)) {ON_ErrorEx(__FILE__,__LINE__,OPENNURBS__FUNCTION__, #cond " is false");return;}}while(0)
 
-#if defined(__FUNCTION__)
-// __FUNCTION__ macro exists
-#define ON_ERROR(msg) ON_ErrorEx(__FILE__,__LINE__,__FUNCTION__,msg)
-#define ON_WARNING(msg) ON_WarningEx(__FILE__,__LINE__,__FUNCTION__,msg)
-#define ON_ASSERT(cond) ON_AssertEx(cond,__FILE__,__LINE__,__FUNCTION__, #cond " is false")
-#define ON_ASSERT_OR_RETURN(cond,returncode) do{if (!(cond)) {ON_AssertEx(false,__FILE__,__LINE__,__FUNCTION__, #cond " is false");return(returncode);}}while(0)
-#else
-// __FUNCTION__ macro does not exist
-#define ON_ERROR(msg) ON_Error(__FILE__,__LINE__,msg)
-#define ON_WARNING(msg) ON_Warning(__FILE__,__LINE__,msg)
-#define ON_ASSERT(cond) ON_Assert(cond,__FILE__,__LINE__, #cond " is false")
-#define ON_ASSERT_OR_RETURN(cond,returncode) do{if (!(cond)) {ON_Assert(false,__FILE__,__LINE__, #cond " is false");return(returncode);}}while(0)
-#endif
+// Do not use ON_ASSERT. If a condition can be checked by ON_ASSERT, then the
+// code must be written detect and respond to that condition. This define will
+// be deleted ASAP. It is being used to detect situations where a crash will
+// occur and then letting the crash occur. 
+#define ON_ASSERT(cond) ON_REMOVE_ASAP_AssertEx(cond,__FILE__,__LINE__,OPENNURBS__FUNCTION__, #cond " is false")
 
 
 ON_BEGIN_EXTERNC
@@ -55,14 +51,14 @@ Returns:
   Number of opennurbs errors since program started.
 */
 ON_DECL
-int     ON_GetErrorCount(void);
+int ON_GetErrorCount(void);
 
 /*
 Returns:
   Number of opennurbs warnings since program started.
 */
 ON_DECL
-int     ON_GetWarningCount(void);
+int ON_GetWarningCount(void);
 
 /*
 Returns:
@@ -70,67 +66,66 @@ Returns:
   been handled since program started.
 */
 ON_DECL
-int     ON_GetMathErrorCount(void);
-
-ON_DECL
-int     ON_GetDebugErrorMessage(void);
-
-ON_DECL
-void    ON_EnableDebugErrorMessage( int bEnableDebugErrorMessage );
+int ON_GetMathErrorCount(void);
 
 
 ON_DECL
-void    ON_Error( const char*, /* sFileName:   __FILE__ will do fine */
-                  int,         /* line number: __LINE__ will do fine */
-                  const char*, /* printf() style format string */
-                  ...          /* printf() style ags */
-                  );
+int ON_GetDebugErrorMessage(void);
 
 ON_DECL
-void    ON_ErrorEx( const char*, // sFileName:   __FILE__ will do fine
-                  int,           // line number: __LINE__ will do fine
-                  const char*,   // sFunctionName: __FUNCTION__ will do fine
-                  const char*,   // printf() style format string
-                  ...            // printf() style ags
-                  );
+void ON_EnableDebugErrorMessage( int bEnableDebugErrorMessage );
+
 ON_DECL
-void    ON_Warning( const char*, /* sFileName:   __FILE__ will do fine */
-                    int,         /* line number: __LINE__ will do fine */
-                    const char*, /* printf() style format string */
-                    ...          /* printf() style ags */
-                  );
+void ON_VARGS_FUNC_CDECL ON_Error(
+  const char* file_name, /* __FILE__ will do fine */
+  int line_number,       /* __LINE__ will do fine */
+  const char* format,    /* format string */
+  ...                    /* format ags */
+  );
+
 ON_DECL
-void    ON_WarningEx( const char*, // sFileName:   __FILE__ will do fine
-                  int,           // line number: __LINE__ will do fine
-                  const char*,   // sFunctionName: __FUNCTION__ will do fine
-                  const char*,   // printf() style format string
-                  ...            // printf() style ags
-                  );
+void ON_VARGS_FUNC_CDECL ON_ErrorEx(
+  const char* file_name,      /* __FILE__ will do fine */
+  int line_number,            /* __LINE__ will do fine */
+  const char* function_name,  /* OPENNURBS__FUNCTION__ will do fine */
+  const char* format,         /* format string */
+  ...                         /* format ags */
+  );
+
+ON_DECL
+void ON_VARGS_FUNC_CDECL ON_Warning(
+  const char* file_name, /* __FILE__ will do fine */
+  int line_number,       /* __LINE__ will do fine */
+  const char* format,    /* format string */
+  ...                    /* format ags */
+  );
+
+ON_DECL
+void ON_VARGS_FUNC_CDECL ON_WarningEx(
+  const char* file_name,      /* __FILE__ will do fine */
+  int line_number,            /* __LINE__ will do fine */
+  const char* function_name,  /*OPENNURBS__FUNCTION__ will do fine */
+  const char* format,         /* format string */
+  ...                         /* format ags */
+  );
 
 // Ideally - these "assert" functions will be deleted when the SDK can be changed.
 ON_DECL
-void    ON_Assert( int,         /* if false, error is flagged */
-                   const char*, /* sFileName:   __FILE__ will do fine */
-                   int,         /* line number: __LINE__ will do fine */
-                   const char*, /* printf() style format string */
-                   ...          /* printf() style ags */
-                  );
+void ON_VARGS_FUNC_CDECL ON_REMOVE_ASAP_AssertEx(
+  int,        // if false, error is flagged
+  const char* file_name,      /* __FILE__ will do fine */
+  int line_number,            /* __LINE__ will do fine */
+  const char* function_name,  /* OPENNURBS__FUNCTION__ will do fine */
+  const char* format,         /* format string */
+  ...                         /* format ags */
+  );
 
 ON_DECL
-void    ON_AssertEx( int,        // if false, error is flagged
-                  const char*,   // sFileName:   __FILE__ will do fine
-                  int,           // line number: __LINE__ will do fine
-                  const char*,   // sFunctionName: __FUNCTION__ will do fine
-                  const char*,   // printf() style format string
-                  ...            // printf() style ags
-                  );
-
-ON_DECL
-void    ON_MathError( 
-        const char*, /* sModuleName */
-        const char*, /* sErrorType */
-        const char*  /* sFunctionName */
-        );
+void ON_MathError( 
+  const char*, /* sModuleName */
+  const char*, /* sErrorType */
+  const char*  /* sFunctionName */
+  );
 
 ON_END_EXTERNC
 

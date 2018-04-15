@@ -16,6 +16,14 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
 bool ON_BezierCage::Read(ON_BinaryArchive& archive)
 {
   Destroy();
@@ -240,7 +248,7 @@ ON_BezierCage& ON_BezierCage::operator=(const ON_BezierCage& src)
 
 bool ON_BezierCage::IsValid() const
 {
-  if ( m_cv == NULL )
+  if ( m_cv == nullptr )
     return false;
 
   if ( m_order[0] < 2 )
@@ -300,21 +308,20 @@ void ON_BezierCage::Dump( ON_TextLog& dump ) const
                (m_is_rat) ? "rational" : "non-rational" );
   if ( !m_cv ) 
   {
-    dump.Print("  NULL cv array\n");
+    dump.Print("  nullptr cv array\n");
   }
   else 
   {
     int i,j;
-    char sPreamble[128]; 
-    memset(sPreamble,0,sizeof(sPreamble));
+    char sPreamble[128] = { 0 };
+    const size_t sPremable_capacity = sizeof(sPreamble) / sizeof(sPreamble[0]);
     for ( i = 0; i < m_order[0]; i++ )
     {
       for ( j = 0; j < m_order[1]; j++ )
       {
         if ( i > 0 || j > 0)
           dump.Print("\n");
-        sPreamble[0] = 0;
-        sprintf(sPreamble,"  CV[%2d][%2d]",i,j);
+        ON_String::FormatIntoBuffer(sPreamble, sPremable_capacity,"  CV[%2d][%2d]", i, j);
         dump.PrintPointList( m_dim, m_is_rat, 
                           m_order[2], m_cv_stride[2],
                           CV(i,j,0), 
@@ -471,7 +478,7 @@ void ON_BezierCage::EmergencyDestroy()
 bool ON_BezierCage::GetBBox( // returns true if successful
        double* boxmin,    // minimum
        double* boxmax,    // maximum
-       int bGrowBox  // true means grow box
+       bool bGrowBox  // true means grow box
        ) const
 {
   int i, j;
@@ -536,15 +543,13 @@ bool ON_BezierCage::Rotate(
 
 bool ON_BezierCage::Translate( const ON_3dVector& delta )
 {
-  ON_Xform tr;
-  tr.Translation( delta );
+  ON_Xform tr(ON_Xform::TranslationTransformation( delta ));
   return Transform( tr );
 }
 
 bool ON_BezierCage::Scale( double x )
 {
-  ON_Xform s;
-  s.Scale( x, x, x );
+  ON_Xform s(ON_Xform::DiagonalTransformation(x));
   return Transform( s );
 }
 
@@ -734,7 +739,7 @@ double* ON_BezierCage::CV( int i, int j, int k ) const
 #if defined(ON_DEBUG)
   if ( 0 == m_cv )
   {
-    ON_ERROR("ON_BezierCage::CV - NULL m_cv");
+    ON_ERROR("ON_BezierCage::CV - nullptr m_cv");
     return 0;
   }
   if ( i < 0 || i >= m_order[0] || j< 0 || j >= m_order[1] || k < 0 || k >= m_order[2])
@@ -1189,6 +1194,7 @@ ON_BezierCageMorph::~ON_BezierCageMorph()
 {
 }
 
+
 bool ON_BezierCageMorph::Create(
     ON_3dPoint P0,
     ON_3dPoint P1,
@@ -1212,7 +1218,7 @@ bool ON_BezierCageMorph::Create(
   ON_3dVector X = P1-P0;
   ON_3dVector Y = P2-P0;
   ON_3dVector Z = P3-P0;
-  ON_Xform xform(1.0);
+  ON_Xform xform(ON_Xform::IdentityTransformation);
   xform[0][0] = X.x;
   xform[1][0] = X.y;
   xform[2][0] = X.z;

@@ -120,6 +120,12 @@ public:
   void Seed( ON__UINT32 s );
 
   /*
+  Description:
+    Seed the random number generator in a way that cannot be reproduced.
+  */
+  void Seed();
+
+  /*
   Returns:
     32 bit unsigned random number [0,0xFFFFFFFF] [0,4294967295]
   */

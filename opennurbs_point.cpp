@@ -16,9 +16,369 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
 bool ON_IsValid(double x)
 {
   return ON_IS_VALID(x);
+}
+
+int ON_CompareDouble(
+  double a,
+  double b
+  )
+{
+  if (a < b)
+    return -1;
+  if (a > b)
+    return 1;
+  if (a == b)
+    return 0;
+
+  // below this point, a and/or b is a nan
+
+
+  if (a == a)
+    return -1; // b is a nan
+  
+  if (b == b)
+    return 1; // ab is a nan
+
+  return 0; // both a and b are nans
+}
+
+
+int ON_CompareFloat(
+  float a,
+  float b
+  )
+{
+  if (a < b)
+    return -1;
+  if (a > b)
+    return 1;
+  if (a == b)
+    return 0;
+
+  // below this point, a and/or b is a nan
+
+
+  if (a == a)
+    return -1; // b is a nan
+  
+  if (b == b)
+    return 1; // ab is a nan
+
+  return 0; // both a and b are nans
+}
+
+static int Internal_DoubleArrayCompare(
+  size_t count,
+  const double* a,
+  const double* b
+  )
+{
+  const double* e = a + count;
+  int rc = ON_CompareDouble(*a++, *b++);
+  while( 0 == rc && a < e)
+    rc = ON_CompareDouble(*a++, *b++);
+  return rc;
+}
+
+static int Internal_FloatArrayCompare(
+  size_t count,
+  const float* a,
+  const float* b
+  )
+{
+  const float* e = a + count;
+  int rc = ON_CompareFloat(*a++, *b++);
+  while( 0 == rc && a < e)
+    rc = ON_CompareFloat(*a++, *b++);
+  return rc;
+}
+
+int ON_CompareDoubleArray(
+  size_t count,
+  const double* a,
+  const double* b
+  )
+{
+  if (count <= 0)
+    return 0;
+  if (a == b)
+    return 0;
+  if (nullptr == a)
+    return 1;
+  if (nullptr == b)
+    return -1;
+  return Internal_DoubleArrayCompare(count, a, b);
+}
+
+static bool Internal_IsUnsetFloat(
+  size_t count,
+  const float* a
+)
+{
+  const float * e = a + count;
+  while (a < e)
+  {
+    float x = *a++;
+    if (ON_UNSET_FLOAT == x || ON_UNSET_POSITIVE_FLOAT == x)
+      return true;
+  }
+  return false;
+}
+
+bool ON_2fPoint::IsUnset() const
+{
+  return Internal_IsUnsetFloat(2, &x);
+}
+
+bool ON_3fPoint::IsUnset() const
+{
+  return Internal_IsUnsetFloat(3, &x);
+}
+
+bool ON_4fPoint::IsUnset() const
+{
+  return Internal_IsUnsetFloat(4, &x);
+}
+
+bool ON_2fVector::IsUnset() const
+{
+  return Internal_IsUnsetFloat(2, &x);
+}
+
+bool ON_3fVector::IsUnset() const
+{
+  return Internal_IsUnsetFloat(3, &x);
+}
+
+static bool Internal_IsUnsetDouble(
+  size_t count,
+  const double* a
+)
+{
+  const double * e = a + count;
+  while (a < e)
+  {
+    double x = *a++;
+    if (ON_UNSET_VALUE == x || ON_UNSET_POSITIVE_VALUE == x)
+      return true;
+  }
+  return false;
+}
+
+bool ON_2dPoint::IsUnset() const
+{
+  return Internal_IsUnsetDouble(2, &x);
+}
+
+bool ON_3dPoint::IsUnset() const
+{
+  return Internal_IsUnsetDouble(3, &x);
+}
+
+bool ON_4dPoint::IsUnset() const
+{
+  return Internal_IsUnsetDouble(4, &x);
+}
+
+bool ON_2dVector::IsUnset() const
+{
+  return Internal_IsUnsetDouble(2, &x);
+}
+
+bool ON_3dVector::IsUnset() const
+{
+  return Internal_IsUnsetDouble(3, &x);
+}
+
+int ON_2dVector::Compare(
+  const ON_2dVector& lhs,
+  const ON_2dVector& rhs
+  )
+{
+  return Internal_DoubleArrayCompare(2, &lhs.x, &rhs.x);
+}
+
+int ON_3dVector::Compare(
+  const ON_3dVector& lhs,
+  const ON_3dVector& rhs
+  )
+{
+  return Internal_DoubleArrayCompare(3, &lhs.x, &rhs.x);
+}
+
+int ON_2dPoint::Compare(
+  const ON_2dPoint& lhs,
+  const ON_2dPoint& rhs
+  )
+{
+  return Internal_DoubleArrayCompare(2, &lhs.x, &rhs.x);
+}
+
+int ON_3dPoint::Compare(
+  const ON_3dPoint& lhs,
+  const ON_3dPoint& rhs
+  )
+{
+  return Internal_DoubleArrayCompare(3, &lhs.x, &rhs.x);
+}
+
+int ON_4dPoint::ProjectiveCompare(
+  const ON_4dPoint& lhs,
+  const ON_4dPoint& rhs
+  )
+{
+  if (lhs.w == rhs.w)
+  {
+    // neither lhs.w nor rhs.w is a nan
+    return Internal_DoubleArrayCompare(3, &lhs.x, &rhs.x);
+  }
+
+  if (0.0 != lhs.w && 0.0 != rhs.w)
+  {
+    // neither lhs.w nor rhs.w is a nan
+    return ON_3dPoint::Compare(ON_3dPoint(lhs), ON_3dPoint(lhs));
+  }
+
+  if (0.0 != lhs.w && 0.0 == rhs.w)
+  {
+    // neither lhs.w nor rhs.w is a nan
+    return -1;
+  }
+
+  if (0.0 == lhs.w && 0.0 != rhs.w)
+  {
+    // neither lhs.w nor rhs.w is a nan
+    return 1;
+  }
+
+  if (lhs.w == lhs.w)
+  {
+    // rhs.w is a nan
+    return -1; 
+  }
+
+  if (rhs.w == rhs.w)
+  {
+    // lhs.w is a nan
+    return 1; 
+  }
+
+  // lhs.w and rhs.w are both nans
+  return Internal_DoubleArrayCompare(3, &lhs.x, &rhs.x);
+}
+
+int ON_4dPoint::DictionaryCompare(
+  const ON_4dPoint& lhs,
+  const ON_4dPoint& rhs
+  )
+{
+  return Internal_DoubleArrayCompare(4, &lhs.x, &rhs.x);
+}
+
+static double Internal_4dEuclideanCoordinate(double x, double w)
+{
+  return
+    ((ON_IS_UNSET_DOUBLE(x) || ON_IS_UNSET_DOUBLE(w)) && x==x && w==w)
+    ? ON_UNSET_VALUE
+    : (x / w);
+}
+
+double ON_4dPoint::EuclideanX() const
+{
+  return Internal_4dEuclideanCoordinate(x,w);
+}
+
+double ON_4dPoint::EuclideanY() const
+{
+  return Internal_4dEuclideanCoordinate(y,w);
+}
+
+double ON_4dPoint::EuclideanZ() const
+{
+  return Internal_4dEuclideanCoordinate(z,w);
+}
+
+static float Internal_4fEuclideanCoordinate(float x, float w)
+{
+  return
+    ((ON_IS_UNSET_FLOAT(x) || ON_IS_UNSET_FLOAT(w)) && x == x && w==w)
+    ? ON_UNSET_FLOAT
+    : (x / w);
+}
+
+
+float ON_4fPoint::EuclideanX() const
+{
+  return Internal_4fEuclideanCoordinate(x,w);
+}
+
+float ON_4fPoint::EuclideanY() const
+{
+  return Internal_4fEuclideanCoordinate(y,w);
+}
+
+float ON_4fPoint::EuclideanZ() const
+{
+  return Internal_4fEuclideanCoordinate(z,w);
+}
+
+int ON_2fVector::Compare(
+  const ON_2fVector& lhs,
+  const ON_2fVector& rhs
+  )
+{
+  return Internal_FloatArrayCompare(2, &lhs.x, &rhs.x);
+}
+
+int ON_3fVector::Compare(
+  const ON_3fVector& lhs,
+  const ON_3fVector& rhs
+  )
+{
+  return Internal_FloatArrayCompare(3, &lhs.x, &rhs.x);
+}
+
+int ON_2fPoint::Compare(
+  const ON_2fPoint& lhs,
+  const ON_2fPoint& rhs
+  )
+{
+  return Internal_FloatArrayCompare(2, &lhs.x, &rhs.x);
+}
+
+int ON_3fPoint::Compare(
+  const ON_3fPoint& lhs,
+  const ON_3fPoint& rhs
+  )
+{
+  return Internal_FloatArrayCompare(3, &lhs.x, &rhs.x);
+}
+
+int ON_4fPoint::DictionaryCompare(
+  const ON_4fPoint& lhs,
+  const ON_4fPoint& rhs
+  )
+{
+  return Internal_FloatArrayCompare(4, &lhs.x, &rhs.x);
+}
+
+int ON_4fPoint::ProjectiveCompare(
+  const ON_4fPoint& lhs,
+  const ON_4fPoint& rhs
+  )
+{
+  return ON_4dPoint::ProjectiveCompare(ON_4dPoint(lhs), ON_4dPoint(rhs));
 }
 
 bool ON_IsValidFloat(float x)
@@ -26,7 +386,6 @@ bool ON_IsValidFloat(float x)
   return ON_IS_VALID_FLOAT(x);
 }
 
-const ON_Interval ON_Interval::EmptyInterval(ON_UNSET_VALUE,ON_UNSET_VALUE);
 
 ON_Interval::ON_Interval()
 {
@@ -38,8 +397,23 @@ ON_Interval::ON_Interval(double t0, double t1)
   Set(t0,t1);
 }
 
-ON_Interval::~ON_Interval()
-{}
+bool ON_Interval::operator!=(const ON_Interval& rhs) const
+{
+  // Intentionally returns false if any double is a nan.
+  if (m_t[0] != rhs.m_t[0])
+  {
+    return (m_t[1] == m_t[1] && rhs.m_t[1] == rhs.m_t[1]);
+  }
+
+  return (m_t[0] == m_t[0] && m_t[1] != rhs.m_t[1]);
+}
+
+bool ON_Interval::operator==(const ON_Interval& rhs) const
+{
+  // Intentionally returns false if any double is a nan.
+  return (m_t[0] == rhs.m_t[0] && m_t[1] == rhs.m_t[1]);
+}
+
 
 double&
 ON_Interval::operator[](int i)
@@ -53,15 +427,31 @@ ON_Interval::operator[](int i) const
   return m_t[(i<=0)?0:1];
 }
 
+double&
+ON_Interval::operator[](unsigned int i)
+{
+  return m_t[(i<=0)?0:1];
+}
+
+double
+ON_Interval::operator[](unsigned int i) const
+{
+  return m_t[(i<=0)?0:1];
+}
+
 double
 ON_Interval::Min() const
 {
-  return m_t[IsDecreasing()?1:0];
+  if (m_t[0] <= m_t[1])
+    return m_t[0];
+  if (m_t[1] <= m_t[0])
+    return m_t[1];
+  return ON_DBL_QNAN;
 }
 
 void ON_Interval::Destroy()
 {
-  Set(ON_UNSET_VALUE,ON_UNSET_VALUE);
+  *this = ON_Interval::EmptyInterval;
 }
 
 void ON_Interval::Set(double t0,double t1)
@@ -105,7 +495,11 @@ ON_Interval ON_Interval::NormalizedParameterAt( // returns x so that min*(1.0-x)
 double
 ON_Interval::Max() const
 {
-  return m_t[IsDecreasing()?0:1];
+  if (m_t[0] >= m_t[1])
+    return m_t[0];
+  if (m_t[1] >= m_t[0])
+    return m_t[1];
+  return ON_DBL_QNAN;
 }
 
 double
@@ -174,31 +568,11 @@ ON_Interval::MakeIncreasing()		// returns true if resulting interval IsIncreasin
 	return IsIncreasing();
 }
 
-bool 
-ON_Interval::operator!=(const ON_Interval& other) const
-{
-  return Compare(other) ? true : false;
-}
-
-bool 
-ON_Interval::operator==(const ON_Interval& other) const
-{
-  return Compare(other) ? false : true;
-}
 
 
-int
-ON_Interval::Compare( const ON_Interval& other ) const
+int ON_Interval::Compare(const ON_Interval& lhs, const ON_Interval& rhs)
 {
-  if ( m_t[0] < other.m_t[0] )
-    return -1;
-  if ( m_t[0] > other.m_t[0] )
-    return 1;
-  if ( m_t[1] < other.m_t[1] )
-    return -1;
-  if ( m_t[1] > other.m_t[1] )
-    return 1;
-  return 0;
+  return Internal_DoubleArrayCompare(2, lhs.m_t, rhs.m_t);
 }
 
 bool
@@ -232,10 +606,19 @@ ON_Interval::Includes( const ON_Interval& other, bool bProperSubSet ) const
   return rc;
 }
 
+bool
+ON_Interval::IntervalsOverlap(const ON_Interval& A, const ON_Interval& B)
+
+{
+  ON_Interval C;
+  C.Intersection(A, B);
+  return C.IsEmptyInterval() ? false : true;
+}
+
 void
 ON_Interval::Reverse()
 {
-  if ( !IsEmptySet() ) {
+  if ( !IsEmptyInterval() ) {
     const double x = -m_t[0];
     m_t[0] = -m_t[1];
     m_t[1] = x;
@@ -262,9 +645,12 @@ bool ON_Interval::Intersection( // this = this intersect arg
        )
 {
   bool rc = false;
-  if ( IsEmptySet() && other.IsEmptySet() )
-    Destroy();
-  else {
+  if (IsEmptyInterval() && other.IsEmptyInterval())
+  {
+    *this = ON_Interval::EmptyInterval;
+  }
+  else 
+  {
     double a, b, mn, mx;
     a = Min();
     b = other.Min();
@@ -272,12 +658,15 @@ bool ON_Interval::Intersection( // this = this intersect arg
     a = Max();
     b = other.Max();
     mx = (a<=b) ? a : b;
-    if ( mn <= mx ) {
+    if ( mn <= mx )
+    {
       Set(mn,mx);
       rc = true;
     }
     else
-      Destroy();
+    {
+      *this = ON_Interval::EmptyInterval;
+    }
   }
   return rc;
 }
@@ -295,22 +684,28 @@ bool ON_Interval::Intersection( // this = intersection of two args
        )
 {
   bool rc = false;
-  if ( ain.IsEmptySet() && bin.IsEmptySet() )
-    Destroy();
-  else {
+  if ( ain.IsEmptyInterval() && bin.IsEmptyInterval() )
+  {
+    *this = ON_Interval::EmptyInterval;
+  }
+  else
+  {
     double a, b, mn, mx;
     a = ain.Min();
     b = bin.Min();
-    mn = (a>=b) ? a : b;
+    mn = (a >= b) ? a : b;
     a = ain.Max();
     b = bin.Max();
-    mx = (a<=b) ? a : b;
-    if ( mn <= mx ) {
-      Set(mn,mx);
+    mx = (a <= b) ? a : b;
+    if (mn <= mx) 
+    {
+      Set(mn, mx);
       rc = true;
     }
     else
-      Destroy();
+    {
+      *this = ON_Interval::EmptyInterval;
+    }
   }
   return rc;
 }
@@ -327,12 +722,14 @@ bool ON_Interval::Union( // this = this union arg
        )
 {
   bool rc = false;
-  if ( other.IsEmptySet() ) {
+  if ( other.IsEmptyInterval() )
+  {
     // this may be increasing, decreasing, or empty
     Set( Min(), Max() );
-    rc = !IsEmptySet();
+    rc = !IsEmptyInterval();
   }
-  else if ( IsEmptySet() ) {
+  else if ( IsEmptyInterval() ) 
+  {
     // other may be increasing or decreasing
     Set( other.Min(), other.Max() );
     rc = true;
@@ -350,7 +747,9 @@ bool ON_Interval::Union( // this = this union arg
       rc = true;
     }
     else
-      Destroy();
+    {
+      *this = ON_Interval::EmptyInterval;
+    }
   }
   return rc;
 }
@@ -375,7 +774,7 @@ bool ON_Interval::Union(
   if ( count <= 0 || 0 == t )
   {
     // this may be increasing, decreasing, or empty
-    if ( !IsEmptySet() )
+    if ( !IsEmptyInterval() )
     {
       mn = Min();
       mx = Max();
@@ -388,7 +787,7 @@ bool ON_Interval::Union(
   }
   else 
   {
-    if ( IsEmptySet() ) 
+    if ( IsEmptyInterval() ) 
     {
       a = *t++;
       Set( a, a );
@@ -415,7 +814,9 @@ bool ON_Interval::Union(
       rc = true;
     }
     else
-      Destroy();
+    {
+      *this = ON_Interval::EmptyInterval;
+    }
   }
   return rc;
 }
@@ -440,12 +841,14 @@ bool ON_Interval::Union( // this = union of two args
        )
 {
   bool rc = false;
-  if ( bin.IsEmptySet() ) {
+  if ( bin.IsEmptyInterval() )
+  {
     // ain may be increasing, decreasing, or empty
     Set( ain.Min(), ain.Max() );
-    rc = !IsEmptySet();
+    rc = !IsEmptyInterval();
   }
-  else if ( ain.IsEmptySet() ) {
+  else if ( ain.IsEmptyInterval() )
+  {
     // bin may be increasing or decreasing
     Set( bin.Min(), bin.Max() );
     rc = true;
@@ -463,7 +866,9 @@ bool ON_Interval::Union( // this = union of two args
       rc = true;
     }
     else
-      Destroy();
+    {
+      *this = ON_Interval::EmptyInterval;
+    }
   }
   return rc;
 }
@@ -620,21 +1025,19 @@ ON_3dVector::PerpendicularTo(
       )
 {
   // Find a the unit normal to a triangle defined by 3 points
-  ON_3dVector V0, V1, V2, N0, N1, N2;
+  *this = ON_3dVector::ZeroVector;
 
-  Zero();
+  ON_3dVector V0 = P2 - P1;
+  ON_3dVector V1 = P0 - P2;
+  ON_3dVector V2 = P1 - P0;
 
-  V0 = P2 - P1;
-  V1 = P0 - P2;
-  V2 = P1 - P0;
-
-  N0 = ON_CrossProduct( V1, V2 );
+  ON_3dVector N0 = ON_CrossProduct( V1, V2 );
   if ( !N0.Unitize() )
     return false;
-  N1 = ON_CrossProduct( V2, V0 );
+  ON_3dVector N1 = ON_CrossProduct( V2, V0 );
   if ( !N1.Unitize() )
     return false;
-  N2 = ON_CrossProduct( V0, V1 );
+  ON_3dVector N2 = ON_CrossProduct( V0, V1 );
   if ( !N2.Unitize() )
     return false;
 
@@ -668,60 +1071,52 @@ ON_3dVector::PerpendicularTo(
 void ON_2dPoint::Transform( const ON_Xform& xform )
 {
   double xx,yy,ww;
-  if ( xform.m_xform ) {
-    ww = xform.m_xform[3][0]*x + xform.m_xform[3][1]*y + xform.m_xform[3][3];
-    if ( ww != 0.0 )
-      ww = 1.0/ww;
-    xx = ww*(xform.m_xform[0][0]*x + xform.m_xform[0][1]*y + xform.m_xform[0][3]);
-    yy = ww*(xform.m_xform[1][0]*x + xform.m_xform[1][1]*y + xform.m_xform[1][3]);
-    x = xx;
-    y = yy;
-  }
+  ww = xform.m_xform[3][0]*x + xform.m_xform[3][1]*y + xform.m_xform[3][3];
+  if ( ww != 0.0 )
+    ww = 1.0/ww;
+  xx = ww*(xform.m_xform[0][0]*x + xform.m_xform[0][1]*y + xform.m_xform[0][3]);
+  yy = ww*(xform.m_xform[1][0]*x + xform.m_xform[1][1]*y + xform.m_xform[1][3]);
+  x = xx;
+  y = yy;
 }
 
 void ON_3dPoint::Transform( const ON_Xform& xform )
 {
   double xx,yy,zz,ww;
-  if ( xform.m_xform ) {
-    ww = xform.m_xform[3][0]*x + xform.m_xform[3][1]*y + xform.m_xform[3][2]*z + xform.m_xform[3][3];
-    if ( ww != 0.0 )
-      ww = 1.0/ww;
-    xx = ww*(xform.m_xform[0][0]*x + xform.m_xform[0][1]*y + xform.m_xform[0][2]*z + xform.m_xform[0][3]);
-    yy = ww*(xform.m_xform[1][0]*x + xform.m_xform[1][1]*y + xform.m_xform[1][2]*z + xform.m_xform[1][3]);
-    zz = ww*(xform.m_xform[2][0]*x + xform.m_xform[2][1]*y + xform.m_xform[2][2]*z + xform.m_xform[2][3]);
-    x = xx;
-    y = yy;
-    z = zz;
-  }
+  ww = xform.m_xform[3][0]*x + xform.m_xform[3][1]*y + xform.m_xform[3][2]*z + xform.m_xform[3][3];
+  if ( ww != 0.0 )
+    ww = 1.0/ww;
+  xx = ww*(xform.m_xform[0][0]*x + xform.m_xform[0][1]*y + xform.m_xform[0][2]*z + xform.m_xform[0][3]);
+  yy = ww*(xform.m_xform[1][0]*x + xform.m_xform[1][1]*y + xform.m_xform[1][2]*z + xform.m_xform[1][3]);
+  zz = ww*(xform.m_xform[2][0]*x + xform.m_xform[2][1]*y + xform.m_xform[2][2]*z + xform.m_xform[2][3]);
+  x = xx;
+  y = yy;
+  z = zz;
 }
 
 void ON_4dPoint::Transform( const ON_Xform& xform )
 {
   double xx,yy,zz,ww;
-  if ( xform.m_xform ) {
-    xx = xform.m_xform[0][0]*x + xform.m_xform[0][1]*y + xform.m_xform[0][2]*z + xform.m_xform[0][3]*w;
-    yy = xform.m_xform[1][0]*x + xform.m_xform[1][1]*y + xform.m_xform[1][2]*z + xform.m_xform[1][3]*w;
-    zz = xform.m_xform[2][0]*x + xform.m_xform[2][1]*y + xform.m_xform[2][2]*z + xform.m_xform[2][3]*w;
-    ww = xform.m_xform[3][0]*x + xform.m_xform[3][1]*y + xform.m_xform[3][2]*z + xform.m_xform[3][3]*w;
-    x = xx;
-    y = yy;
-    z = zz;
-    w = ww;
-  }
+  xx = xform.m_xform[0][0]*x + xform.m_xform[0][1]*y + xform.m_xform[0][2]*z + xform.m_xform[0][3]*w;
+  yy = xform.m_xform[1][0]*x + xform.m_xform[1][1]*y + xform.m_xform[1][2]*z + xform.m_xform[1][3]*w;
+  zz = xform.m_xform[2][0]*x + xform.m_xform[2][1]*y + xform.m_xform[2][2]*z + xform.m_xform[2][3]*w;
+  ww = xform.m_xform[3][0]*x + xform.m_xform[3][1]*y + xform.m_xform[3][2]*z + xform.m_xform[3][3]*w;
+  x = xx;
+  y = yy;
+  z = zz;
+  w = ww;
 }
 
 void ON_2fPoint::Transform( const ON_Xform& xform )
 {
   double xx,yy,ww;
-  if ( xform.m_xform ) {
-    ww = xform.m_xform[3][0]*x + xform.m_xform[3][1]*y + xform.m_xform[3][3];
-    if ( ww != 0.0 )
-      ww = 1.0/ww;
-    xx = ww*(xform.m_xform[0][0]*x + xform.m_xform[0][1]*y + xform.m_xform[0][3]);
-    yy = ww*(xform.m_xform[1][0]*x + xform.m_xform[1][1]*y + xform.m_xform[1][3]);
-    x = (float)xx;
-    y = (float)yy;
-  }
+  ww = xform.m_xform[3][0]*x + xform.m_xform[3][1]*y + xform.m_xform[3][3];
+  if ( ww != 0.0 )
+    ww = 1.0/ww;
+  xx = ww*(xform.m_xform[0][0]*x + xform.m_xform[0][1]*y + xform.m_xform[0][3]);
+  yy = ww*(xform.m_xform[1][0]*x + xform.m_xform[1][1]*y + xform.m_xform[1][3]);
+  x = (float)xx;
+  y = (float)yy;
 }
 
 void ON_2fPoint::Rotate( 
@@ -739,7 +1134,7 @@ void ON_2fPoint::Rotate(
       )
 {
   ON_Xform rot;
-  rot.Rotation( sin_angle, cos_angle, ON_zaxis, ON_3dPoint(center) );
+  rot.Rotation( sin_angle, cos_angle, ON_3dVector::ZAxis, ON_3dPoint(center) );
   Transform(rot);
 }
 
@@ -766,14 +1161,17 @@ void ON_3fPoint::Rotate(
 
 void ON_3fPoint::Transform( const ON_Xform& xform )
 {
-  double xx,yy,zz,ww;
-  if ( xform.m_xform ) {
-    ww = xform.m_xform[3][0]*x + xform.m_xform[3][1]*y + xform.m_xform[3][2]*z + xform.m_xform[3][3];
-    if ( ww != 0.0 )
-      ww = 1.0/ww;
-    xx = ww*(xform.m_xform[0][0]*x + xform.m_xform[0][1]*y + xform.m_xform[0][2]*z + xform.m_xform[0][3]);
-    yy = ww*(xform.m_xform[1][0]*x + xform.m_xform[1][1]*y + xform.m_xform[1][2]*z + xform.m_xform[1][3]);
-    zz = ww*(xform.m_xform[2][0]*x + xform.m_xform[2][1]*y + xform.m_xform[2][2]*z + xform.m_xform[2][3]);
+  const double ww = xform.m_xform[3][0]*x + xform.m_xform[3][1]*y + xform.m_xform[3][2]*z + xform.m_xform[3][3];
+  if (0.0 == ww)
+  {
+    ON_ERROR("divide by zero.");
+    *this = ON_3fPoint::NanPoint;
+  }
+  else
+  {
+    const double xx = (xform.m_xform[0][0] * x + xform.m_xform[0][1] * y + xform.m_xform[0][2] * z + xform.m_xform[0][3]) / ww;
+    const double yy = (xform.m_xform[1][0] * x + xform.m_xform[1][1] * y + xform.m_xform[1][2] * z + xform.m_xform[1][3]) / ww;
+    const double zz = (xform.m_xform[2][0] * x + xform.m_xform[2][1] * y + xform.m_xform[2][2] * z + xform.m_xform[2][3]) / ww;
     x = (float)xx;
     y = (float)yy;
     z = (float)zz;
@@ -782,17 +1180,14 @@ void ON_3fPoint::Transform( const ON_Xform& xform )
 
 void ON_4fPoint::Transform( const ON_Xform& xform )
 {
-  double xx,yy,zz,ww;
-  if ( xform.m_xform ) {
-    xx = xform.m_xform[0][0]*x + xform.m_xform[0][1]*y + xform.m_xform[0][2]*z + xform.m_xform[0][3]*w;
-    yy = xform.m_xform[1][0]*x + xform.m_xform[1][1]*y + xform.m_xform[1][2]*z + xform.m_xform[1][3]*w;
-    zz = xform.m_xform[2][0]*x + xform.m_xform[2][1]*y + xform.m_xform[2][2]*z + xform.m_xform[2][3]*w;
-    ww = xform.m_xform[3][0]*x + xform.m_xform[3][1]*y + xform.m_xform[3][2]*z + xform.m_xform[3][3]*w;
-    x = (float)xx;
-    y = (float)yy;
-    z = (float)zz;
-    w = (float)ww;
-  }
+  const double xx = xform.m_xform[0][0]*x + xform.m_xform[0][1]*y + xform.m_xform[0][2]*z + xform.m_xform[0][3]*w;
+  const double yy = xform.m_xform[1][0]*x + xform.m_xform[1][1]*y + xform.m_xform[1][2]*z + xform.m_xform[1][3]*w;
+  const double zz = xform.m_xform[2][0]*x + xform.m_xform[2][1]*y + xform.m_xform[2][2]*z + xform.m_xform[2][3]*w;
+  const double ww = xform.m_xform[3][0]*x + xform.m_xform[3][1]*y + xform.m_xform[3][2]*z + xform.m_xform[3][3]*w;
+  x = (float)xx;
+  y = (float)yy;
+  z = (float)zz;
+  w = (float)ww;
 }
 
 double ON_3fPoint::Fuzz( 
@@ -1030,7 +1425,7 @@ void ON_2dPoint::Rotate(
       )
 {
   ON_Xform rot;
-  rot.Rotation( sin_angle, cos_angle, ON_zaxis, center );
+  rot.Rotation( sin_angle, cos_angle, ON_3dVector::ZAxis, ON_3dPoint(center) );
   Transform(rot);
 }
 
@@ -1047,7 +1442,7 @@ void ON_2dVector::Rotate(
       )
 {
   ON_Xform rot;
-  rot.Rotation( sin_angle, cos_angle, ON_zaxis, ON_origin );
+  rot.Rotation( sin_angle, cos_angle, ON_3dVector::ZAxis, ON_3dPoint::Origin );
   Transform(rot);
 }
 
@@ -1088,7 +1483,7 @@ bool ON_IsRightHandFrame( const ON_2dVector& X,  const ON_2dVector& Y )
   // returns true if X, Y, Z is an orthonormal right hand frame
   if ( !ON_IsOrthonormalFrame(X,Y) )
     return false;
-  double x = ON_DotProduct( ON_CrossProduct( X, Y ), ON_zaxis );
+  double x = ON_DotProduct( ON_CrossProduct( X, Y ), ON_3dVector::ZAxis );
   if ( x <=  ON_SQRT_EPSILON )
     return false;
   return true;
@@ -1109,7 +1504,7 @@ void ON_3fVector::Rotate(
 {
   //bool rc = false;
   ON_Xform rot;
-  rot.Rotation( sin_angle, cos_angle, ON_3dVector(axis), ON_origin );
+  rot.Rotation( sin_angle, cos_angle, ON_3dVector(axis), ON_3dPoint::Origin );
   Transform(rot);
 }
 
@@ -1129,7 +1524,7 @@ void ON_3dVector::Rotate(
 {
   //bool rc = false;
   ON_Xform rot;
-  rot.Rotation( sin_angle, cos_angle, axis, ON_origin );
+  rot.Rotation( sin_angle, cos_angle, axis, ON_3dPoint::Origin );
   Transform(rot);
 }
 
@@ -1306,66 +1701,6 @@ double ON_3dVector::Fuzz(
   return(t > absolute_tolerance) ? t : absolute_tolerance;
 }
 
-const ON_2dPoint ON_2dPoint::Origin(0.0,0.0);
-const ON_2dPoint ON_2dPoint::UnsetPoint(ON_UNSET_VALUE,ON_UNSET_VALUE);
-
-const ON_3dPoint ON_3dPoint::Origin(0.0,0.0,0.0);
-const ON_3dPoint ON_3dPoint::UnsetPoint(ON_UNSET_VALUE,ON_UNSET_VALUE,ON_UNSET_VALUE);
-
-const ON_2dVector ON_2dVector::ZeroVector(0.0,0.0);
-const ON_2dVector ON_2dVector::XAxis(1.0,0.0);
-const ON_2dVector ON_2dVector::YAxis(0.0,1.0);
-const ON_2dVector ON_2dVector::UnsetVector(ON_UNSET_VALUE,ON_UNSET_VALUE);
-
-const ON_3dVector ON_3dVector::ZeroVector(0.0,0.0,0.0);
-const ON_3dVector ON_3dVector::XAxis(1.0,0.0,0.0);
-const ON_3dVector ON_3dVector::YAxis(0.0,1.0,0.0);
-const ON_3dVector ON_3dVector::ZAxis(0.0,0.0,1.0);
-const ON_3dVector ON_3dVector::UnsetVector(ON_UNSET_VALUE,ON_UNSET_VALUE,ON_UNSET_VALUE);
-
-const ON_2fPoint ON_2fPoint::Origin(0.0f,0.0f);
-const ON_3fPoint ON_3fPoint::Origin(0.0f,0.0f,0.0f);
-
-const ON_2fVector ON_2fVector::ZeroVector(0.0f,0.0f);
-const ON_2fVector ON_2fVector::XAxis(1.0f,0.0f);
-const ON_2fVector ON_2fVector::YAxis(0.0f,1.0f);
-
-const ON_3fVector ON_3fVector::ZeroVector(0.0f,0.0f,0.0f);
-const ON_3fVector ON_3fVector::XAxis(1.0f,0.0f,0.0f);
-const ON_3fVector ON_3fVector::YAxis(0.0f,1.0f,0.0f);
-const ON_3fVector ON_3fVector::ZAxis(0.0f,0.0f,1.0f);
-
-// OBSOLETE  - use ON_3dPoint::UnsetPoint
-const ON_3dPoint  ON_UNSET_POINT(ON_UNSET_VALUE, ON_UNSET_VALUE, ON_UNSET_VALUE);
-
-// OBSOLETE  - use ON_3dVector::UnsetVector
-const ON_3dVector ON_UNSET_VECTOR(ON_UNSET_VALUE, ON_UNSET_VALUE, ON_UNSET_VALUE);
-
-// OBSOLETE  - use ON_3dPoint::Origin
-const ON_3dPoint  ON_origin(0.0, 0.0,0.0);
-
-// OBSOLETE  - use ON_3dVector::XAxis
-const ON_3dVector ON_xaxis(1.0, 0.0, 0.0);
-
-// OBSOLETE  - use ON_3dVector::YAxis
-const ON_3dVector ON_yaxis(0.0, 1.0, 0.0);
-
-// OBSOLETE  - use ON_3dVector::ZAxis
-const ON_3dVector ON_zaxis(0.0, 0.0, 1.0);
-
-// OBSOLETE  - use ON_3fPoint::Origin
-const ON_3fPoint  ON_forigin(0.0f, 0.0f, 0.0f);
-
-// OBSOLETE  - use ON_3fVector::XAxis
-const ON_3fVector ON_fxaxis(1.0f, 0.0f, 0.0f);
-
-// OBSOLETE  - use ON_3fVector::YAxis
-const ON_3fVector ON_fyaxis(0.0f, 1.0f, 0.0f);
-
-// OBSOLETE  - use ON_3fVector::ZAxis
-const ON_3fVector ON_fzaxis(0.0f, 0.0f, 1.0f);
-
-
 //////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////
@@ -1374,9 +1709,6 @@ const ON_3fVector ON_fzaxis(0.0f, 0.0f, 1.0f);
 //
 // ON_2fPoint
 //
-
-ON_2fPoint::ON_2fPoint()
-{}
 
 ON_2fPoint::ON_2fPoint( const double* p )
 {
@@ -1551,13 +1883,6 @@ ON_2fPoint& ON_2fPoint::operator/=(float d)
   return *this;
 }
 
-ON_2fPoint& ON_2fPoint::operator+=(const ON_2fPoint& p)
-{
-  x += p.x;
-  y += p.y;
-  return *this;
-}
-
 ON_2fPoint& ON_2fPoint::operator+=(const ON_2fVector& v)
 {
   x += v.x;
@@ -1565,28 +1890,7 @@ ON_2fPoint& ON_2fPoint::operator+=(const ON_2fVector& v)
   return *this;
 }
 
-ON_2fPoint& ON_2fPoint::operator+=(const ON_3fVector& v)
-{
-  x += v.x;
-  y += v.y;
-  return *this;
-}
-
-ON_2fPoint& ON_2fPoint::operator-=(const ON_2fPoint& p)
-{
-  x -= p.x;
-  y -= p.y;
-  return *this;
-}
-
 ON_2fPoint& ON_2fPoint::operator-=(const ON_2fVector& v)
-{
-  x -= v.x;
-  y -= v.y;
-  return *this;
-}
-
-ON_2fPoint& ON_2fPoint::operator-=(const ON_3fVector& v)
 {
   x -= v.x;
   y -= v.y;
@@ -1717,19 +2021,68 @@ float ON_2fPoint::operator*(const ON_2fVector& h) const
   return x*h.x + y*h.y;
 }
 
-float ON_2fPoint::operator*(const ON_4fPoint& h) const
-{
-  return x*h.x + y*h.y + h.w;
-}
-
 bool ON_2fPoint::operator==( const ON_2fPoint& p ) const
 {
   return (x==p.x&&y==p.y)?true:false;
 }
 
-bool ON_2fPoint::operator!=( const ON_2fPoint& p ) const
+static bool Internal_NotEqualDoubleArray(size_t count, const double* lhs, const double* rhs)
 {
-  return (x!=p.x||y!=p.y)?true:false;
+  bool rc = false;
+  const double* e = lhs + count; 
+  while (lhs < e)
+  {
+    const double x = *lhs++;
+    const double y = *rhs++;
+    if (x != y)
+    {
+      // neither x nor y is a nan
+      rc = true;
+      continue;
+    }
+    if (!(x == x))
+      return false; // nan
+    if (!(y == y))
+      return false; // nan
+  }
+  return rc;
+}
+
+static bool Internal_NotEqualFloatArray(size_t count, const float* lhs, const float* rhs)
+{
+  bool rc = false;
+  const float* e = lhs + count; 
+  while (lhs < e)
+  {
+    const float x = *lhs++;
+    const float y = *rhs++;
+    if (x != y)
+    {
+      // neither x nor y is a nan
+      rc = true;
+      continue;
+    }
+    if (!(x == x))
+      return false; // nan
+    if (!(y == y))
+      return false; // nan
+  }
+  return rc;
+}
+
+bool ON_4fPoint::operator!=(const ON_4fPoint& rhs) const
+{
+  return Internal_NotEqualFloatArray(4, &x, &rhs.x);
+}
+
+bool ON_4fPoint::operator==(const ON_4fPoint& rhs) const
+{
+  return (x == rhs.x && y == rhs.y && z == rhs.z && w == rhs.w);
+}
+
+bool ON_2fPoint::operator!=( const ON_2fPoint& p ) const
+{ 
+  return Internal_NotEqualFloatArray(2, &x, &p.x);
 }
 
 bool ON_2fPoint::operator<=( const ON_2fPoint& p ) const
@@ -1799,6 +2152,17 @@ void ON_2fPoint::Zero()
   x = y = 0.0;
 }
 
+bool ON_2fPoint::IsZero() const
+{
+  return (x==0.0f && y==0.0f);
+}
+
+bool ON_2fPoint::IsNotZero() const
+{
+  // the && (x == x && y == y) insures no coordinate is a Nan.
+  return (x != 0.0f ||  y != 0.0f) && (x == x && y == y);
+}
+
 ON_2fPoint operator*(int d, const ON_2fPoint& p)
 {
   return ON_2fPoint(d*p.x,d*p.y);
@@ -1818,9 +2182,6 @@ ON_2dPoint operator*(double d, const ON_2fPoint& p)
 //
 // ON_3fPoint
 //
-
-ON_3fPoint::ON_3fPoint()
-{}
 
 ON_3fPoint::ON_3fPoint( const double* p )
 {
@@ -2009,27 +2370,11 @@ ON_3fPoint& ON_3fPoint::operator/=(float d)
   return *this;
 }
 
-ON_3fPoint& ON_3fPoint::operator+=(const ON_3fPoint& p)
-{
-  x += p.x;
-  y += p.y;
-  z += p.z;
-  return *this;
-}
-
 ON_3fPoint& ON_3fPoint::operator+=(const ON_3fVector& v)
 {
   x += v.x;
   y += v.y;
   z += v.z;
-  return *this;
-}
-
-ON_3fPoint& ON_3fPoint::operator-=(const ON_3fPoint& p)
-{
-  x -= p.x;
-  y -= p.y;
-  z -= p.z;
   return *this;
 }
 
@@ -2167,11 +2512,6 @@ float ON_3fPoint::operator*(const ON_3fVector& h) const
   return x*h.x + y*h.y + z*h.z;
 }
 
-float ON_3fPoint::operator*(const ON_4fPoint& h) const
-{
-  return x*h.x + y*h.y + z*h.z + h.w;
-}
-
 bool ON_3fPoint::operator==( const ON_3fPoint& p ) const
 {
   return (x==p.x&&y==p.y&&z==p.z)?true:false;
@@ -2179,7 +2519,7 @@ bool ON_3fPoint::operator==( const ON_3fPoint& p ) const
 
 bool ON_3fPoint::operator!=( const ON_3fPoint& p ) const
 {
-  return (x!=p.x||y!=p.y||z!=p.z)?true:false;
+  return Internal_NotEqualFloatArray(3, &x, &p.x);
 }
 
 bool ON_3fPoint::operator<=( const ON_3fPoint& p ) const
@@ -2249,6 +2589,17 @@ void ON_3fPoint::Zero()
   x = y = z = 0.0;
 }
 
+bool ON_3fPoint::IsZero() const
+{
+  return (x==0.0f && y==0.0f && z==0.0f);
+}
+
+bool ON_3fPoint::IsNotZero() const
+{
+  // the && (x == x && y == y) insures no coordinate is a Nan.
+  return (x != 0.0f || y != 0.0f || z != 0.0f) && (x == x && y == y && z == z);
+}
+
 ON_3fPoint operator*(int d, const ON_3fPoint& p)
 {
   return ON_3fPoint(d*p.x,d*p.y,d*p.z);
@@ -2268,9 +2619,6 @@ ON_3dPoint operator*(double d, const ON_3fPoint& p)
 //
 // ON_4fPoint
 //
-
-ON_4fPoint::ON_4fPoint()
-{}
 
 ON_4fPoint::ON_4fPoint( const double* p )
 {
@@ -2556,26 +2904,6 @@ ON_4fPoint ON_4fPoint::operator/( float d ) const
   return ON_4fPoint(x*one_over_d,y*one_over_d,z*one_over_d,w*one_over_d);
 }
 
-float ON_4fPoint::operator*(const ON_4fPoint& h) const
-{
-  return x*h.x + y*h.y + z*h.z + w*h.w;
-}
-
-bool ON_4fPoint::operator==( ON_4fPoint p ) const
-{
-  ON_4fPoint a = *this; a.Normalize(); p.Normalize();
-  if ( fabs(a.x-p.x) >  ON_SQRT_EPSILON ) return false;
-  if ( fabs(a.y-p.y) >  ON_SQRT_EPSILON ) return false;
-  if ( fabs(a.z-p.z) >  ON_SQRT_EPSILON ) return false;
-  if ( fabs(a.w-p.w) >  ON_SQRT_EPSILON ) return false;
-  return true;
-}
-
-bool ON_4fPoint::operator!=( const ON_4fPoint& p ) const
-{
-  return (*this == p)?false:true;
-}
-
 float ON_4fPoint::operator[](int i) const
 {
   return ((i<=0)?x:((i>=3)?w:((i==1)?y:z)));
@@ -2612,11 +2940,6 @@ double ON_4fPoint::MaximumCoordinate() const
   return c;
 }
 
-void ON_4fPoint::Zero()
-{
-  x = y = z = w = 0.0;
-}
-
 ON_4fPoint operator*( float d, const ON_4fPoint& p )
 {
   return ON_4fPoint( d*p.x, d*p.y, d*p.z, d*p.w );
@@ -2647,9 +2970,6 @@ const ON_2fVector& ON_2fVector::UnitVector(int index)
   }
   return o;
 }
-
-ON_2fVector::ON_2fVector()
-{}
 
 ON_2fVector::ON_2fVector( const double* v )
 {
@@ -2944,12 +3264,6 @@ ON_3dPoint ON_2fVector::operator-( const ON_3dPoint& v ) const
   return ON_3dPoint(x-v.x,y-v.y,-v.z);
 }
 
-
-float ON_2fVector::operator*(const ON_4fPoint& h) const
-{
-  return x*h.x + y*h.y;
-}
-
 bool ON_2fVector::operator==( const ON_2fVector& v ) const
 {
   return (x==v.x&&y==v.y)?true:false;
@@ -2957,7 +3271,7 @@ bool ON_2fVector::operator==( const ON_2fVector& v ) const
 
 bool ON_2fVector::operator!=( const ON_2fVector& v ) const
 {
-  return (x!=v.x||y!=v.y)?true:false;
+  return Internal_NotEqualFloatArray(2, &x, &v.x);
 }
 
 bool ON_2fVector::operator<=( const ON_2fVector& v ) const
@@ -3027,11 +3341,6 @@ double ON_2fVector::Length() const
   return ON_Length2d((double)x,(double)y);
 }
 
-void ON_2fVector::Zero()
-{
-  x = y = 0.0;
-}
-
 void ON_2fVector::Reverse()
 {
   x = -x;
@@ -3055,6 +3364,13 @@ bool ON_2fVector::Unitize()
   return rc;
 }
 
+ON_2fVector ON_2fVector::UnitVector() const
+{
+  ON_2fVector u(*this);
+  u.Unitize();
+  return u;
+}
+
 bool ON_2fVector::IsUnitVector() const
 {
   return (x != ON_UNSET_FLOAT && y != ON_UNSET_FLOAT && fabs(Length() - 1.0) <= 1.0e-5);
@@ -3070,9 +3386,20 @@ bool ON_2fVector::IsTiny( double tiny_tol ) const
   return (fabs(x) <= tiny_tol && fabs(y) <= tiny_tol );
 }
 
+void ON_2fVector::Zero()
+{
+  x = y = 0.0;
+}
+
 bool ON_2fVector::IsZero() const
 {
   return (x==0.0f && y==0.0f);
+}
+
+bool ON_2fVector::IsNotZero() const
+{
+  // the && (x == x && y == y) insures no coordinate is a Nan.
+  return (x != 0.0f || y != 0.0f) && (x == x && y == y);
 }
 
 // set this vector to be perpendicular to another vector
@@ -3144,9 +3471,6 @@ const ON_3fVector& ON_3fVector::UnitVector(int index)
   }
   return o;
 }
-
-ON_3fVector::ON_3fVector()
-{}
 
 ON_3fVector::ON_3fVector( const double* v )
 {
@@ -3454,12 +3778,6 @@ ON_3dPoint ON_3fVector::operator-( const ON_2dPoint& v ) const
   return ON_3dPoint(x-v.x,y-v.y,z);
 }
 
-
-float ON_3fVector::operator*(const ON_4fPoint& h) const
-{
-  return x*h.x + y*h.y + z*h.z;
-}
-
 bool ON_3fVector::operator==( const ON_3fVector& v ) const
 {
   return (x==v.x&&y==v.y&&z==v.z)?true:false;
@@ -3467,7 +3785,7 @@ bool ON_3fVector::operator==( const ON_3fVector& v ) const
 
 bool ON_3fVector::operator!=( const ON_3fVector& v ) const
 {
-  return (x!=v.x||y!=v.y||z!=v.z)?true:false;
+  return Internal_NotEqualFloatArray(3, &x, &v.x);
 }
 
 bool ON_3fVector::operator<=( const ON_3fVector& v ) const
@@ -3537,11 +3855,6 @@ double ON_3fVector::Length() const
   return ON_Length3d((double)x,(double)y,(double)z);
 }
 
-void ON_3fVector::Zero()
-{
-  x = y = z = 0.0;
-}
-
 void ON_3fVector::Reverse()
 {
   x = -x;
@@ -3568,9 +3881,21 @@ bool ON_3fVector::Unitize()
   return rc;
 }
 
+ON_3fVector ON_3fVector::UnitVector() const
+{
+  ON_3fVector u(*this);
+  u.Unitize();
+  return u;
+}
+
 bool ON_3fVector::IsTiny( double tiny_tol ) const
 {
   return (fabs(x) <= tiny_tol && fabs(y) <= tiny_tol && fabs(z) <= tiny_tol );
+}
+
+void ON_3fVector::Zero()
+{
+  x = y = z = 0.0;
 }
 
 bool ON_3fVector::IsZero() const
@@ -3578,6 +3903,11 @@ bool ON_3fVector::IsZero() const
   return (x==0.0f && y==0.0f && z==0.0f);
 }
 
+bool ON_3fVector::IsNotZero() const
+{
+  // the && (x == x && y == y && z == z) insures no coordinate is a Nan.
+  return (x != 0.0f || y != 0.0f || z != 0.0f) && (x == x && y == y && z == z);
+}
 
 ON_3fVector operator*(int d, const ON_3fVector& v)
 {
@@ -3626,9 +3956,6 @@ float ON_TripleProduct( const float* a, const float* b, const float* c )
 //
 // ON_2dPoint
 //
-
-ON_2dPoint::ON_2dPoint()
-{}
 
 ON_2dPoint::ON_2dPoint( const float* p )
 {
@@ -3804,13 +4131,6 @@ ON_2dPoint& ON_2dPoint::operator/=(double d)
   return *this;
 }
 
-ON_2dPoint& ON_2dPoint::operator+=(const ON_2dPoint& p)
-{
-  x += p.x;
-  y += p.y;
-  return *this;
-}
-
 ON_2dPoint& ON_2dPoint::operator+=(const ON_2dVector& v)
 {
   x += v.x;
@@ -3818,28 +4138,7 @@ ON_2dPoint& ON_2dPoint::operator+=(const ON_2dVector& v)
   return *this;
 }
 
-ON_2dPoint& ON_2dPoint::operator+=(const ON_3dVector& v)
-{
-  x += v.x;
-  y += v.y;
-  return *this;
-}
-
-ON_2dPoint& ON_2dPoint::operator-=(const ON_2dPoint& p)
-{
-  x -= p.x;
-  y -= p.y;
-  return *this;
-}
-
 ON_2dPoint& ON_2dPoint::operator-=(const ON_2dVector& v)
-{
-  x -= v.x;
-  y -= v.y;
-  return *this;
-}
-
-ON_2dPoint& ON_2dPoint::operator-=(const ON_3dVector& v)
 {
   x -= v.x;
   y -= v.y;
@@ -3977,11 +4276,6 @@ double ON_2dPoint::operator*(const ON_2dVector& h) const
   return x*h.x + y*h.y;
 }
 
-double ON_2dPoint::operator*(const ON_4dPoint& h) const
-{
-  return x*h.x + y*h.y + h.w;
-}
-
 bool ON_2dPoint::operator==( const ON_2dPoint& p ) const
 {
   return (x==p.x&&y==p.y)?true:false;
@@ -3989,7 +4283,7 @@ bool ON_2dPoint::operator==( const ON_2dPoint& p ) const
 
 bool ON_2dPoint::operator!=( const ON_2dPoint& p ) const
 {
-  return (x!=p.x||y!=p.y)?true:false;
+  return Internal_NotEqualDoubleArray(2, &x, &p.x);
 }
 
 bool ON_2dPoint::operator<=( const ON_2dPoint& p ) const
@@ -4065,10 +4359,20 @@ double ON_2dPoint::MinimumCoordinate() const
   return c;
 }
 
-
 void ON_2dPoint::Zero()
 {
   x = y = 0.0;
+}
+
+bool ON_2dPoint::IsZero() const
+{
+  return (x==0.0 && y==0.0);
+}
+
+bool ON_2dPoint::IsNotZero() const
+{
+  // the && (x == x && y == y) insures no coordinate is a Nan.
+  return (x != 0.0 || y != 0.0) && (x == x && y == y);
 }
 
 ON_2dPoint operator*(int i, const ON_2dPoint& p)
@@ -4092,9 +4396,6 @@ ON_2dPoint operator*(double d, const ON_2dPoint& p)
 //
 // ON_3dPoint
 //
-
-ON_3dPoint::ON_3dPoint()
-{}
 
 ON_3dPoint::ON_3dPoint( const float* p )
 {
@@ -4125,12 +4426,6 @@ ON_3dPoint::ON_3dPoint(const ON_2fVector& p)
 
 ON_3dPoint::ON_3dPoint(const ON_3fVector& p)
 {x=(double)p.x;y=(double)p.y;z=(double)p.z;}
-
-ON_3dRay::ON_3dRay()
-{}
-
-ON_3dRay::~ON_3dRay()
-{}
 
 ON_3dPoint::ON_3dPoint( const double* p )
 {
@@ -4291,27 +4586,11 @@ ON_3dPoint& ON_3dPoint::operator/=(double d)
   return *this;
 }
 
-ON_3dPoint& ON_3dPoint::operator+=(const ON_3dPoint& p)
-{
-  x += p.x;
-  y += p.y;
-  z += p.z;
-  return *this;
-}
-
 ON_3dPoint& ON_3dPoint::operator+=(const ON_3dVector& v)
 {
   x += v.x;
   y += v.y;
   z += v.z;
-  return *this;
-}
-
-ON_3dPoint& ON_3dPoint::operator-=(const ON_3dPoint& p)
-{
-  x -= p.x;
-  y -= p.y;
-  z -= p.z;
   return *this;
 }
 
@@ -4448,19 +4727,16 @@ double ON_3dPoint::operator*(const ON_3dVector& h) const
   return x*h.x + y*h.y + z*h.z;
 }
 
-double ON_3dPoint::operator*(const ON_4dPoint& h) const
+bool operator==(const ON_3dPoint& a, const ON_3dPoint& b)
 {
-  return x*h.x + y*h.y + z*h.z + h.w;
+  // Properly handles nans.
+  return (a.x==b.x && a.y==b.y && a.z==b.z);
 }
 
-bool ON_3dPoint::operator==( const ON_3dPoint& p ) const
+bool operator!=(const ON_3dPoint& a, const ON_3dPoint& b)
 {
-  return (x==p.x&&y==p.y&&z==p.z)?true:false;
-}
-
-bool ON_3dPoint::operator!=( const ON_3dPoint& p ) const
-{
-  return (x!=p.x||y!=p.y||z!=p.z)?true:false;
+  // Properly handles nans.
+  return (a.x!=b.x || a.y!=b.y || a.z!=b.z);
 }
 
 bool ON_3dPoint::operator<=( const ON_3dPoint& p ) const
@@ -4541,6 +4817,17 @@ void ON_3dPoint::Zero()
   x = y = z = 0.0;
 }
 
+bool ON_3dPoint::IsZero() const
+{
+  return x == 0.0 && y == 0.0 && z == 0.0;
+}
+
+bool ON_3dPoint::IsNotZero() const
+{
+  // the && (x == x && y == y && z == z) insures no coordinate is a Nan.
+  return (x != 0.0 || y != 0.0 || z != 0.0) && (x == x && y == y && z == z);
+}
+
 ON_3dPoint operator*(int i, const ON_3dPoint& p)
 {
   double d = i;
@@ -4563,8 +4850,24 @@ ON_3dPoint operator*(double d, const ON_3dPoint& p)
 // ON_4dPoint
 //
 
-ON_4dPoint::ON_4dPoint()
-{}
+bool ON_4dPoint::operator!=(const ON_4dPoint& rhs) const
+{
+  return Internal_NotEqualDoubleArray(4, &x, &rhs.x);
+}
+
+bool ON_4dPoint::operator==(const ON_4dPoint& rhs) const
+{
+  return (x == rhs.x && y == rhs.y && z == rhs.z && w == rhs.w);
+}
+
+
+double ON_4dPoint::InnerProduct(
+  const ON_4dPoint& lhs,
+  const ON_4dPoint& rhs
+)
+{
+  return (lhs.x*rhs.x + lhs.y*rhs.y + lhs.z*rhs.z + lhs.w*rhs.w);
+}
 
 ON_4dPoint::ON_4dPoint( const float* p )
 {
@@ -4851,26 +5154,6 @@ ON_4dPoint ON_4dPoint::operator/( double d ) const
   return ON_4dPoint(x*one_over_d,y*one_over_d,z*one_over_d,w*one_over_d);
 }
 
-double ON_4dPoint::operator*(const ON_4dPoint& h) const
-{
-  return x*h.x + y*h.y + z*h.z + w*h.w;
-}
-
-bool ON_4dPoint::operator==( ON_4dPoint p ) const
-{
-  ON_4dPoint a = *this; a.Normalize(); p.Normalize();
-  if ( fabs(a.x-p.x) > ON_SQRT_EPSILON ) return false;
-  if ( fabs(a.y-p.y) > ON_SQRT_EPSILON ) return false;
-  if ( fabs(a.z-p.z) > ON_SQRT_EPSILON ) return false;
-  if ( fabs(a.w-p.w) > ON_SQRT_EPSILON ) return false;
-  return true;
-}
-
-bool ON_4dPoint::operator!=( const ON_4dPoint& p ) const
-{
-  return (*this == p)?false:true;
-}
-
 double ON_4dPoint::operator[](int i) const
 {
   return ((i<=0)?x:((i>=3)?w:((i==1)?y:z)));
@@ -4921,12 +5204,6 @@ double ON_4dPoint::MinimumCoordinate() const
   return c;
 }
 
-
-void ON_4dPoint::Zero()
-{
-  x = y = z = w = 0.0;
-}
-
 ON_4dPoint operator*( double d, const ON_4dPoint& p )
 {
   return ON_4dPoint( d*p.x, d*p.y, d*p.z, d*p.w );
@@ -4952,9 +5229,6 @@ const ON_2dVector& ON_2dVector::UnitVector(int index)
   }
   return o;
 }
-
-ON_2dVector::ON_2dVector()
-{}
 
 ON_2dVector::ON_2dVector( const float* v )
 {
@@ -5250,13 +5524,6 @@ ON_3dPoint ON_2dVector::operator-( const ON_3fPoint& v ) const
   return ON_3dPoint(x-v.x,y-v.y,-v.z);
 }
 
-
-
-double ON_2dVector::operator*(const ON_4dPoint& h) const
-{
-  return x*h.x + y*h.y;
-}
-
 bool ON_2dVector::operator==( const ON_2dVector& v ) const
 {
   return (x==v.x&&y==v.y)?true:false;
@@ -5264,7 +5531,7 @@ bool ON_2dVector::operator==( const ON_2dVector& v ) const
 
 bool ON_2dVector::operator!=( const ON_2dVector& v ) const
 {
-  return (x!=v.x||y!=v.y)?true:false;
+  return Internal_NotEqualDoubleArray(2, &x, &v.x);
 }
 
 bool ON_2dVector::operator<=( const ON_2dVector& v ) const
@@ -5379,11 +5646,6 @@ double ON_2dVector::WedgeProduct(const ON_2dVector& B) const{
 	return x*B.y - y*B.x;
 }
 
-void ON_2dVector::Zero()
-{
-  x = y = 0.0;
-}
-
 void ON_2dVector::Reverse()
 {
   x = -x;
@@ -5432,14 +5694,32 @@ bool ON_2dVector::Unitize()
   return false;
 }
 
+ON_2dVector ON_2dVector::UnitVector() const
+{
+  ON_2dVector u(*this);
+  u.Unitize();
+  return u;
+}
+
 bool ON_2dVector::IsTiny( double tiny_tol ) const
 {
   return (fabs(x) <= tiny_tol && fabs(y) <= tiny_tol );
 }
 
+void ON_2dVector::Zero()
+{
+  x = y = 0.0;
+}
+
 bool ON_2dVector::IsZero() const
 {
   return (x==0.0 && y==0.0);
+}
+
+bool ON_2dVector::IsNotZero() const
+{
+  // the && (x == x && y == y) insures no coordinate is a Nan.
+  return (x != 0.0 || y != 0.0) && (x == x && y == y);
 }
 
 bool ON_2dVector::IsUnitVector() const
@@ -5524,9 +5804,6 @@ const ON_3dVector& ON_3dVector::UnitVector(int index)
   }
   return o;
 }
-
-ON_3dVector::ON_3dVector()
-{}
 
 ON_3dVector::ON_3dVector( const float* v )
 {
@@ -5833,10 +6110,14 @@ ON_3dPoint ON_3dVector::operator-( const ON_2fPoint& v ) const
   return ON_3dPoint(x-v.x,y-v.y,z);
 }
 
-
-double ON_3dVector::operator*(const ON_4dPoint& h) const
+bool ON_3dPoint::operator==( const ON_3dPoint& v ) const
 {
-  return x*h.x + y*h.y + z*h.z;
+  return (x==v.x&&y==v.y&&z==v.z)?true:false;
+}
+
+bool ON_3dPoint::operator!=( const ON_3dPoint& v ) const
+{
+  return Internal_NotEqualDoubleArray(3, &x, &v.x);
 }
 
 bool ON_3dVector::operator==( const ON_3dVector& v ) const
@@ -5846,7 +6127,7 @@ bool ON_3dVector::operator==( const ON_3dVector& v ) const
 
 bool ON_3dVector::operator!=( const ON_3dVector& v ) const
 {
-  return (x!=v.x||y!=v.y||z!=v.z)?true:false;
+  return Internal_NotEqualDoubleArray(3, &x, &v.x);
 }
 
 bool ON_3dVector::operator<=( const ON_3dVector& v ) const
@@ -5962,11 +6243,6 @@ double ON_3dVector::Length() const
   return ON_Length3d(x,y,z);
 }
 
-void ON_3dVector::Zero()
-{
-  x = y = z = 0.0;
-}
-
 void ON_3dVector::Reverse()
 {
   x = -x;
@@ -6021,6 +6297,13 @@ bool ON_3dVector::Unitize()
   return false;
 }
 
+ON_3dVector ON_3dVector::UnitVector() const
+{
+  ON_3dVector u(*this);
+  u.Unitize();
+  return u;
+}
+
 double ON_3dVector::LengthAndUnitize()
 {
   double d;
@@ -6071,15 +6354,25 @@ double ON_3dVector::LengthAndUnitize()
   return len;
 }
 
-
 bool ON_3dVector::IsTiny( double tiny_tol ) const
 {
   return (fabs(x) <= tiny_tol && fabs(y) <= tiny_tol && fabs(z) <= tiny_tol );
 }
 
+void ON_3dVector::Zero()
+{
+  x = y = z = 0.0;
+}
+
 bool ON_3dVector::IsZero() const
 {
   return (x==0.0 && y==0.0 && z==0.0);
+}
+
+bool ON_3dVector::IsNotZero() const
+{
+  // the && (x == x && y == y && z == z) insures no coordinate is a Nan.
+  return (x != 0.0 ||  y != 0.0 || z != 0.0) && (x == x && y == y && z == z);
 }
 
 bool ON_3dVector::IsUnitVector() const
@@ -6132,14 +6425,10 @@ double ON_TripleProduct( const double* a, const double* b, const double* c )
   return (a[0]*(b[1]*c[2] - b[2]*c[1]) + a[1]*(b[2]*c[0] - b[0]*c[2]) + a[2]*(b[0]*c[1] - b[1]*c[0]));
 }
 
+
 bool ON_2dVector::IsValid() const
 {
   return ( ON_IS_VALID(x) && ON_IS_VALID(y) ) ? true : false;
-}
-
-bool ON_2dVector::IsUnsetVector() const
-{
-  return ( ON_UNSET_VALUE == x && ON_UNSET_VALUE == y );
 }
 
 bool ON_3dVector::IsValid() const
@@ -6147,19 +6436,9 @@ bool ON_3dVector::IsValid() const
   return ( ON_IS_VALID(x) && ON_IS_VALID(y) && ON_IS_VALID(z) ) ? true : false;
 }
 
-bool ON_3dVector::IsUnsetVector() const
-{
-  return ( ON_UNSET_VALUE == x && ON_UNSET_VALUE == y && ON_UNSET_VALUE == z );
-}
-
 bool ON_2dPoint::IsValid() const
 {
   return (ON_IS_VALID(x) && ON_IS_VALID(y)) ? true : false;
-}
-
-bool ON_2dPoint::IsUnsetPoint() const
-{
-  return ( ON_UNSET_VALUE == x && ON_UNSET_VALUE == y );
 }
 
 bool ON_3dPoint::IsValid() const
@@ -6167,21 +6446,36 @@ bool ON_3dPoint::IsValid() const
   return (ON_IS_VALID(x) && ON_IS_VALID(y) && ON_IS_VALID(z) ) ? true : false;
 }
 
-bool ON_3dPoint::IsUnsetPoint() const
-{
-  return ( ON_UNSET_VALUE == x && ON_UNSET_VALUE == y && ON_UNSET_VALUE == z );
-}
-
 bool ON_4dPoint::IsValid() const
 {
   return (ON_IS_VALID(x) && ON_IS_VALID(y) && ON_IS_VALID(z) && ON_IS_VALID(w)) ? true : false;
 }
 
-bool ON_4dPoint::IsUnsetPoint() const
+
+bool ON_2fVector::IsValid() const
 {
-  return ( ON_UNSET_VALUE == x && ON_UNSET_VALUE == y && ON_UNSET_VALUE == z && ON_UNSET_VALUE == w );
+  return ( ON_IS_VALID_FLOAT(x) && ON_IS_VALID_FLOAT(y) ) ? true : false;
 }
 
+bool ON_3fVector::IsValid() const
+{
+  return ( ON_IS_VALID_FLOAT(x) && ON_IS_VALID_FLOAT(y) && ON_IS_VALID_FLOAT(z) ) ? true : false;
+}
+
+bool ON_2fPoint::IsValid() const
+{
+  return (ON_IS_VALID_FLOAT(x) && ON_IS_VALID_FLOAT(y)) ? true : false;
+}
+
+bool ON_3fPoint::IsValid() const
+{
+  return (ON_IS_VALID_FLOAT(x) && ON_IS_VALID_FLOAT(y) && ON_IS_VALID_FLOAT(z) ) ? true : false;
+}
+
+bool ON_4fPoint::IsValid() const
+{
+  return (ON_IS_VALID_FLOAT(x) && ON_IS_VALID_FLOAT(y) && ON_IS_VALID_FLOAT(z) && ON_IS_VALID_FLOAT(w)) ? true : false;
+}
 
 void ON_2dPoint::Set(double xx, double yy)
 {
@@ -6244,24 +6538,199 @@ bool ON_PlaneEquation::Create( ON_3dPoint P, ON_3dVector N )
     x = N.x;
     y = N.y;
     z = N.z;
-    rc = ( fabs(1.0 - Length()) > ON_ZERO_TOLERANCE ) ? Unitize() : true;
+    ON_3dVector* v = (ON_3dVector*)&x;
+    rc = (fabs(1.0 - v->Length()) > ON_ZERO_TOLERANCE) ? v->Unitize() : true;
     d = -(x*P.x + y*P.y + z*P.z);
   }
   return rc;
 }
 
 ON_PlaneEquation::ON_PlaneEquation()
-: ON_3dVector(0.0,0.0,0.0)
-, d(0.0)
+  : x(0.0)
+  , y(0.0)
+  , z(0.0)
+  , d(0.0)
 {}
 
 ON_PlaneEquation::ON_PlaneEquation(double xx, double yy, double zz, double dd)
-: ON_3dVector(xx,yy,zz)
-, d(dd)
+  : x(xx)
+  , y(yy)
+  , z(zz)
+  , d(dd)
 {}
 
-const ON_PlaneEquation ON_PlaneEquation::UnsetPlaneEquation(ON_UNSET_VALUE,ON_UNSET_VALUE,ON_UNSET_VALUE,ON_UNSET_VALUE);
-const ON_PlaneEquation ON_PlaneEquation::ZeroPlaneEquation(0.0,0.0,0.0,0.0);
+void ON_PlaneEquation::Set(ON_PlaneEquation& plane_equation, double x, double y, double z, double d)
+{
+  plane_equation.x = x;
+  plane_equation.y = y;
+  plane_equation.z = z;
+  plane_equation.d = d;
+}
+
+double ON_PlaneEquation::MaximumCoefficient() const
+{
+  double m = fabs(x);
+  if (fabs(y) > m)
+    m = fabs(y);
+  if (fabs(z) > m)
+    m = fabs(z);
+  if (fabs(d) > m)
+    m = fabs(d);
+  return m;
+}
+
+double& ON_PlaneEquation::operator[](int i)
+{
+  switch (i)
+  {
+  case 0:
+    return x;
+    break;
+  case 1:
+    return y;
+    break;
+  case 2:
+    return z;
+    break;
+  case 3:
+    return d;
+    break;
+  }
+
+  ON_ERROR("Invalid coefficient index.");
+
+  // send caller something that can be dereferenced without crashing.
+  double* invalid_coefficient = (double*)onmalloc_forever(sizeof(*invalid_coefficient));
+  *invalid_coefficient = ON_DBL_QNAN;
+  return *invalid_coefficient;
+}
+
+double& ON_PlaneEquation::operator[](unsigned int i)
+{
+  switch (i)
+  {
+  case 0:
+    return x;
+    break;
+  case 1:
+    return y;
+    break;
+  case 2:
+    return z;
+    break;
+  case 3:
+    return d;
+    break;
+  }
+
+  ON_ERROR("Invalid coefficient index.");
+
+  // send caller something that can be dereferenced without crashing.
+  double* invalid_coefficient = (double*)onmalloc_forever(sizeof(*invalid_coefficient));
+  *invalid_coefficient = ON_DBL_QNAN;
+  return *invalid_coefficient;
+}
+
+double ON_PlaneEquation::operator[](int i) const
+{
+  switch (i)
+  {
+  case 0:
+    return x;
+    break;
+  case 1:
+    return y;
+    break;
+  case 2:
+    return z;
+    break;
+  case 3:
+    return d;
+    break;
+  }
+
+  ON_ERROR("Invalid coefficient index.");
+  return ON_UNSET_VALUE;
+}
+
+double ON_PlaneEquation::operator[](unsigned int i) const
+{
+  switch (i)
+  {
+  case 0:
+    return x;
+    break;
+  case 1:
+    return y;
+    break;
+  case 2:
+    return z;
+    break;
+  case 3:
+    return d;
+    break;
+  }
+
+  ON_ERROR("Invalid coefficient index.");
+  return ON_UNSET_VALUE;
+}
+
+ON_PlaneEquation ON_PlaneEquation::NegatedPlaneEquation() const
+{
+  // do not negate ON_UNSET_VALUE or NaN
+  return ON_PlaneEquation(ON_IS_VALID(x) ? -x : x, ON_IS_VALID(y) ? -y : y, ON_IS_VALID(z) ? -z : z, ON_IS_VALID(d) ? -d : d);
+}
+
+
+ON_PlaneEquation ON_PlaneEquation::UnitizedPlaneEquation() const
+{
+  if (IsSet())
+  {
+    // 15 September 2003 Dale Lear
+    //     Added the ON_IS_FINITE and ON_DBL_MIN test.  See ON_3dVector::Length()
+    //     for details.
+    double dd = DirectionLength();
+
+    if (ON_IS_FINITE(dd))
+    {
+      if (dd > ON_DBL_MIN)
+      {
+        return ON_PlaneEquation(x / dd, y / dd, z / dd, d / dd);
+      }
+
+      if (dd > 0.0)
+      {
+        // This code is rarely used and can be slow.
+        // It multiplies by 2^1023 in an attempt to 
+        // normalize the coordinates.
+        // If the renormalization works, then we're
+        // ok.  If the renormalization fails, we
+        // return false.
+        ON_PlaneEquation tmp(
+          x*8.9884656743115795386465259539451e+307,
+          y*8.9884656743115795386465259539451e+307,
+          z*8.9884656743115795386465259539451e+307,
+          d*8.9884656743115795386465259539451e+307
+          );
+        dd = tmp.DirectionLength();
+        if (ON_IS_FINITE(dd) && dd > ON_DBL_MIN)
+        {
+          return ON_PlaneEquation(tmp.x / dd, tmp.y / dd, tmp.z / dd, tmp.d / dd);
+        }
+      }
+    }
+  }
+  else if ( d == ON_UNSET_VALUE )
+  {
+    ON_3dVector v = Direction();
+    if (v.IsValid() && v.Unitize())
+    {
+      return ON_PlaneEquation(v.x, v.y, v.z, ON_UNSET_VALUE);
+    }
+  }
+
+  return ON_PlaneEquation::ZeroPlaneEquation;
+}
 
 bool ON_PlaneEquation::IsValid() const
 {
@@ -6273,6 +6742,30 @@ bool ON_PlaneEquation::IsSet() const
   return ( ON_IS_VALID(x) && ON_IS_VALID(y) && ON_IS_VALID(z) && ON_IS_VALID(d) 
            && (0.0 != x || 0.0 != y || 0.0 != z) 
          );
+}
+
+ON_3dVector ON_PlaneEquation::Direction() const
+{
+  return ON_3dVector(x, y, z);
+}
+
+double ON_PlaneEquation::DirectionLength() const
+{
+  return ((const ON_3dVector*)&x)->Length();
+}
+
+
+ON_3dVector ON_PlaneEquation::UnitNormal() const
+{
+  ON_3dVector normal(x, y, z);
+  if (false == normal.IsUnitVector() && false == normal.Unitize())
+    normal = ON_3dVector::ZeroVector;
+  return normal;
+}
+
+int ON_PlaneEquation::IsParallelTo(const ON_PlaneEquation& other, double angle_tolerance /*= ON_DEFAULT_ANGLE_TOLERANCE*/) const
+{
+	return ON_3dVector(x, y, z).IsParallelTo(ON_3dVector(other.x, other.y, other.z), angle_tolerance);
 }
 
 double ON_PlaneEquation::ZeroTolerance() const
@@ -6453,7 +6946,150 @@ double* ON_PlaneEquation::ValueAt(
   return value;
 }
 
+ON_Interval ON_PlaneEquation::ValueRange(
+  size_t point_list_count,
+  const ON_3dPoint* point_list
+  ) const
+{
+  ON_3dPointListRef vertex_list;
+  vertex_list.SetFromDoubleArray(point_list_count,3,(const double*)point_list);
+  return ValueRange(vertex_list);
+}
 
+ON_Interval ON_PlaneEquation::ValueRange(
+  const ON_SimpleArray< ON_3dPoint >& point_list
+  ) const
+{
+  return ValueRange(point_list.UnsignedCount(),point_list.Array());
+}
+
+ON_Interval ON_PlaneEquation::ValueRange(
+  size_t point_list_count,
+  const ON_3fPoint* point_list
+  ) const
+{
+  ON_3dPointListRef vertex_list;
+  vertex_list.SetFromFloatArray(point_list_count,3,(const float*)point_list);
+  return ValueRange(vertex_list);
+}
+
+ON_Interval ON_PlaneEquation::ValueRange(
+  const ON_SimpleArray< ON_3fPoint >& point_list
+  ) const
+{
+  return ValueRange(point_list.UnsignedCount(),point_list.Array());
+}
+
+ON_Interval ON_PlaneEquation::ValueRange(
+  const class ON_3dPointListRef& point_list
+  ) const
+{
+  return ValueRange(point_list.PointCount(),0,point_list);
+}
+
+
+ON_Interval ON_PlaneEquation::ValueRange(
+  size_t point_index_count,
+  const unsigned int* point_index_list,
+  const class ON_3dPointListRef& point_list
+  ) const
+{
+  size_t point_index_stride = 1;
+
+  return ValueRange(
+    point_index_count,
+    point_index_stride,
+    point_index_list,
+    point_list
+    );
+}
+
+ON_Interval ON_PlaneEquation::ValueRange(
+  size_t point_index_count,
+  size_t point_index_stride,
+  const unsigned int* point_index_list,
+  const class ON_3dPointListRef& point_list
+  ) const
+{
+  ON_Interval value_interval(ON_Interval::EmptyInterval);
+
+  for(;;)
+  {
+    if ( false == IsValid() )
+      break; // invalid plane equation;
+
+    double h;
+    const unsigned int vertex_count = point_list.PointCount();
+    if ( 0 == vertex_count )
+      break;
+    const unsigned int point_count = (point_index_count > 0 && point_index_count < (size_t)ON_UNSET_UINT_INDEX)
+                                   ? ((unsigned int)point_index_count)
+                                   : 0;
+    if ( 0 == point_count )
+      break;
+
+    if ( 0 != point_index_list )
+    {
+      const unsigned int point_stride = (point_index_stride > 0 && point_index_stride < (size_t)ON_UNSET_UINT_INDEX)
+                                      ? ((unsigned int)point_index_stride)
+                                      : 0;
+      if ( 0 == point_stride )
+        break;
+      for ( unsigned int i = 0; i < point_count*point_stride; i += point_stride )
+      {
+        unsigned int j = point_index_list[i];
+        if ( j >= vertex_count )
+          continue;
+        h = ValueAt(point_list[j]);
+        if ( ON_IsValid(h) )
+        {
+          value_interval.Set(h,h);
+          for (i++; i < point_count*point_stride; i+= point_stride )
+          {
+            unsigned int j_local = point_index_list[i];
+            if ( j_local >= vertex_count )
+              continue;
+            h = ValueAt(point_list[j_local]);
+            if ( ON_IsValid(h) )
+            {
+              if ( h < value_interval.m_t[0] )
+                value_interval.m_t[0] = h;
+              else if ( h > value_interval.m_t[1] )
+                value_interval.m_t[1] = h;
+            }
+          }
+          break;
+        }
+      }
+    }
+    else if ( point_count <= vertex_count )
+    {
+      for ( unsigned int i = 0; i < point_count; i++ )
+      {        
+        h = ValueAt(point_list[i]);
+        if ( ON_IsValid(h) )
+        {
+          value_interval.Set(h,h);
+          for (i++; i < point_count; i++ )
+          {
+            h = ValueAt(point_list[i]);
+            if ( ON_IsValid(h) )
+            {
+              if ( h < value_interval.m_t[0] )
+                value_interval.m_t[0] = h;
+              else if ( h > value_interval.m_t[1] )
+                value_interval.m_t[1] = h;
+            }
+          }
+          break;
+        }
+      }
+    }
+
+    break;
+  }
+  return value_interval;
+}
 
 ON_3dPoint ON_PlaneEquation::ClosestPointTo( ON_3dPoint P ) const
 {
@@ -6905,8 +7541,9 @@ int ON_Get3dConvexHull(
       for (k = j+1; k < point_count; k++ )
       {
         C = points[k];
-        e.ON_3dVector::operator=(ON_CrossProduct(B-A,C-A));
-        if ( !e.ON_3dVector::Unitize() )
+        ON_3dVector* v = (ON_3dVector*)&e.x;
+        v->operator=(ON_CrossProduct(B-A,C-A));
+        if ( !v->Unitize() )
           continue;
         e.d = -(A.x*e.x + A.y*e.y + A.z*e.z);
         d0 = d1 = e.ValueAt(A);
@@ -6981,33 +7618,6 @@ int ON_Get3dConvexHull(
   return hull.Count() - count0;
 }
 
-bool ON_BoundingBox::IsValid() const 
-{
-	return (    m_min.x <= m_max.x
-          && ON_IS_VALID(m_min.x)
-          && ON_IS_VALID(m_max.x)
-          && m_min.y <= m_max.y 
-          && ON_IS_VALID(m_min.y)
-          && ON_IS_VALID(m_max.y)
-          && m_min.z <= m_max.z
-          && ON_IS_VALID(m_min.z)
-          && ON_IS_VALID(m_max.z)
-         );
-};
-
-void ON_BoundingBox::Dump(ON_TextLog& text_log) const
-{
-  text_log.Print("Bounding box: ");
-  if ( !IsValid() )
-  {
-    text_log.Print("not valid ");
-  }
-  text_log.Print("%.17g to %.17g, %.17g to %.17g, %.17g to %.17g\n",
-    m_min.x,m_max.x,
-    m_min.y,m_max.y,
-    m_min.z,m_max.z
-    );
-}
 
 bool ON_IsDegenrateConicHelper(double A, double B, double C, double D, double E)
 {
@@ -7022,7 +7632,7 @@ bool ON_IsDegenrateConicHelper(double A, double B, double C, double D, double E)
   // (F = 0 in our case here.)
 
   // zero_tol was tuned by 
-  //  1) testing sets of equaly spaced colinear 
+  //  1) testing sets of equaly spaced collinear 
   //     points with coordinate sizes ranging from 0.001 to 1.0e4 and
   //     segment lengths from 0.001 to 1000.0.
   //  2) testing ellipses with axes lengths ranging from 0.001 to 1000
@@ -7491,14 +8101,14 @@ bool ON_GetConicEquationThrough6Points(
   double E = N[4][4];
   // F = 0
 
-  // check for colinear point set
+  // check for collinear point set
   if ( ON_IsDegenrateConicHelper(A,B,C,D,E) )
   {
     // points lie on one or two lines
     return false;
   }
 
-  // points are not colinear
+  // points are not collinear
 
   // undo the scale we applied when we calculated M[][]
   x = scale*scale;
@@ -7727,4 +8337,816 @@ bool ON_GetEllipseConicEquation(
   }
 
   return true;
+}
+
+
+ON_3dPointListRef::ON_3dPointListRef(
+  const class ON_Mesh* mesh
+  )
+{
+  *this = ON_3dPointListRef::FromMesh(mesh);
+}
+
+ON_3dPointListRef::ON_3dPointListRef(
+  const class ON_SimpleArray<ON_3dPoint>& point_array
+  )
+{
+  *this = ON_3dPointListRef::FromPointArray(point_array);
+}
+
+ON_3dPointListRef::ON_3dPointListRef(
+  const class ON_SimpleArray<ON_3fPoint>& point_array
+  )
+{
+  *this = ON_3dPointListRef::FromPointArray(point_array);
+}
+
+const ON_3dPointListRef ON_3dPointListRef::EmptyPointList;
+
+unsigned int ON_3dPointListRef::SetFromDoubleArray(
+    size_t point_count,
+    size_t point_stride,
+    const double* point_array
+    )
+{
+  *this = ON_3dPointListRef::EmptyPointList;
+  if ( point_count > 0 
+       && point_count < (size_t)ON_UNSET_UINT_INDEX 
+       && point_stride >= 3
+       && point_stride < (size_t)ON_UNSET_UINT_INDEX 
+       && 0 != point_array
+       )
+  {
+    m_point_count = (unsigned int)point_count;
+    m_point_stride = (unsigned int)point_stride;
+    m_dP = point_array;
+  }
+  return m_point_count;
+}
+
+unsigned int ON_3dPointListRef::SetFromFloatArray(
+    size_t point_count,
+    size_t point_stride,
+    const float* point_array
+    )
+{
+  *this = ON_3dPointListRef::EmptyPointList;
+  if ( point_count > 0 
+       && point_count < (size_t)ON_UNSET_UINT_INDEX 
+       && point_stride >= 3
+       && point_stride < (size_t)ON_UNSET_UINT_INDEX 
+       && 0 != point_array
+       )
+  {
+    m_point_count = (unsigned int)point_count;
+    m_point_stride = (unsigned int)point_stride;
+    m_fP = point_array;
+  }
+  return m_point_count;
+}
+
+
+unsigned int ON_3dPointListRef::SetFromMesh(
+  const class ON_Mesh* mesh
+  )
+{
+  if ( 0 != mesh )
+  {
+    const unsigned int vertex_count = mesh->VertexUnsignedCount();
+    if ( vertex_count > 0 )
+    {
+      return (mesh->HasDoublePrecisionVertices())
+      ? SetFromDoubleArray(vertex_count,3,(const double*)(mesh->m_dV.Array()))
+      : SetFromFloatArray(vertex_count,3,(const float*)(mesh->m_V.Array()));
+    }
+  }
+  *this = ON_3dPointListRef::EmptyPointList;
+  return m_point_count;
+}
+
+ON_3dPointListRef ON_3dPointListRef::FromDoubleArray(
+  size_t point_count,
+  size_t point_stride,
+  const double* point_array
+  )
+{
+  ON_3dPointListRef p;
+  p.SetFromDoubleArray(point_count,point_stride,point_array);
+  return p;
+}
+
+ON_3dPointListRef ON_3dPointListRef::FromFloatArray(
+  size_t point_count,
+  size_t point_stride,
+  const float* point_array
+  )
+{
+  ON_3dPointListRef p;
+  p.SetFromFloatArray(point_count,point_stride,point_array);
+  return p;
+}
+
+ON_3dPointListRef ON_3dPointListRef::FromPointArray(
+  const class ON_SimpleArray<ON_3dPoint>& point_array
+  )
+{
+  ON_3dPointListRef p;
+  p.SetFromDoubleArray(point_array.UnsignedCount(),3,(const double*)point_array.Array());
+  return p;
+}
+
+ON_3dPointListRef ON_3dPointListRef::FromPointArray(
+  const class ON_SimpleArray<ON_3fPoint>& point_array
+  )
+{
+  ON_3dPointListRef p;
+  p.SetFromFloatArray(point_array.UnsignedCount(),3,(const float*)point_array.Array());
+  return p;
+}
+
+ON_3dPointListRef ON_3dPointListRef::FromMesh(
+  const class ON_Mesh* mesh
+  )
+{
+  ON_3dPointListRef p;
+  p.SetFromMesh(mesh);
+  return p;
+}
+
+unsigned int ON_3dPointListRef::Precision() const
+{
+  if ( 0 != m_dP )
+    return 2;
+  if ( 0 != m_fP )
+    return 1;
+  return 0;
+}
+
+ON_SimpleArray<ON_3dPoint> ON_3dPointListRef::To3dPointArray() const
+{
+  ON_SimpleArray<ON_3dPoint> a;
+
+  unsigned int i = m_point_count;
+  if ( i > 0 )
+  {
+    a.Reserve(i);
+    a.SetCount(i);
+    double* dst = (double*)a.Array();
+    if ( m_dP )
+    {
+      const double* src = m_dP;
+      while(i--)
+      {
+        *dst++ = src[0];
+        *dst++ = src[1];
+        *dst++ = src[2];
+        src += m_point_stride;
+      }
+    }
+    else if ( m_fP )
+    {
+      const float* src = m_fP;
+      while(i--)
+      {
+        *dst++ = src[0];
+        *dst++ = src[1];
+        *dst++ = src[2];
+        src += m_point_stride;
+      }
+    }
+  }
+
+  // Note: 
+  //  ON_SimpleArray<ON_3dPoint> has rvalue copy constructor
+  //  and operator=, so this return does not create a copy.
+  return a;
+}
+
+ON_SimpleArray<ON_3fPoint> ON_3dPointListRef::To3fPointArray() const
+{
+  ON_SimpleArray<ON_3fPoint> a;
+
+  unsigned int i = m_point_count;
+  if ( i > 0 )
+  {
+    a.Reserve(i);
+    a.SetCount(i);
+    float* dst = (float*)a.Array();
+    if ( m_dP )
+    {
+      const double* src = m_dP;
+      while(i--)
+      {
+        *dst++ = (float)src[0];
+        *dst++ = (float)src[1];
+        *dst++ = (float)src[2];
+        src += m_point_stride;
+      }
+    }
+    else if ( m_fP )
+    {
+      const float* src = m_fP;
+      while(i--)
+      {
+        *dst++ = src[0];
+        *dst++ = src[1];
+        *dst++ = src[2];
+        src += m_point_stride;
+      }
+    }
+  }
+
+  // Note: 
+  //  ON_SimpleArray<ON_3fPoint> has rvalue copy constructor
+  //  and operator=, so this return does not create a copy.
+  return a;
+}
+
+/*
+Returns:
+  true if the points are double precision
+*/
+bool ON_3dPointListRef::DoublePrecision() const
+{
+  return (0 != m_dP);
+}
+
+/*
+Returns:
+  true if the points are single precision
+*/
+bool ON_3dPointListRef::SinglePrecision() const
+{
+  return (0 != m_dP);
+}
+
+unsigned int ON_3dPointListRef::GetMeshFacePoints(
+  const class ON_MeshFace* mesh_face,
+  ON_3dPoint face_points[4]
+  ) const
+{
+  return (0 != mesh_face) 
+         ? GetPoints(4U,(const unsigned int*)(mesh_face->vi),face_points) 
+         : 0;
+}
+
+unsigned int ON_3dPointListRef::GetMeshNgonPoints(
+  const class ON_MeshNgon* mesh_ngon,
+  size_t ngon_points_capacity,
+  class ON_3dPoint* ngon_points
+  ) const
+{
+  return ( 0 != mesh_ngon && ((size_t)mesh_ngon->m_Vcount) <= ngon_points_capacity) 
+    ? GetPoints(mesh_ngon->m_Vcount, mesh_ngon->m_vi, ngon_points)
+    : 0;
+}
+
+unsigned int ON_3dPointListRef::GetMeshNgonPoints(
+  const class ON_MeshNgon* mesh_ngon,
+  ON_SimpleArray<ON_3dPoint>& ngon_points
+  ) const
+{
+  if ( mesh_ngon && mesh_ngon->m_Vcount > 0 && 0 != mesh_ngon->m_vi )
+  {
+    ngon_points.Reserve(mesh_ngon->m_Vcount);
+    ngon_points.SetCount(mesh_ngon->m_Vcount);
+    return GetPoints(mesh_ngon->m_Vcount, mesh_ngon->m_vi, ngon_points.Array());
+  }
+  ngon_points.SetCount(0);
+  return 0;
+}
+
+unsigned int ON_3dPointListRef::GetQuadPoints(
+  const int quad_point_indices[4],
+  class ON_3dPoint quad_points[4]
+  ) const
+{
+  return GetPoints(4,quad_point_indices,quad_points);
+}
+
+unsigned int ON_3dPointListRef::GetQuadPoints(
+  const unsigned int quad_point_indices[4],
+  class ON_3dPoint quad_points[4]
+  ) const
+{
+  return GetPoints(4,quad_point_indices,quad_points);
+}
+
+unsigned int ON_3dPointListRef::GetTrianglePoints(
+  const int triangle_point_indices[3],
+  class ON_3dPoint triangle_points[3]
+  ) const
+{
+  return GetPoints(3,triangle_point_indices,triangle_points);
+}
+
+unsigned int ON_3dPointListRef::GetTrianglePoints(
+  const unsigned int triangle_point_indices[3],
+  class ON_3dPoint triangle_points[3]
+  ) const
+{
+  return GetPoints(3,triangle_point_indices,triangle_points);
+}
+
+unsigned int ON_3dPointListRef::GetPoints(
+  int point_index_count,
+  const int* point_index_list,
+  class ON_3dPoint* points
+  ) const
+{
+  return GetPoints((unsigned int)point_index_count,(const unsigned int*)point_index_list,points);
+}
+
+unsigned int ON_3dPointListRef::GetPoints(
+  unsigned int point_index_count,
+  const unsigned int* point_index_list,
+  class ON_3dPoint* points
+  ) const
+{
+  unsigned int rc = 0;
+  if ( 0 == point_index_list 
+      || 0 == points
+      || 0 == point_index_count
+      || point_index_count >= m_point_count 
+      )
+  {
+    return rc;
+  }
+
+  double* dst = &points[0].x;
+
+  if ( m_dP )
+  {
+    rc = point_index_count;
+    while(point_index_count--)
+    {
+      unsigned int i = *point_index_list++;
+      if ( i < m_point_count )
+      {
+        const double* src = m_dP + i*m_point_stride;
+        *dst++ = *src++;
+        *dst++ = *src++;
+        *dst++ = *src;
+      }
+      else
+      {
+        *dst++ = ON_UNSET_VALUE;
+        *dst++ = ON_UNSET_VALUE;
+        *dst++ = ON_UNSET_VALUE;
+      }
+    }
+    return rc;
+  }
+
+  if ( m_fP )
+  {
+    rc = point_index_count;
+    while(point_index_count--)
+    {
+      unsigned int i = *point_index_list++;
+      if ( i < m_point_count )
+      {
+        const float* src = m_fP + i*m_point_stride;
+        *dst++ = *src++;
+        *dst++ = *src++;
+        *dst++ = *src;
+      }
+      else
+      {
+        *dst++ = ON_UNSET_VALUE;
+        *dst++ = ON_UNSET_VALUE;
+        *dst++ = ON_UNSET_VALUE;
+      }
+    }
+    return rc;
+  }
+
+  return rc;
+}
+
+unsigned int ON_3dPointListRef::GetPoints(
+  const ON_SimpleArray<int>& point_index_list,
+  ON_SimpleArray<ON_3dPoint>& points
+  ) const
+{
+  points.Reserve(point_index_list.UnsignedCount());
+  points.SetCount(point_index_list.UnsignedCount());
+  unsigned int rc = GetPoints( point_index_list.UnsignedCount(),
+                               (const unsigned int*)point_index_list.Array(),
+                               points.Array()
+                             );
+  if ( rc < points.UnsignedCount() )
+    points.SetCount(rc);
+
+  return rc;
+}
+
+
+unsigned int ON_3dPointListRef::GetPoints(
+  int point_index_count,
+  const int* point_index_list,
+  ON_SimpleArray<ON_3dPoint>& points
+  ) const
+{
+  unsigned int rc = (point_index_count > 0) 
+                  ? GetPoints((unsigned int)point_index_count,(const unsigned int*)point_index_list,points) 
+                  : 0;
+
+  if (rc < points.UnsignedCount())
+    points.SetCount(rc);
+
+  return rc;
+}
+
+unsigned int ON_3dPointListRef::GetPoints(
+  unsigned int point_index_count,
+  const unsigned int* point_index_list,
+  ON_SimpleArray<ON_3dPoint>& points
+  ) const
+{
+  unsigned int rc = 0;
+  if ( point_index_count > 0 && 0 != point_index_list )
+  {
+    points.Reserve(point_index_count);
+    points.SetCount(point_index_count);
+    rc = GetPoints(point_index_count,point_index_list,points.Array());
+  }
+
+  if (rc < points.UnsignedCount())
+    points.SetCount(rc);
+
+  return rc;
+}
+  
+static ON__UINT32 Internal_DoubleArrayDataCRC(
+  ON__UINT32 current_remainder,
+  size_t count,
+  const double* a
+)
+{
+  double x;
+  char* byte_swap 
+    = (ON::endian::big_endian == ON::Endian()) 
+    ? ((char*)&x)
+    : nullptr;
+  char c;
+  if (nullptr != a && count > 0)
+  {
+    const double* a1 = a + count;
+    while (a < a1)
+    {
+      x = *a++;
+      if (0.0 == x)
+        x = 0.0; // change -0.0 into +0.0
+      else if (false == (x == x))
+        x = ON_DBL_QNAN; // change any nan into ON_DBL_QNAN.
+      if (nullptr != byte_swap)
+      {
+        c = byte_swap[0]; byte_swap[0] = byte_swap[7]; byte_swap[7] = c;
+        c = byte_swap[1]; byte_swap[1] = byte_swap[6]; byte_swap[6] = c;
+        c = byte_swap[2]; byte_swap[2] = byte_swap[5]; byte_swap[5] = c;
+        c = byte_swap[3]; byte_swap[3] = byte_swap[4]; byte_swap[4] = c;
+      }
+      current_remainder = ON_CRC32(current_remainder, sizeof(x), (const void*)&x);
+    }
+  }
+  return current_remainder;
+}
+
+ON__UINT32 ON_2dPoint::DataCRC(ON__UINT32 current_remainder) const
+{
+  return Internal_DoubleArrayDataCRC(current_remainder, 2, &x);
+}
+  
+ON__UINT32 ON_3dPoint::DataCRC(ON__UINT32 current_remainder) const
+{
+  return Internal_DoubleArrayDataCRC(current_remainder, 3, &x);
+}
+  
+ON__UINT32 ON_4dPoint::DataCRC(ON__UINT32 current_remainder) const
+{
+  return Internal_DoubleArrayDataCRC(current_remainder, 4, &x);
+}
+
+ON__UINT32 ON_2dVector::DataCRC(ON__UINT32 current_remainder) const
+{
+  return Internal_DoubleArrayDataCRC(current_remainder, 2, &x);
+}
+  
+ON__UINT32 ON_3dVector::DataCRC(ON__UINT32 current_remainder) const
+{
+  return Internal_DoubleArrayDataCRC(current_remainder, 3, &x);
+}
+  
+ON__UINT32 ON_2fPoint::DataCRC(ON__UINT32 current_remainder) const
+{
+  const ON_2dPoint p(*this);
+  return p.DataCRC(current_remainder);
+}
+  
+ON__UINT32 ON_3fPoint::DataCRC(ON__UINT32 current_remainder) const
+{
+  const ON_3dPoint p(*this);
+  return p.DataCRC(current_remainder);
+}
+  
+ON__UINT32 ON_4fPoint::DataCRC(ON__UINT32 current_remainder) const
+{
+  const ON_4dPoint p(*this);
+  return p.DataCRC(current_remainder);
+}
+
+ON__UINT32 ON_2fVector::DataCRC(ON__UINT32 current_remainder) const
+{
+  const ON_2dVector v(*this);
+  return v.DataCRC(current_remainder);
+}
+  
+ON__UINT32 ON_3fVector::DataCRC(ON__UINT32 current_remainder) const
+{
+  const ON_3dVector v(*this);
+  return v.DataCRC(current_remainder);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ON_2dSize
+
+int ON_2dSize::Compare(
+  const ON_2dSize& lhs,
+  const ON_2dSize& rhs
+)
+{
+  if (lhs.cx < rhs.cx)
+    return -1;
+  if (lhs.cx > rhs.cx)
+    return 1;
+  if (lhs.cy < rhs.cy)
+    return -1;
+  if (lhs.cy > rhs.cy)
+    return 1;
+  return 0;
+}
+
+int ON_2dSize::ComparePointer(
+  const ON_2dSize* lhs,
+  const ON_2dSize* rhs
+)
+{
+  if (lhs == rhs)
+    return 0;
+  if (nullptr == lhs)
+    return -1;
+  if (nullptr == rhs)
+    return 1;
+  if (lhs->cx < rhs->cx)
+    return -1;
+  if (lhs->cx > rhs->cx)
+    return 1;
+  if (lhs->cy < rhs->cy)
+    return -1;
+  if (lhs->cy > rhs->cy)
+    return 1;
+  return 0;
+}
+
+ON_2dSize::ON_2dSize(double cxValue, double cyValue)
+  : cx(cxValue)
+  , cy(cyValue)
+{}
+
+bool ON_2dSize::IsSet() const
+{
+  return (ON_UNSET_VALUE != cx && ON_UNSET_VALUE != cy);
+}
+
+bool ON_2dSize::IsZero() const
+{
+  return (0 == cx && 0 == cy);
+}
+
+bool operator==(
+  const ON_2dSize& lhs,
+  const ON_2dSize& rhs
+  )
+{
+  return (lhs.cx == rhs.cx && lhs.cy == rhs.cy);
+}
+
+bool operator!=(const ON_2dSize& lhs, const ON_2dSize& rhs)
+{
+  return (lhs.cx != rhs.cx || lhs.cy != rhs.cy);
+}
+
+// ON_4dRect
+ON_4dRect::ON_4dRect(double leftValue, double topValue, double rightValue, double bottomValue)
+  : left(leftValue)
+  , top(topValue)
+  , right(rightValue)
+  , bottom(bottomValue)
+{}
+
+ON_4dRect::ON_4dRect(const ON_2dPoint topLeft, const ON_2dPoint& bottomRight)
+	: left(topLeft.x)
+	, top(topLeft.y)
+	, right(bottomRight.x)
+	, bottom(bottomRight.y)
+{}
+
+ON_4dRect::ON_4dRect(const ON_2dPoint& point, const ON_2dSize& size)
+{
+	left = point.x;
+	top = point.y;
+	right = left + size.cx;
+	bottom = top + size.cy;
+}
+
+bool ON_4dRect::IsSet() const
+{
+  return (
+    ON_UNSET_VALUE != left 
+    && ON_UNSET_VALUE != top
+    && ON_UNSET_VALUE != right
+    && ON_UNSET_VALUE != bottom
+    );
+}
+
+double ON_4dRect::Width(void) const { return fabs(right - left); }
+
+double ON_4dRect::Height(void) const { return fabs(bottom - top); }
+
+const ON_2dSize ON_4dRect::Size(void) const { return ON_2dSize(Width(), Height()); }
+
+const ON_2dPoint ON_4dRect::CenterPoint(void) const { return ON_2dPoint((left + right) / 2.0, (top + bottom) / 2.0); }
+
+const ON_2dPoint ON_4dRect::TopLeft(void) const { return ON_2dPoint(left, top); }
+
+const ON_2dPoint ON_4dRect::BottomRight(void) const { return ON_2dPoint(right, bottom); }
+
+bool ON_4dRect::IntersectRect(const ON_4dRect * r1, const ON_4dRect * r2)
+{
+	left = ON_Max(r1->left, r2->left);
+	top = ON_Max(r1->top, r2->top);
+	right = ON_Min(r1->right, r2->right);
+	bottom = ON_Min(r1->bottom, r2->bottom);
+
+	if (IsRectEmpty()) {
+		// degenerate rectangle
+		SetRectEmpty();
+		return false;
+	}
+	return true;
+}
+
+bool ON_4dRect::IntersectRect(const ON_4dRect & r1, const ON_4dRect & r2) { return IntersectRect(&r1, &r2); }
+
+bool ON_4dRect::IsRectEmpty(void) const 
+{ 
+	return 0 == Width() || 0 == Height(); 
+}
+
+bool ON_4dRect::IsRectNull(void) const
+{ 
+	return 0.0 == left &&
+		   0.0 == top  &&
+		   0.0 == bottom &&
+		   0.0 == right; 
+}
+
+void ON_4dRect::SetRect(double l, double t, double r, double b) { left = l; top = t; right = r; bottom = b; }
+
+bool ON_4dRect::PtInRect(const ON_2dPoint & pt) const
+{
+	return pt.x >= left && pt.y >= top && pt.x < right && pt.y < bottom;
+}
+
+void ON_4dRect::OffsetRect(double x, double y)
+{
+	left += x;
+	right += x;
+	top += y;
+	bottom += y;
+}
+
+void ON_4dRect::OffsetRect(const ON_2dVector& v)
+{
+	left += v.x;
+	right += v.x;
+	top += v.y;
+	bottom += v.y;
+}
+
+void ON_4dRect::InflateRect(double x, double y)
+{
+	left -= x;
+	top -= y;
+	right += x;
+	bottom += y;
+}
+
+void ON_4dRect::InflateRect(double l, double t, double r, double b)
+{
+	left -= l;
+	top -= t;
+	right += r;
+	bottom += b;
+}
+
+void ON_4dRect::DeflateRect(double x, double y)
+{
+	left += x;
+	top += y;
+	right -= x;
+	bottom -= y;
+}
+
+bool ON_4dRect::SubtractRect(const ON_4dRect* rect1, const ON_4dRect* rect2)
+{
+	if (rect1 == nullptr)
+		return false;
+
+	*this = *rect1;
+
+	if (rect1->IsRectEmpty() || rect2 == nullptr || rect2->IsRectEmpty())
+	{
+		return true;
+	}
+
+	if (rect2->top <= rect1->top && rect2->bottom >= rect1->bottom)
+	{
+		if (left < rect2->right)
+		{
+			left = ON_Min(rect2->right, right);
+		}
+		if (right > rect2->left)
+		{
+			right = ON_Max(left, rect2->left);
+		}
+	}
+
+	if (rect2->left <= rect1->left && rect2->right >= rect1->right)
+	{
+		if (top < rect2->bottom)
+		{
+			top = ON_Min(rect2->bottom, bottom);
+		}
+		if (bottom > rect2->top)
+		{
+			bottom = ON_Max(top, rect2->top);
+		}
+	}
+
+	return true;
+}
+
+void ON_4dRect::NormalizeRect()
+{
+	double nTemp;
+	if (left > right)
+	{
+		nTemp = left;
+		left = right;
+		right = nTemp;
+	}
+	if (top > bottom)
+	{
+		nTemp = top;
+		top = bottom;
+		bottom = nTemp;
+	}
+}
+
+bool ON_4dRect::IsZero() const
+{
+  return (0.0 == left && 0.0 == top && 0.0 == right && 0.0 == bottom);
+}
+
+void ON_4dRect::SetZero() { *this = Zero; }
+
+
+bool operator==(const ON_4dRect& lhs, const ON_4dRect& rhs)
+{
+  return (lhs.left == rhs.left
+    && lhs.top == rhs.top 
+    && lhs.right == rhs.right
+    && lhs.bottom == rhs.bottom);
+}
+
+bool operator!=(const ON_4dRect& lhs, const ON_4dRect& rhs)
+{
+  return (lhs.left != rhs.left
+    || lhs.top != rhs.top 
+    || lhs.right != rhs.right
+    || lhs.bottom != rhs.bottom);
 }

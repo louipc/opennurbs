@@ -16,6 +16,14 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
 /////////////////////////////////////////////////////////////////////////////
 // Empty strings point at empty_astring
 
@@ -23,8 +31,8 @@
 struct ON_aStringHeader
 {
 	int   ref_count;       // reference count (>=0 or -1 for empty string)
-	int   string_length;   // does not include NULL terminator
-	int   string_capacity; // does not include NULL terminator
+	int   string_length;   // does not include nullptr terminator
+	int   string_capacity; // does not include nullptr terminator
   char* string_array() {return (char*)(this+1);}
 };
 
@@ -96,7 +104,6 @@ bool ON_String::IsReferenceCounted() const
   return true;
 }
 
-
 ON_aStringHeader* ON_String::Header() const
 {
   ON_aStringHeader* p = (ON_aStringHeader*)m_s;
@@ -107,7 +114,7 @@ ON_aStringHeader* ON_String::Header() const
   return p;
 }
 
-void ON_String::CreateArray( int capacity )
+char* ON_String::CreateArray( int capacity )
 {
   Destroy();
   if ( capacity > 0 ) {
@@ -118,7 +125,9 @@ void ON_String::CreateArray( int capacity )
 		p->string_capacity = capacity;
 		m_s = p->string_array();
     memset( m_s, 0, (capacity+1)*sizeof(*m_s) );
+    return m_s;
   }
+  return nullptr;
 }
 
 void ON_String::CopyArray()
@@ -141,7 +150,7 @@ void ON_String::CopyArray()
   }
 }
 
-void ON_String::ReserveArray( size_t array_capacity )
+char* ON_String::ReserveArray( size_t array_capacity )
 {
   ON_aStringHeader* p = Header();
   const int capacity = (int) array_capacity;
@@ -167,6 +176,7 @@ void ON_String::ReserveArray( size_t array_capacity )
     memset( &m_s[p->string_capacity], 0, (1+capacity-p->string_capacity)*sizeof(*m_s) );
     p->string_capacity = capacity;
 	}
+  return Array();
 }
 
 void ON_String::ShrinkArray()
@@ -250,15 +260,16 @@ int ON_String::Length( const char* s )
   return n;
 }
 
-int ON_String::Length( const unsigned char* s )
+unsigned int ON_String::UnsignedLength( const char* s )
 {
-  return ON_String::Length((const char*)s);
+  return (unsigned int)ON_String::Length( s );
 }
 
 //////////////////////////////////////////////////////////////////////////////
 // Construction/Destruction
 
-ON_String::ON_String()
+
+ON_String::ON_String() ON_NOEXCEPT
 {
 	Create();
 }
@@ -270,9 +281,7 @@ ON_String::~ON_String()
 
 ON_String::ON_String(const ON_String& src)
 {
-	if (    src.Header()->ref_count > 0 
-       && 0 == ON_WorkerMemoryPool()
-     )	
+	if ( src.Header()->ref_count > 0 )	
   {
 		m_s = src.m_s;
     src.Header()->ref_count++;
@@ -283,6 +292,30 @@ ON_String::ON_String(const ON_String& src)
 		*this = src.m_s; // use operator=(const char*) to copy
 	}
 }
+
+#if defined(ON_HAS_RVALUEREF)
+
+// Clone constructor
+ON_String::ON_String( ON_String&& src ) ON_NOEXCEPT
+{
+  m_s = src.m_s;
+  src.m_s = (char*)pEmptyaString;
+}
+
+// Clone Assignment operator
+ON_String& ON_String::operator=( ON_String&& src ) ON_NOEXCEPT
+{
+  if ( this != &src )
+  {
+    this->Destroy();
+    m_s = src.m_s;
+    src.m_s = (char*)pEmptyaString;
+  }
+  return *this;
+}
+
+#endif
+
 
 ON_String::ON_String( const char* s )
 {
@@ -352,7 +385,8 @@ ON_String::ON_String( const wchar_t* w, int w_length )
 {
   // from substring
   Create();
-  if ( w && w[0] ) {
+  if ( w && w[0] ) 
+  {
     CopyToArray( w_length, w );
   }
 }
@@ -366,7 +400,7 @@ ON_String::ON_String( const ON_wString& w )
 
 
 
-#if defined (ON_OS_WINDOWS)
+#if defined (ON_RUNTIME_WIN)
 bool ON_String::LoadResourceString( HINSTANCE instance, UINT id )
 {
   char s[2048]; // room for 2047 characters
@@ -386,11 +420,21 @@ int ON_String::Length() const
   return Header()->string_length;
 }
 
+unsigned int ON_String::UnsignedLength() const
+{
+  return (unsigned int)Length();
+}
+
 // 25 October 2007 Dale Lear - remove bogus decl and defn
 //void Destroy();
 //void EmergencyDestroy()
 //{
 //}
+
+ON_String::operator const char*() const
+{
+  return ( nullptr == m_s || m_s == pEmptyaString ) ? "" : m_s;
+}
 
 char& ON_String::operator[](int i)
 {
@@ -405,7 +449,12 @@ char ON_String::operator[](int i) const
 
 bool ON_String::IsEmpty() const
 {
-  return (Header()->string_length <= 0 ) ? true : false;
+  return (Header()->string_length <= 0) ? true : false;
+}
+
+bool ON_String::IsNotEmpty() const
+{
+  return (Header()->string_length > 0) ? true : false;
 }
 
 ON_String& ON_String::operator=(const ON_String& src)
@@ -417,9 +466,7 @@ ON_String& ON_String::operator=(const ON_String& src)
       Destroy();
       Create();
     }
-    else if (    src.Header()->ref_count > 0 
-              && 0 == ON_WorkerMemoryPool()
-            ) 
+    else if ( src.Header()->ref_count > 0 ) 
     {
       Destroy();
       src.Header()->ref_count++;
@@ -444,7 +491,7 @@ ON_String& ON_String::operator=( char c )
 ON_String& ON_String::operator=( const char* s )
 {
   if ( (void*)s != (void*)m_s )
-	  CopyToArray( Length(s), s);
+	  CopyToArray( ON_String::Length(s), s);
 	return *this;
 }
 
@@ -457,15 +504,14 @@ ON_String& ON_String::operator=( unsigned char c )
 ON_String& ON_String::operator=( const unsigned char* s )
 {
   if ( (void*)s != (void*)m_s )
-	  CopyToArray( Length(s), s);
+	  CopyToArray( ON_String::Length((const char*)s), s);
 	return *this;
 }
 
 ON_String& ON_String::operator=( const wchar_t* w )
 {
-  // converts wide string to byt string
-  int w_length = 0;
-  if ( w ) while ( w[w_length] ) w_length++;
+  // converts wide string to byte string
+  const int w_length = ON_wString::Length(w);
   CopyToArray( w_length, w);
 	return *this;
 }
@@ -508,7 +554,7 @@ ON_String ON_String::operator+(const char* s2) const
 ON_String ON_String::operator+( const unsigned char* s2) const
 {
 	ON_String s(*this);
-  s.AppendToArray( ON_String::Length(s2), s2 );
+  s.AppendToArray( ON_String::Length((const char*)s2), s2 );
 	return s;
 }
 
@@ -557,11 +603,11 @@ const ON_String& ON_String::operator+=( const char* s )
 
 const ON_String& ON_String::operator+=( const unsigned char* s )
 {
-  AppendToArray(Length(s),s);
+  AppendToArray(ON_String::Length((const char*)s),s);
 	return *this;
 }
 
-void ON_String::SetLength(size_t string_length)
+char* ON_String::SetLength(size_t string_length)
 {
   int length = (int)string_length; // for 64 bit compilers
   if ( length >= Header()->string_capacity ) {
@@ -571,7 +617,9 @@ void ON_String::SetLength(size_t string_length)
     CopyArray();
     Header()->string_length = length;
     m_s[length] = 0;
+    return m_s;
   }
+  return nullptr;
 }
 
 char* ON_String::Array()
@@ -603,58 +651,130 @@ ON__UINT32 ON_String::DataCRC(ON__UINT32 current_remainder) const
   int string_length = Header()->string_length;
   if ( string_length > 0 )
   {
-    current_remainder = ON_CRC32(current_remainder,string_length*sizeof(*m_s),m_s);
+    current_remainder = ON_CRC32(current_remainder, string_length*sizeof(*m_s), m_s);
   }
   return current_remainder;
 }
 
-int ON_String::Compare( const char* s ) const
+int ON_StringLengthUTF8(
+  const char* string
+  )
 {
-  int rc = 0;
-  if ( s && s[0] ) {
-    if ( IsEmpty() ) {
-      rc = -1;
-    }
-    else {
-      rc = strcmp( m_s, s );
-    }
+  const char* string1 = string;
+  if (nullptr != string1)
+  {
+    while (0 != *string1)
+      string1++;
   }
-  else {
-    rc = IsEmpty() ? 0 : 1;
-  }
-  return rc;
+  return (int)(string1 - string);
 }
 
-int ON_String::Compare( const unsigned char* s) const
+int ON_StringLengthUTF16(
+  const ON__UINT16* string
+  )
 {
-  return ON_String::Compare((const char*)s);
+  const ON__UINT16* string1 = string;
+  if (nullptr != string1)
+  {
+    while (0 != *string1)
+      string1++;
+  }
+  return (int)(string1 - string);
 }
 
-int ON_String::CompareNoCase( const char* s) const
+int ON_StringLengthUTF32(
+  const ON__UINT32* string
+  )
 {
-  int rc = 0;
-  if ( s && s[0] ) {
-    if ( IsEmpty() ) {
-      rc = -1;
-    }
-    else {
-      rc = on_stricmp( m_s, s );
+  const ON__UINT32* string1 = string;
+  if (nullptr != string1)
+  {
+    while (0 != *string1)
+      string1++;
+  }
+  return (int)(string1 - string);
+}
+
+int ON_StringLengthWideChar(
+  const wchar_t* string
+  )
+{
+#if (1 == ON_SIZEOF_WCHAR_T)
+  return ON_StringLengthUTF8((const char*)string);
+#elif (2 == ON_SIZEOF_WCHAR_T)
+  return ON_StringLengthUTF16((const ON__UINT16*)string);
+#elif (4 == ON_SIZEOF_WCHAR_T)
+  return ON_StringLengthUTF32((const ON__UINT32*)string);
+#else
+#error ON_SIZEOF_WCHAR_T is not defined or has an unexpected value
+#endif
+}
+
+int ON_StringLengthUTF8(
+  const char* string,
+  size_t string_capacity
+  )
+{
+  const char* string1 = string;
+  if (nullptr != string1 && string_capacity > 0 )
+  {
+    for (const char* end = string1 + string_capacity; string1 < end; string1++)
+    {
+      if ( 0 == *string1)
+        break;
     }
   }
-  else {
-    rc = IsEmpty() ? 0 : 1;
+  return (int)(string1 - string);
+}
+
+int ON_StringLengthUTF16(
+  const ON__UINT16* string,
+  size_t string_capacity
+  )
+{
+  const ON__UINT16* string1 = string;
+  if (nullptr != string1 && string_capacity > 0 )
+  {
+    for (const ON__UINT16* end = string1 + string_capacity; string1 < end; string1++)
+    {
+      if ( 0 == *string1)
+        break;
+    }
   }
-  return rc;
+  return (int)(string1 - string);
 }
 
-int ON_String::CompareNoCase( const unsigned char* s) const
+int ON_StringLengthUTF32(
+  const ON__UINT32* string,
+  size_t string_capacity
+  )
 {
-  return ON_String::CompareNoCase((const char*)s);
+  const ON__UINT32* string1 = string;
+  if (nullptr != string1 && string_capacity > 0 )
+  {
+    for (const ON__UINT32* end = string1 + string_capacity; string1 < end; string1++)
+    {
+      if ( 0 == *string1)
+        break;
+    }
+  }
+  return (int)(string1 - string);
 }
 
-ON_String::operator const char*() const
+int ON_StringLengthWideChar(
+  const wchar_t* string,
+  size_t string_capacity
+  )
 {
-  return ( m_s == pEmptyaString ) ? NULL : m_s;
+#if (1 == ON_SIZEOF_WCHAR_T)
+  return ON_StringLengthUTF8((const char*)string,string_capacity);
+#elif (2 == ON_SIZEOF_WCHAR_T)
+  return ON_StringLengthUTF16((const ON__UINT16*)string,string_capacity);
+#elif (4 == ON_SIZEOF_WCHAR_T)
+  return ON_StringLengthUTF32((const ON__UINT32*)string,string_capacity);
+#else
+#error ON_SIZEOF_WCHAR_T is not defined or has an unexpected value
+#endif
 }
 
 
@@ -906,18 +1026,21 @@ int ON_String::Replace( const unsigned char* token1, const unsigned char* token2
   return Replace((const char*)token1, (const char*)token2);
 }
 
-int ON_String::Replace( char token1, char token2 )
+int ON_String::Replace(char utf8_single_byte_c1, char utf8_single_byte_c2)
 {
   int count = 0;
-  int i = Length();
-  while (i--)
+  if (ON_IsValidSingleByteUTF8CharValue(utf8_single_byte_c1) && ON_IsValidSingleByteUTF8CharValue(utf8_single_byte_c2))
   {
-    if ( token1 == m_s[i] )
+    int i = Length();
+    while (i--)
     {
-      if ( 0 == count )
-        CopyArray();
-      m_s[i] = token2;
-      count++;
+      if (utf8_single_byte_c1 == m_s[i])
+      {
+        if (0 == count)
+          CopyArray();
+        m_s[i] = utf8_single_byte_c2;
+        count++;
+      }
     }
   }
   return count;
@@ -931,81 +1054,210 @@ int ON_String::Replace( unsigned char token1, unsigned char token2 )
 
 ///////////////////////////////////////////////////////////////////////////////
 
-int ON_String::Find( char c ) const
+int ON_String::Find(char utf8_single_byte_c) const
 {
 	// find first single character
-  char s[2];
-  s[0] = c;
-  s[1] = 0;
-  return Find( s );
-}
-
-int ON_String::Find( unsigned char c ) const
-{
-  return Find( (char)c );
-}
-
-int ON_String::ReverseFind( char c ) const
-{
-	// find first single character
-  if ( IsEmpty() )
-    return -1;
-  int i;
-  const int length = Length();
-  for ( i = length-1; i >= 0; i-- ) {
-    if ( c == m_s[i] )
-      return i;
+  if (ON_IsValidSingleByteUTF8CharValue(utf8_single_byte_c))
+  {
+    char s[2];
+    s[0] = utf8_single_byte_c;
+    s[1] = 0;
+    return Find(s);
   }
   return -1;
 }
 
-int ON_String::ReverseFind( unsigned char c ) const
+int ON_String::Find(unsigned char utf8_single_byte_c) const
 {
-  return ReverseFind( (char)c );
+  return Find((char)utf8_single_byte_c);
+}
+
+int ON_String::ReverseFind(char utf8_single_byte_c) const
+{
+	// find first single character
+  if (IsNotEmpty() && ON_IsValidSingleByteUTF8CharValue(utf8_single_byte_c))
+  {
+    const char* p0 = m_s;
+    const char* p = p0 + Length();
+    while ( p > p0)
+    {
+      p--;
+      if (utf8_single_byte_c == *p)
+        return ((int)(p - p0));
+    }
+  }
+  return -1;
+}
+
+int ON_String::ReverseFind(unsigned char utf8_single_byte_c) const
+{
+  return ReverseFind((char)utf8_single_byte_c);
 }
 
 int ON_String::Find( const char* s ) const
 {
+  return Find(s, 0);
+}
+
+int ON_String::Find( const unsigned char* s ) const
+{
+  return Find((const char*)s, 0);
+}
+
+int ON_String::Find(const char* s, int start_index) const
+{
   int rc = -1;
-  if ( s && s[0] && !IsEmpty() ) {
-    const char* p;
-    p = strstr( m_s, s );
-    if ( p )
+  const int length = Length();
+  if (s && s[0] && length>0 && start_index>=0 && start_index<length) {
+    const char* source = m_s + start_index;
+    const char* p = strstr(source, s);
+    if (p)
     {
-      rc = ((int)(p-m_s)); // the (int) is for 64 bit size_t conversion
+      rc = ((int)(p - m_s)); // the (int) is for 64 bit size_t conversion
     }
   }
   return rc;
 }
 
-int ON_String::Find( const unsigned char* s ) const
+int ON_String::Find(const unsigned char* s, int start_index) const
 {
-  return Find( (const char*)s );
+  return Find((const char*)s, start_index);
 }
 
-void ON_String::MakeUpper()
+int ON_String::ReverseFind(const char* s) const
 {
-  if ( !IsEmpty() ) {
-  	CopyArray();
-    on_strupr(m_s);
+  int rc = -1;
+  if (s && s[0] && !IsEmpty()) 
+  {
+    int s_len = 0;
+    while (0 != s[s_len])
+      s_len++;
+    if (Length() >= s_len)
+    {
+      const char* p0 = m_s;
+      const char* p = p0 + (Length()-s_len);
+      while (p >= p0)
+      {
+        if (0 == strncmp(p, s, s_len))
+          return ((int)(p - p0));
+        p--;
+      }
+    }
   }
+  return rc;
 }
 
-void ON_String::MakeLower()
+int ON_String::ReverseFind(const unsigned char* s) const
 {
-  if ( !IsEmpty() ) {
-  	CopyArray();
-    on_strlwr(m_s);
-  }
+  return ReverseFind((const char*)s);
 }
+
 
 void ON_String::MakeReverse()
 {
-  if ( !IsEmpty() ) {
+  if ( IsNotEmpty() ) 
+  {
   	CopyArray();
-    on_strrev(m_s);
+    ON_String::Reverse(m_s,Length());
   }
 }
+
+ON_String ON_String::Reverse() const
+{
+  ON_String reverse_string(*this);
+  reverse_string.MakeReverse();
+  return reverse_string;
+}
+
+static void ON_String_ReverseUTF8(
+  char* string,
+  int element_count
+  )
+{
+  if ( element_count < 2 || nullptr == string )
+    return;
+  ON_String buffer(string,element_count);
+  const char* b0 = static_cast<const char*>(buffer);
+  const char* b1 = b0+element_count;
+  char* s1 = string + (element_count-1);
+
+  ON_UnicodeErrorParameters e;
+  e.m_error_mask = 8; // mask overlong UTF-8 encoding errors.
+  ON__UINT32 unicode_code_point;
+  int count;
+  memset(&e, 0, sizeof(e));
+  while (b0 < b1)
+  {
+    const char* c0 = b0++;
+
+    if (0xC0 == (*c0 & 0xC0))
+    {
+      // *c0 should be the first element in a UTF-8 multi-char encoding.
+
+      while (b0 < b1 && 0x80 == (*b0 & 0xC0))
+        b0++;
+
+      unicode_code_point = 0;
+      e.m_error_status = 0;
+      count = (int)(b0 - c0);
+      if (count != ON_DecodeUTF8(c0, count, &e, &unicode_code_point) && 0 != e.m_error_status)
+      {
+        // not a valid UTF-8 string
+        b0 = c0+1;
+      }
+    }
+    
+    const char* c = b0;
+    while (c > c0)
+    {
+      c--;
+      *s1-- = *c;
+    }
+  }
+}
+
+char* ON_String::Reverse(
+  char* string,
+  int element_count
+  )
+{
+  if (element_count < 0)
+  {
+    element_count = ON_String::Length(string);
+    if (element_count < 0)
+      return nullptr;
+  }
+  if ( 0 == element_count )
+    return string;
+
+  if (nullptr == string)
+  {
+    ON_ERROR("string is nullptr.");
+    return nullptr;
+  }
+
+  int i, j;
+  char a, b;
+
+  for ( i = 0, j = element_count-1; i < j; i++, j-- ) 
+  {
+    a = string[i];
+    b = string[j];
+    if (0 == (0x80 & a) && 0 == (0x80 & b))
+    {
+      string[i] = b;
+      string[j] = a;
+      continue;
+    }
+
+    // code points with multi char element encodeings need to be handled
+    ON_String_ReverseUTF8(string+i,j-i+1);
+    break;
+  }
+
+  return string;
+}
+
 
 void ON_String::TrimLeft(const char* s)
 {
@@ -1014,16 +1266,25 @@ void ON_String::TrimLeft(const char* s)
   char* dc;
   int i;
   if ( !IsEmpty() ) {
-    if ( !s )
-      s = " \t\n";
-    for ( i = 0; 0 != (c=m_s[i]); i++ )
+    if (nullptr == s)
     {
-      for (sc = s;*sc;sc++) {
-        if ( *sc == c )
+      for (i = 0; 0 != (c = m_s[i]); i++)
+      {
+        if ( c < 0 || c > ON_String::Space )
           break;
       }
-      if (!(*sc))
-        break;
+    }
+    else
+    {
+      for (i = 0; 0 != (c = m_s[i]); i++)
+      {
+        for (sc = s; *sc; sc++) {
+          if (*sc == c)
+            break;
+        }
+        if (!(*sc))
+          break;
+      }
     }
     if ( i > 0 ) {
       if ( m_s[i] ) {
@@ -1045,16 +1306,25 @@ void ON_String::TrimRight(const char* s)
   const char* sc;
   int i = Header()->string_length;
   if ( i > 0 ) {
-    if ( !s )
-      s = " \t\n";
-    for (i--; i >= 0 && 0 != (c=m_s[i]); i-- )
+    if (nullptr == s)
     {
-      for (sc = s;*sc;sc++) {
-        if ( *sc == c )
+      for (i--; i >= 0 && 0 != (c = m_s[i]); i--)
+      {
+        if ( c < 0 || c > ON_String::Space )
           break;
       }
-      if (!(*sc))
-        break;
+    }
+    else
+    {
+      for (i--; i >= 0 && 0 != (c = m_s[i]); i--)
+      {
+        for (sc = s; *sc; sc++) {
+          if (*sc == c)
+            break;
+        }
+        if (!(*sc))
+          break;
+      }
     }
     if ( i < 0 )
       Destroy();
@@ -1072,8 +1342,11 @@ void ON_String::TrimLeftAndRight(const char* s)
   TrimLeft(s);
 }
 
-int ON_String::Remove( const char chRemove)
+int ON_String::Remove(const char utf8_single_byte_c)
 {
+  if (false == ON_IsValidSingleByteUTF8CharValue(utf8_single_byte_c))
+    return 0;
+
   CopyArray();
 
   char* pstrSource = m_s;
@@ -1082,7 +1355,7 @@ int ON_String::Remove( const char chRemove)
 
   while( pstrSource && pstrSource  < pstrEnd)
   {
-    if (*pstrSource != chRemove)
+    if (*pstrSource != utf8_single_byte_c)
     {
       *pstrDest = *pstrSource;
       pstrDest++;
@@ -1155,118 +1428,6 @@ ON_String ON_String::Right(int count) const
   return s;
 }
 
-void ON_MSC_CDECL ON_String::Format( const char* sFormat, ...)
-{
-#define MAX_MSG_LENGTH 2048
-  char sMessage[MAX_MSG_LENGTH];
-  va_list args;
-
-  /* put formatted message in sMessage */
-  memset(sMessage,0,sizeof(sMessage));
-  if (sFormat) {
-    va_start(args, sFormat);
-    on_vsnprintf(sMessage, MAX_MSG_LENGTH-1, sFormat, args);
-    sMessage[MAX_MSG_LENGTH-1] = 0;
-    va_end(args);
-  }
-  const int len = Length(sMessage);
-  if ( len < 1 ) {
-    Destroy();
-    Create();
-  }
-  else {
-    ReserveArray( len );
-    CopyToArray( len, sMessage );
-  }
-}
-
-void ON_MSC_CDECL ON_String::Format( const unsigned char* sFormat, ...)
-{
-#define MAX_MSG_LENGTH 2048
-  char sMessage[MAX_MSG_LENGTH];
-  va_list args;
-
-  /* put formatted message in sMessage */
-  memset(sMessage,0,sizeof(sMessage));
-  if (sFormat) {
-    va_start(args, sFormat);
-    on_vsnprintf(sMessage, MAX_MSG_LENGTH-1, (const char*)sFormat, args);
-    sMessage[MAX_MSG_LENGTH-1] = 0;
-    va_end(args);
-  }
-  const int len = Length(sMessage);
-  if ( len < 1 ) {
-    Destroy();
-    Create();
-  }
-  else {
-    ReserveArray( len );
-    CopyToArray( len, sMessage );
-  }
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-bool ON_String::operator==(const ON_String& s2) const
-{
-  return (Compare(s2) == 0) ? true : false;
-}
-
-bool ON_String::operator==(const char* s2) const
-{
-  return (Compare(s2) == 0) ? true : false;
-}
-
-bool ON_String::operator!=(const ON_String& s2) const
-{
-  return (Compare(s2) != 0) ? true : false;
-}
-
-bool ON_String::operator!=(const char* s2) const
-{
-  return (Compare(s2) != 0) ? true : false;
-}
-
-bool ON_String::operator<(const ON_String& s2) const
-{
-  return (Compare(s2) < 0) ? true : false;
-}
-
-bool ON_String::operator<(const char* s2) const
-{
-  return (Compare(s2) < 0) ? true : false;
-}
-
-bool ON_String::operator>(const ON_String& s2) const
-{
-  return (Compare(s2) > 0) ? true : false;
-}
-
-bool ON_String::operator>(const char* s2) const
-{
-  return (Compare(s2) > 0) ? true : false;
-}
-
-bool ON_String::operator<=(const ON_String& s2) const
-{
-  return (Compare(s2) <= 0) ? true : false;
-}
-
-bool ON_String::operator<=(const char* s2) const
-{
-  return (Compare(s2) <= 0) ? true : false;
-}
-
-bool ON_String::operator>=(const ON_String& s2) const
-{
-  return (Compare(s2) >= 0) ? true : false;
-}
-
-bool ON_String::operator>=(const char* s2) const
-{
-  return (Compare(s2) >= 0) ? true : false;
-}
-
 
 ON_CheckSum::ON_CheckSum()
 {
@@ -1285,8 +1446,6 @@ void ON_CheckSum::Zero()
   for ( int i = 0; i < 8; i++ ) 
     m_crc[i] = 0;
 }
-
-const ON_CheckSum ON_CheckSum::UnsetCheckSum;
 
 bool ON_CheckSum::IsSet() const
 {
@@ -1451,7 +1610,7 @@ bool ON::IsDirectory( const wchar_t* pathname )
       buffer = pathname;
       buffer.TrimRight(trim);
       if ( buffer.Length() > 0 )
-        pathname = buffer;
+        pathname = static_cast< const wchar_t* >(buffer);
     }
 #if defined(ON_COMPILER_MSC)
     // this works on Windows
@@ -1489,7 +1648,7 @@ bool ON::IsDirectory( const char* utf8pathname )
       buffer = utf8pathname;
       buffer.TrimRight(trim);
       if ( buffer.Length() > 0 )
-        utf8pathname = buffer;
+        utf8pathname = static_cast< const char* >(buffer);
     }
 #if defined(ON_COMPILER_MSC)
     // this works on Windows
@@ -1522,7 +1681,7 @@ int ON::IsOpenNURBSFile( FILE* fp )
   int version = 0;
   if ( 0 != fp )
   {
-    ON_BinaryFile archive(ON::read3dm,fp);
+    ON_BinaryFile archive(ON::archive_mode::read3dm,fp);
     if ( !archive.Read3dmStartSection(&version,sStartSectionComment) )
       version = 0;
   }
@@ -1567,7 +1726,7 @@ bool ON_CheckSum::SetFileCheckSum( FILE* fp )
   {
     size_t filesize = 0;
     time_t filetime = 0;
-    if ( ON::GetFileStats(fp,&filesize,NULL,&filetime) )
+    if ( ON::GetFileStats(fp,&filesize,nullptr,&filetime) )
     {
       m_time = filetime;
     }
@@ -1725,7 +1884,7 @@ bool ON_CheckSum::CheckFile(
 
   size_t filesize=0;
   time_t filetime=0;
-  if ( ON::GetFileStats( fp, &filesize, NULL, &filetime ) )
+  if ( ON::GetFileStats( fp, &filesize, nullptr, &filetime ) )
   {
     if ( m_size != filesize )
     {
@@ -1822,3 +1981,16 @@ void ON_CheckSum::Dump(ON_TextLog& text_log) const
     text_log.PopIndent();
   }
 }
+
+/*
+TODO for apple support
+https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man3/wcscmp.3.html
+
+ wcscasecmp_l(const wchar_t *s1, const wchar_t *s2, locale_t loc);
+ wcsncasecmp_l(const wchar_t *s1, const wchar_t *s2, size_t n, locale_t loc);
+
+ look in SetPOSIXLocale() to set up calls to opennurbs locale setter.
+
+ ON_Locale will need to have posix locale_t available for apple functions.
+
+*/

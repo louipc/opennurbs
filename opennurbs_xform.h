@@ -28,6 +28,21 @@ class ON_Matrix;
 class ON_CLASS ON_Xform
 {
 public:
+  // ON_Xform IdentityTransformation diagonal = (1,1,1,1)
+  static const ON_Xform IdentityTransformation;
+
+  // ON_Xform ZeroTransformation diagonal = (0,0,0,1)
+  static const ON_Xform ZeroTransformation;
+
+  // ON_Xform::Zero4x4 - every coefficient is 0.0.
+  static const ON_Xform Zero4x4;
+
+  // ON_Xform::Unset - every coefficient is ON_UNSET_VALUE
+  static const ON_Xform Unset;
+
+  // ON_Xform::Nan - every coefficient is ON_DBL_QNAN
+  static const ON_Xform Nan;
+
   double m_xform[4][4]; // [i][j] = row i, column j.  I.e., 
                         //
                         //           [0][0] [0][1] [0][2] [0][3]
@@ -35,26 +50,61 @@ public:
                         //           [2][0] [2][1] [2][2] [2][3]
                         //           [3][0] [3][1] [3][2] [3][3]
 
-  // use implicit destructor, copy constructor
-  ON_Xform();                     // zero matrix
+  // Default constructor transformation has diagonal (0,0,0,1)
+  ON_Xform();
+  ~ON_Xform() = default;
+  ON_Xform(const ON_Xform&) = default;
+  ON_Xform& operator=(const ON_Xform&) = default;
 
-  ON_Xform( int );                // diagonal matrix (d,d,d,1)
-  ON_Xform( double );             // diagonal matrix (d,d,d,1)
+  bool operator==(const ON_Xform& rhs) const;
+
+  bool operator!=(const ON_Xform& rhs) const;
+
+  // Constructs transformation with diagonal (x,x,x,1)
+  explicit ON_Xform(
+    double x
+  );
+
+  /*
+  Returns:
+    Transformation with diagonal (d,d,d,1).
+  */
+  static const ON_Xform DiagonalTransformation(
+    double d
+  );
+
+  /*
+  Returns:
+    Transformation with diagonal (d0,d1,d2,1.0).
+  */
+  static const ON_Xform DiagonalTransformation(
+    double d0,
+    double d1,
+    double d2
+  );
+
+  /*
+  Returns:
+    Transformation with diagonal (d0,d1,d2,1.0).
+  */
+  static const ON_Xform DiagonalTransformation(
+    const ON_3dVector& diagnoal
+  );
 
 #if defined(ON_COMPILER_MSC)
   // Microsoft's compiler won't pass double m[4][4] as a const double[4][4] arg.
   // Gnu's compiler handles this.
-  ON_Xform( double[4][4] );       // from standard double m[4][4]
-  ON_Xform( float[4][4] );        // from standard float m[4][4]
+  explicit ON_Xform( double[4][4] );       // from standard double m[4][4]
+  explicit ON_Xform( float[4][4] );        // from standard float m[4][4]
 #endif
   
-  ON_Xform( const double[4][4] ); // from standard double m[4][4]
-  ON_Xform( const float[4][4] );  // from standard float m[4][4]
+  explicit ON_Xform( const double[4][4] ); // from standard double m[4][4]
+  explicit ON_Xform( const float[4][4] );  // from standard float m[4][4]
   
-  ON_Xform( const double* );      // from array of 16 doubles (row0,row1,row2,row3)
-  ON_Xform( const float* );       // from array of 16 floats (row0,row1,row2,row3)
+  explicit ON_Xform( const double* );      // from array of 16 doubles (row0,row1,row2,row3)
+  explicit ON_Xform( const float* );       // from array of 16 floats (row0,row1,row2,row3)
   
-  ON_Xform( const ON_Matrix& ); // from upper left 4x4 of an
+  explicit ON_Xform( const ON_Matrix& ); // from upper left 4x4 of an
                                     // arbitrary matrix.  Any missing
                                     // rows/columns are set to identity. 
 	ON_Xform(const ON_3dPoint& P,	// as a frame. 
@@ -62,15 +112,10 @@ public:
 						const ON_3dVector& Y,	
 						const ON_3dVector& Z); 
 
-  // use implicit operator=(const ON_3dVector&), operator==
-  
   double* operator[](int);
   const double* operator[](int) const;
 
   // xform = scalar results in a diagonal 3x3 with bottom row = 0,0,0,1
-  ON_Xform& operator=( int );
-  ON_Xform& operator=( float );
-  ON_Xform& operator=( double );
   ON_Xform& operator=( const ON_Matrix& ); // from upper left 4x4 of an
                                                // arbitrary matrix.  Any missing
                                                // rows/columns are set to identity.
@@ -93,10 +138,22 @@ public:
     Test the entries of the transformation matrix
     to see if they are valid number.
   Returns:
-    True if ON_IsValid() is true for every number
-    in the transformation matrix.
+    True if ON_IsValid() is true for every coefficient in the transformation matrix.
   */
   bool IsValid() const;
+
+  /*
+  Description:
+    Test the entries of the transformation matrix
+    to see if they are valid number.
+  Returns:
+    True if any coefficient in the transformation matrix is a nan.
+  */
+  bool IsNan() const;
+
+  bool IsValidAndNotZeroAndNotIdentity(
+    double zero_tolerance = 0.0
+  ) const;
 
   /*
   Returns:
@@ -139,14 +196,37 @@ public:
   
   /*
   Returns:
-    true if matrix is the zero transformation
-
+    true if matrix is ON_Xform::Zero4x4, ON_Xform::ZeroTransformation,
+    or some other type of zero. The value xform[3][3] can be anything.
           0 0 0 0
           0 0 0 0
           0 0 0 0
           0 0 0 *
   */
   bool IsZero() const;
+  
+  /*
+  Returns:
+    true if matrix is ON_Xform::Zero4x4
+    The value xform[3][3] must be zero.
+          0 0 0 0
+          0 0 0 0
+          0 0 0 0
+          0 0 0 0
+  */
+  bool IsZero4x4() const;
+  
+  /*
+  Returns:
+    true if matrix is ON_Xform::ZeroTransformation
+    The value xform[3][3] must be 1.
+          0 0 0 0
+          0 0 0 0
+          0 0 0 0
+          0 0 0 1
+  */
+  bool IsZeroTransformation() const;
+
 
   /*
   Description:
@@ -159,34 +239,48 @@ public:
   */
   int IsSimilarity() const;
 
+	/*
+	Description:
+		A transformation is affine if it is valid and its last row is
+		  0  0  0  1
+		An affine transformation can be broken into a linear transformation and a translation.
+	Example:
+	  A perspective transformation is not affine.
+	Returns:
+		True if this is an affine transformation.
+	*/
+	bool IsAffine() const;
 
+  /*
+  Description:
+    Well ordered dictionary compare that is nan aware.
+  */
   int Compare( const ON_Xform& other ) const;
-
   
   // matrix operations
   void Transpose(); // transposes 4x4 matrix
 
   int 
   Rank( // returns 0 to 4
-    double* = NULL // If not NULL, returns minimum pivot
+    double* = nullptr // If not nullptr, returns minimum pivot
   ) const;
 
   double
   Determinant( // returns determinant of 4x4 matrix
-    double* = NULL // If not NULL, returns minimum pivot
+    double* = nullptr // If not nullptr, returns minimum pivot
   ) const;
 
   bool
   Invert( // If matrix is non-singular, returns true,
           // otherwise returns false and sets matrix to 
           // pseudo inverse.
-    double* = NULL // If not NULL, returns minimum pivot
+    double* = nullptr // If not nullptr, returns minimum pivot
   );
 
   ON_Xform
   Inverse(  // If matrix is non-singular, returns inverse,
             // otherwise returns pseudo inverse.
-    double* = NULL // If not NULL, returns minimum pivot
+    double* = nullptr // If not nullptr, returns minimum pivot
   ) const;
 
   /*
@@ -266,14 +360,13 @@ public:
   ////////////////////////////////////////////////////////////////
   // standard transformations
 
-  // All zeros including the bottom row.
-  void Zero();
 
   // diagonal is (1,1,1,1)
+  ON_DEPRECATED_MSG("Use xform = ON_Xform::IdentityTransformation;")
   void Identity();
 
-  // diagonal 3x3 with bottom row = 0,0,0,1
-  void Diagonal(double); 
+  ON_DEPRECATED_MSG("Use xform = ON_Xform::DiagonalTransformation(d);")
+  void Diagonal(double d); 
 
   /*
   Description:
@@ -287,6 +380,7 @@ public:
   Remarks:
     The diagonal is (x_scale_factor, y_scale_factor, z_scale_factor, 1)
   */
+  ON_DEPRECATED_MSG("Use xform = ON_Xform::DiagonalTransformation(x_scale_factor,z_scale_factor,z_scale_factor);")
   void Scale( 
     double x_scale_factor,
     double y_scale_factor,
@@ -295,14 +389,14 @@ public:
 
   /*
   Description:
-    Create non-uniform scale transformation with the origin as
-    a fixed point.
+    Create non-uniform scale transformation with the origin as the fixed point.
   Parameters:
     fixed_point - [in]
     scale_vector - [in]
   Remarks:
     The diagonal is (scale_vector.x, scale_vector.y, scale_vector.z, 1)
   */
+  ON_DEPRECATED_MSG("Use xform = ON_Xform::DiagonalTransformation(scale_vector);")
   void Scale( 
     const ON_3dVector& scale_vector
     );
@@ -315,10 +409,41 @@ public:
     fixed_point - [in]
     scale_factor - [in]
   */
+  ON_DEPRECATED_MSG("Use xform = ON_Xform::ScaleTransformation(fixed_point,scale_factor)")
   void Scale
     (
     ON_3dPoint fixed_point,
     double scale_factor
+    );
+
+  static const ON_Xform ScaleTransformation(
+    const ON_3dPoint& fixed_point,
+    double scale_factor
+  );
+
+  static const ON_Xform ScaleTransformation(
+    const ON_3dPoint& fixed_point,
+    double x_scale_factor,
+    double y_scale_factor,
+    double z_scale_factor
+  );
+
+  /*
+  Description:
+    Create non-uniform scale transformation with a specified
+    fixed point.
+  Parameters:
+    plane - [in] plane.origin is the fixed point
+    x_scale_factor - [in] plane.xaxis scale factor
+    y_scale_factor - [in] plane.yaxis scale factor
+    z_scale_factor - [in] plane.zaxis scale factor
+  */
+  static const ON_Xform ScaleTransformation
+    (
+    const ON_Plane& plane,
+    double x_scale_factor,
+    double y_scale_factor,
+    double z_scale_factor
     );
 
   /*
@@ -331,6 +456,7 @@ public:
     y_scale_factor - [in] plane.yaxis scale factor
     z_scale_factor - [in] plane.zaxis scale factor
   */
+  ON_DEPRECATED_MSG("Use xform = ON_Xform::ScaleTransformation(plane,x_scale_factor,y_scale_factor,z_scale_factor)")
   void Scale
     (
     const ON_Plane& plane,
@@ -348,6 +474,14 @@ public:
     y1 - [in] plane.yaxis scale factor
     z1 - [in] plane.zaxis scale factor
   */
+  static const ON_Xform ShearTransformation(
+    const ON_Plane& plane,
+    const ON_3dVector& x1,
+    const ON_3dVector& y1,
+    const ON_3dVector& z1
+  );
+
+  ON_DEPRECATED_MSG("Use xform = ON_Xform::ShearTransformation(plane,x1,y1,z1);")
   void Shear
     (
     const ON_Plane& plane,
@@ -356,17 +490,34 @@ public:
     const ON_3dVector& z1
     );
 
-  // Right column is (d.x, d.y,d.z, 1).
+  ON_DEPRECATED_MSG("Use xform = ON_Xform::TranslationTransformation(delta);")
   void Translation( 
-    const ON_3dVector& // d
-    );
+    const ON_3dVector& delta
+  );
+
+  ON_DEPRECATED_MSG("Use xform = ON_Xform::TranslationTransformation(dx,dy,dz);")
+  void Translation( 
+    double dx,
+    double dy,
+    double dz
+  );
+
+  // Right column is (delta.x, delta.y, 0, 1).
+  static const ON_Xform TranslationTransformation(
+    const ON_2dVector& delta
+  );
+
+  // Right column is (delta.x, delta.y, delta.z, 1).
+  static const ON_Xform TranslationTransformation(
+    const ON_3dVector& delta
+  );
 
   // Right column is (dx, dy, dz, 1).
-  void Translation( 
-    double, // dx
-    double, // dy
-    double  // dz
-    );
+  static const ON_Xform TranslationTransformation(
+    double dx,
+    double dy,
+    double dz
+  );
 
   // Description:
   //   Get transformation that projects to a plane
@@ -609,7 +760,7 @@ public:
          const ON_3dVector&  // unit CameraZ vector (from screen to camera)
          );
   bool CameraToClip( // maps viewport frustum to -1 <= x,y,z <= 1 box
-      ON_BOOL32, // true for perspective, false for orthographic
+      bool bIsPerspective, // true for perspective, false for orthographic
       double, double, // left != right (usually left < right )
       double, double, // bottom != top (usually bottom < top )
       double, double  // near != far (usually 0 < near < far )
@@ -617,7 +768,7 @@ public:
 
   // maps -1 <= x,y,z <= 1 box to viewport frustum
   bool ClipToCamera( 
-      int, // true for perspective, false for orthographic
+      bool bIsPerspective, // true for perspective, false for orthographic
       double, double, // left != right (usually left < right )
       double, double, // bottom != top (usually bottom < top )
       double, double  // near != far an bot are non-zero (usually 0 < near < far )
@@ -687,7 +838,7 @@ public:
     int, // count
     int, // stride
     const double*, // points
-    ON_BOOL32 = true // bTeztZ
+    bool bTestZ = true // bTeztZ
     ) const;
 
   // Description: 
@@ -721,7 +872,7 @@ public:
     int, // count
     int, // stride 
     const double*, // points
-    ON_BOOL32 = true // bTestZ
+    bool bTestZ = true // bTestZ
     ) const;
 
   // Description: Computes 3d clipping flags for a 3d bounding
@@ -763,16 +914,41 @@ public:
     );
 };
 
+ON_DECL
+const ON_Xform operator*(double c, const ON_Xform& xform);
+
+ON_DECL
+const ON_Xform operator*(const ON_Xform& xform, double c);
+
 class ON_CLASS ON_ClippingRegion
 {
 public:
   ON_ClippingRegion();
 
+  /*
+  Description:
+    Sets the object to clip transformation to
+    the viewport's workd to clip transformation.
+  */
+  bool SetObjectToClipTransformation(
+    const class ON_Viewport& viewport
+    );
+
+  bool SetObjectToClipTransformation(
+    const ON_Xform object_to_clip_transformation
+    );
+
+  ON_Xform ObjectToClipTransformation() const;
+  ON_Xform InverseObjectToClipTransformation() const;
+
+private:
   // The transformation m_xform transforms the view frustum,
   // in object coordinates to the (-1,+1)^3 clipping 
   // coordinate box.
   ON_Xform m_xform;
+  mutable ON_Xform m_inverse_xform; // = m_xform.Inverse().
 
+public:
   /*
   Parameters:
     clip_plane_tolerance - [in]  
@@ -812,11 +988,7 @@ public:
   int m_clip_plane_count; // (0 <= m_clip_plane_count <= max_clip_plane_count)
 
 private:
-  // The "float" should be a double, but that can't happen
-  // until V6 because it will brake the SDK.  Use the
-  // SetClipPlaneTolerance() and ClipPlaneTolerance() 
-  // functions to set and get this value.
-  float m_clip_plane_tolerance;
+  double m_clip_plane_tolerance;
 
 public:
   ON_PlaneEquation m_clip_plane[max_clip_plane_count];
@@ -1039,6 +1211,190 @@ public:
 
 };
 
+/*
+Description:
+  ON_ClippingRegionPoints is a container for storing or referencing 
+  clip points and clip flags.
+  The values are typically calcuated by ON_ClippingRegion.TransformPoint().
+*/
+class ON_CLASS ON_ClippingRegionPoints
+{
+public:
+  static const ON_ClippingRegionPoints Empty;
+
+  ON_ClippingRegionPoints() = default;
+  ~ON_ClippingRegionPoints();
+  ON_ClippingRegionPoints(const ON_ClippingRegionPoints& src);
+  ON_ClippingRegionPoints& operator=(const ON_ClippingRegionPoints& src);
+
+#if defined(ON_HAS_RVALUEREF)
+  // rvalue copy constructor
+  ON_ClippingRegionPoints( ON_ClippingRegionPoints&& ) ON_NOEXCEPT;
+
+  // The rvalue assignment operator calls ON_Object::operator=(ON_Object&&)
+  // which could throw exceptions.  See the implementation of
+  // ON_Object::operator=(ON_Object&&) for details.
+  ON_ClippingRegionPoints& operator=( ON_ClippingRegionPoints&& );
+#endif
+
+  unsigned int PointCapacity() const;
+
+  unsigned int PointCout() const;
+
+  /*
+  Description:
+    Sets point count and aggragate flags falues to zero but does not 
+    deallocate the memory buffer.  When an ON_ClippingRegionPoints will be used
+    multiple times, it is more efficient to call Clear() between
+    uses than calling Destroy().
+  */
+  void Clear();
+
+  /*
+  Description:
+    Clear() and deallocate the memory buffer.
+  */
+  void Destroy();
+
+  /*
+  Returns:
+    Clip point location.
+  */
+  ON_3dPoint ClipPoint(
+    unsigned int point_index
+    ) const;
+
+  /*
+  Returns:
+    Clip flag
+  */
+  unsigned int ClipFlag(
+    unsigned int point_index
+    ) const;
+
+  /*
+  Description:
+    Append the clipping point and clipping flag calculated by
+    clipping_region.TransformPoint(world_point,...).
+  */
+  bool AppendClipPoint(
+    const class ON_ClippingRegion& clipping_region,
+    ON_3dPoint world_point
+    );
+
+  /*
+  Description:
+    Append the clipping points and clipping flags calculated by
+    clipping_region.TransformPoint(world_point,...) for every input
+    world point.
+  */
+  bool AppendClipPoints(
+    const class ON_ClippingRegion& clipping_region,
+    const ON_SimpleArray<ON_3dPoint>& world_points
+    );
+
+  /*
+  Description:
+    Append the clipping points and clipping flags calculated by
+    clipping_region.TransformPoint(world_point,...) for every input
+    world point.
+  */
+  bool AppendClipPoints(
+    const class ON_ClippingRegion& clipping_region,
+    size_t world_point_count,
+    const ON_3dPoint* world_points
+    );
+
+   /*
+  Description:
+    Append the clipping points and clipping flags calculated by
+    clipping_region.TransformPoint(world_point,...) for every input
+    world point.
+  */
+ bool AppendClipPoints(
+    const class ON_ClippingRegion& clipping_region,
+    size_t world_point_count,
+    size_t world_point_stride,
+    const double* world_points
+    );
+
+  /*
+  Description:
+    Append the clipping point and clipping flag value.
+  */
+  bool AppendClipPoint(
+    ON_3dPoint clip_point,
+    unsigned int clip_flag
+    );
+  
+public:
+  // These functions and data members are public so they can be used
+  // by experts to reference information that is managed by other entities.
+  // If you access or modify them, you are responsible for making 
+  // sure you do it correctly.  All the interface functions above
+  // assume the values below are correctly set.
+
+  /*
+  Reserve buffer capacity.
+  */
+  bool ReserveBufferPointCapacity(
+    size_t buffer_point_capacity
+    );
+
+  // All the information below is automatically managed if you use 
+  // the AppendClipPoint() or AppendClipPoints() functions to add 
+  // clipping points.
+  unsigned int m_point_count = 0;
+  unsigned int m_point_capacity = 0;
+  ON_3dPoint* m_clip_points = nullptr;
+  unsigned int* m_clip_flags = nullptr;
+
+  unsigned int m_and_clip_flags = 0;
+  unsigned int m_or_clip_flags = 0;
+
+private:
+  size_t m_buffer_point_capacity = 0;
+  void* m_buffer = nullptr;
+};
+
+class ON_CLASS ON_PickPoint
+{
+public:
+  static const ON_PickPoint Unset;
+
+  ON_PickPoint() = default;
+  ~ON_PickPoint() = default;
+  ON_PickPoint(const ON_PickPoint&)= default;
+  ON_PickPoint& operator=(const ON_PickPoint&) = default;
+
+  /*
+  Returns:
+    +1: a is a better pick pont than b.
+    -1: b is a better pick point than a.
+     0: a and b are the same.
+  */
+  static int Compare( 
+    const ON_PickPoint& a,
+    const ON_PickPoint& b
+    );
+
+  /*
+  Returns:
+    True if this is set.
+  */
+  bool IsSet() const;
+
+  /*
+  Returns:
+    True if this is not set.
+  */
+  bool IsNotSet() const;
+
+  ON_3dPoint m_point = ON_3dPoint::UnsetPoint;
+  double m_t[4]; // parameters (unused values are set to ON_UNSET_VALUE)
+  double m_depth = ON_UNSET_VALUE;  // larger values are in front of smaller values.
+  double m_distance = 1.0e300; // smaller values are closer to pick ray.
+};
 
 class ON_CLASS ON_Localizer
 {
@@ -1192,6 +1548,7 @@ public:
   ON_SpaceMorph();
   virtual ~ON_SpaceMorph();
 
+
   /*
   Description:
     Provides a quick way to determine if a morph function
@@ -1206,6 +1563,53 @@ public:
   */
   virtual
   bool IsIdentity( const ON_BoundingBox& bbox ) const;
+
+  /*
+  Description:
+    A slower way to determine if a morph function
+    is the identity (doesn't move the points) on a set of points, to within a tolerance
+  Parameters:
+    Points - [in] Set of points to test.
+    tol -    [in] Distance tolerance.
+  Returns:
+    True if none of the points move a distance of tol or more under the morph function.
+    Uses MorphPoint()
+  */
+  bool IsIdentity(const ON_SimpleArray<ON_3dPoint>& Points, double tol) const;
+
+
+  /*
+  Description:
+    A slower way to determine if a morph function
+    is the identity (doesn't move the points) on a surface, to within a tolerance
+  Parameters:
+    Srf -    [in] Surface to be tested.
+    tol -    [in] Distance tolerance.
+  Returns:
+    Uses MorphPoint() on a dense sample of points.
+    True if none of the points move a distance of tol or more under the morph function.
+  Remark:
+    Call IsIdentity(Srf.BoundingBox()) first.
+    Use this on surfaces whose nurb form is rational or has a different parameterization.
+  */
+  bool IsIdentity(const class ON_Surface& Srf, double tol) const;
+
+  /*
+  Description:
+    A slower way to determine if a morph function
+    is the identity (doesn't move the points) on a curve, to within a tolerance.
+  Parameters:
+    Crv -    [in] Curve to be tested.
+    tol -    [in] Distance tolerance.
+  Returns:
+    Uses MorphPoint() on a dense sample of points.
+    True if none of the points move a distance of tol or more under the morph function.
+  Remark:
+    Call IsIdentity(Crv.BoundingBox()) first.
+    Use this on curves whose nurb form is rational or has a different parameterization.
+  */
+  bool IsIdentity(const class ON_Curve& Crv, double tol) const;
+
 
   /*
   Description:
@@ -1280,21 +1684,18 @@ public:
           );
 
 private:
-  double m_tolerance;
-  bool m_bQuickPreview;
-  bool m_bPreserveStructure;
+  double m_tolerance = 0.0;
+  ON__UINT_PTR m_reserved1 = 0; // Some reserved field could provide more Morph type information. RH-4091
+  unsigned int m_reserved2 = 0;
+  bool m_bQuickPreview = false;
+  bool m_bPreserveStructure = false;
+  char m_reserved3 = 0;
+  char m_reserved4 = 0;
 };
 
 #if defined(ON_DLL_TEMPLATE)
-
-// This stuff is here because of a limitation in the way Microsoft
-// handles templates and DLLs.  See Microsoft's knowledge base 
-// article ID Q168958 for details.
-#pragma warning( push )
-#pragma warning( disable : 4231 )
 ON_DLL_TEMPLATE template class ON_CLASS ON_SimpleArray<ON_Xform>;
 ON_DLL_TEMPLATE template class ON_CLASS ON_ClassArray<ON_Localizer>;
-#pragma warning( pop )
 #endif
 
 #endif

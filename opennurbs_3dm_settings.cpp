@@ -16,99 +16,140 @@
 
 #include "opennurbs.h"
 
-// Easy way to toggle the name of the obsolete ON_3dmView::m_target
-// variable when you want to change the name and compile to insure
-// no rogue code is directly accessing this variable.  See
-// ON_3dmView header for more comments.
-//
-//#define OBSOLETE_3DM_VIEW_TARGET m_target_HIDEME
-#define OBSOLETE_3DM_VIEW_TARGET m_target
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //
 // ON_3dmUnitsAndTolerances
 //
 
-ON_UnitSystem::ON_UnitSystem()
-: m_unit_system(ON::millimeters)
-, m_custom_unit_scale(1.0)
+static double ON_Internal_UnitSystemCtorMetersPerUnit(
+  ON::LengthUnitSystem length_unit_system
+)
 {
-}
-
-ON_UnitSystem::ON_UnitSystem(ON::unit_system us)
-: m_unit_system(ON::UnitSystem(us))
-, m_custom_unit_scale(ON::UnitScale(ON::meters,m_unit_system))
-{
-}
-
-ON_UnitSystem& ON_UnitSystem::operator=(ON::unit_system us)
-{
-  m_unit_system = ON::UnitSystem(us);
-  if ( ON::custom_unit_system != us )
+  double meters_per_unit;
+  switch (length_unit_system)
   {
-    m_custom_unit_scale = ON::UnitScale(ON::meters,m_unit_system);
-    m_custom_unit_name.Destroy();
+  case ON::LengthUnitSystem::None:
+    meters_per_unit = 0.0;
+    break;
+  case ON::LengthUnitSystem::Angstroms:
+  case ON::LengthUnitSystem::Nanometers:
+  case ON::LengthUnitSystem::Microns:
+  case ON::LengthUnitSystem::Millimeters:
+  case ON::LengthUnitSystem::Centimeters:
+  case ON::LengthUnitSystem::Decimeters:
+  case ON::LengthUnitSystem::Meters:
+  case ON::LengthUnitSystem::Dekameters:
+  case ON::LengthUnitSystem::Hectometers:
+  case ON::LengthUnitSystem::Kilometers:
+  case ON::LengthUnitSystem::Megameters:
+  case ON::LengthUnitSystem::Gigameters:
+  case ON::LengthUnitSystem::Microinches:
+  case ON::LengthUnitSystem::Mils:
+  case ON::LengthUnitSystem::Inches:
+  case ON::LengthUnitSystem::Feet:
+  case ON::LengthUnitSystem::Yards:
+  case ON::LengthUnitSystem::Miles:
+  case ON::LengthUnitSystem::PrinterPoints:
+  case ON::LengthUnitSystem::PrinterPicas:
+  case ON::LengthUnitSystem::NauticalMiles:
+  case ON::LengthUnitSystem::AstronomicalUnits:
+  case ON::LengthUnitSystem::LightYears:
+  case ON::LengthUnitSystem::Parsecs:
+    meters_per_unit = ON::UnitScale(ON::LengthUnitSystem::Meters, length_unit_system);
+    break;
+  case ON::LengthUnitSystem::CustomUnits:
+    meters_per_unit = 1.0;
+    break;
+  case ON::LengthUnitSystem::Unset:
+    meters_per_unit = ON_DBL_QNAN;
+    break;
+  default:
+    meters_per_unit = ON_DBL_QNAN;
+    break;
   }
+  return meters_per_unit;
+}
+
+
+ON_UnitSystem::ON_UnitSystem(ON::LengthUnitSystem length_unit_system)
+: m_unit_system(ON::LengthUnitSystemFromUnsigned(static_cast<unsigned int>(length_unit_system)))
+, m_meters_per_unit(ON_Internal_UnitSystemCtorMetersPerUnit(m_unit_system))
+{}
+
+ON_UnitSystem& ON_UnitSystem::operator=(
+  ON::LengthUnitSystem length_unit_system
+  )
+{
+  *this = ON_UnitSystem(length_unit_system);
   return *this;
 }
 
-bool ON_UnitSystem::operator==(const ON_UnitSystem& other)
+
+bool ON_UnitSystem::operator==(const ON_UnitSystem& other) const
 {
   if ( m_unit_system != other.m_unit_system )
     return false;
 
-  if ( ON::custom_unit_system == m_unit_system )
+  if ( ON::LengthUnitSystem::CustomUnits == m_unit_system )
   {
-    if ( m_custom_unit_name.Compare(other.m_custom_unit_name) )
+    if ( !(m_meters_per_unit == other.m_meters_per_unit) )
       return false;
-    if ( !(m_custom_unit_scale == other.m_custom_unit_scale) )
+    if ( false == m_custom_unit_name.EqualOrdinal(other.m_custom_unit_name,false) )
       return false;
   }
 
   return true;
 }
 
-bool ON_UnitSystem::operator!=(const ON_UnitSystem& other)
+bool ON_UnitSystem::operator!=(const ON_UnitSystem& other) const
 {
   if ( m_unit_system != other.m_unit_system )
     return true;
 
-  if ( ON::custom_unit_system == m_unit_system )
+  if ( ON::LengthUnitSystem::CustomUnits == m_unit_system )
   {
-    if ( m_custom_unit_name.Compare(other.m_custom_unit_name) )
+    if ( m_meters_per_unit != other.m_meters_per_unit )
       return true;
-    if ( m_custom_unit_scale != other.m_custom_unit_scale )
+    if ( false == m_custom_unit_name.EqualOrdinal(other.m_custom_unit_name,false) )
       return true;
   }
 
   return false;
 }
 
-ON_UnitSystem::~ON_UnitSystem()
-{
-}
-
-void ON_UnitSystem::Default()
-{
-  m_unit_system = ON::millimeters;
-  m_custom_unit_scale = 1.0;
-  m_custom_unit_name.Destroy();
-}
-
 bool ON_UnitSystem::IsValid() const
 {
-  if ( m_unit_system != ON::UnitSystem(m_unit_system) )
+  if ( m_unit_system != ON::LengthUnitSystemFromUnsigned(static_cast<unsigned int>(m_unit_system)) )
   {
     // bogus enum value
     return false;
   }
 
-  if ( ON::custom_unit_system == m_unit_system )
+  if (ON::LengthUnitSystem::None == m_unit_system)
   {
-    if ( !ON_IsValid(m_custom_unit_scale) || m_custom_unit_scale <= 0.0 )
-    {
-      // m_custom_unit_scale should be > 0.0 and a valid double
+    if (!(0.0 == m_meters_per_unit))
       return false;
+  }
+  else
+  {
+    if (!(m_meters_per_unit > 0.0 && m_meters_per_unit < ON_UNSET_POSITIVE_VALUE))
+    {
+      // m_meters_per_unit should be > 0.0 and a valid double
+      return false;
+    }
+
+    if (ON::LengthUnitSystem::CustomUnits != m_unit_system)
+    {
+      if (m_meters_per_unit != ON::UnitScale(ON::LengthUnitSystem::Meters, m_unit_system))
+        return false;
     }
   }
 
@@ -117,20 +158,303 @@ bool ON_UnitSystem::IsValid() const
 
 bool ON_UnitSystem::IsSet() const
 {
-  return ( ON::no_unit_system != m_unit_system && IsValid() );
+  return ( ON::LengthUnitSystem::None != m_unit_system && IsValid() );
 }
 
-void ON_UnitSystem::Unset()
+bool ON_UnitSystem::IsCustomUnitSystem() const
 {
-  Default();
-  m_unit_system = ON::no_unit_system;
+  return (ON::LengthUnitSystem::CustomUnits == m_unit_system && IsSet());
 }
 
+void ON_UnitSystem::SetUnitSystem(
+  ON::LengthUnitSystem us
+  )
+{
+  *this = ON_UnitSystem(us);
+}
+
+ON_UnitSystem ON_UnitSystem::CreateCustomUnitSystem(
+  const wchar_t* custom_unit_name,
+  double meters_per_custom_unit
+)
+{
+  ON_UnitSystem custom_unit_system = ON_UnitSystem::Unset;
+  custom_unit_system.SetCustomUnitSystem(custom_unit_name, meters_per_custom_unit);
+  return custom_unit_system;
+}
+
+void ON_UnitSystem::SetCustomUnitSystem(
+  const wchar_t* custom_unit_name,
+  double meters_per_custom_unit
+  )
+{
+  m_unit_system = ON::LengthUnitSystem::CustomUnits;
+  m_custom_unit_name = custom_unit_name;
+  m_custom_unit_name.TrimLeftAndRight();
+  if (meters_per_custom_unit > 0.0 && meters_per_custom_unit < ON_UNSET_POSITIVE_VALUE)
+  {
+    m_meters_per_unit = meters_per_custom_unit;
+  }
+  else
+  {
+    ON_ERROR("Invalid meters_per_custom_unit parameter");
+    m_meters_per_unit = 1.0; // must be > 0.0 and < ON_UNSET_POSITIVE_VALUE
+  }
+}
+
+void ON_UnitSystem::SetCustomUnitSystemName(
+  const wchar_t* custom_unit_name
+  )
+{
+  const bool bIsCustomUnitSystem = (ON::LengthUnitSystem::CustomUnits == m_unit_system);
+  ON_wString local_name(custom_unit_name);
+  local_name.TrimLeftAndRight();
+  if (local_name.IsNotEmpty() || bIsCustomUnitSystem)
+  {
+    const double meters_per_custom_unit
+      = bIsCustomUnitSystem
+      ? m_meters_per_unit
+      : 1.0;
+    SetCustomUnitSystem(local_name, meters_per_custom_unit);
+  }
+}
+
+void ON_UnitSystem::SetCustomUnitSystemScale(
+  double meters_per_custom_unit
+  )
+{
+  const bool bIsCustomUnitSystem = (ON::LengthUnitSystem::CustomUnits == m_unit_system);
+  if (meters_per_custom_unit != m_meters_per_unit || bIsCustomUnitSystem)
+  {
+    if (meters_per_custom_unit > 0.0 && meters_per_custom_unit < ON_UNSET_POSITIVE_VALUE)
+    {
+      ON_wString unit_system_name
+        = (ON::LengthUnitSystem::CustomUnits == m_unit_system)
+        ? unit_system_name
+        : ON_wString::EmptyString;
+      SetCustomUnitSystem(unit_system_name, meters_per_custom_unit);
+    }
+  }
+}
+
+
+double ON_UnitSystem::MetersPerUnit() const
+{
+  return m_meters_per_unit;
+}
+
+ON::LengthUnitSystem ON_UnitSystem::UnitSystem() const
+{
+  return m_unit_system;
+}
+
+static void ON_Internal_InitUnitSystemName(
+  const wchar_t* name,
+  ON_wString& local_storage
+  )
+{
+  if (local_storage.IsEmpty())
+    local_storage = name;
+}
+
+const ON_wString& ON_UnitSystem::UnitSystemName() const
+{
+  switch (m_unit_system)
+  {
+  case ON::LengthUnitSystem::None:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"no units",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Angstroms:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"angstroms",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Nanometers:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"nanometers",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Microns:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"microns",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Millimeters:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"millimeters",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Decimeters:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"decimeters",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Centimeters:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"centimeters",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Meters:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"meters",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Dekameters:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"dekameters",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Hectometers:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"hectometers",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Kilometers:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"kilometers",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Megameters:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"megameters",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Gigameters:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"gigameters",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Microinches:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"microinches",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Mils:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"mils",s_name);// (= 0.001 inches)";
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Inches:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"inches",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Feet:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"feet",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Yards:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"yards",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Miles:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"miles",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::PrinterPoints:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"points",s_name); // (1/72 inch)";
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::PrinterPicas:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"picas",s_name); // (1/6 inch)";
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::NauticalMiles:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"nautical miles",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::AstronomicalUnits:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"astronomical units",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::LightYears:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"light years",s_name);
+      return s_name;
+    }
+    break;
+  case ON::LengthUnitSystem::Parsecs:
+    {
+      static ON_wString s_name;
+      ON_Internal_InitUnitSystemName(L"parsecs",s_name);
+      return s_name;
+    }
+    break;
+
+  case ON::LengthUnitSystem::CustomUnits:
+    return m_custom_unit_name;
+    break;
+
+  case ON::LengthUnitSystem::Unset:
+    {
+      return ON_wString::EmptyString;
+    }
+    break;
+  }
+
+  return ON_wString::EmptyString;
+}
 
 
 bool ON_UnitSystem::Read( ON_BinaryArchive& file )
 {
-  Default();
+  *this = ON_UnitSystem::None;
 
   int major_version = 0;
   int minor_version = 0;
@@ -138,19 +462,44 @@ bool ON_UnitSystem::Read( ON_BinaryArchive& file )
   if ( !file.BeginRead3dmChunk(TCODE_ANONYMOUS_CHUNK,&major_version,&minor_version) )
     return false;
 
-  bool rc = (1 == major_version);
-  int i = m_unit_system;
-  if (rc)
-    rc = file.ReadInt( &i );
-  if (rc)
-    m_unit_system = ON::UnitSystem(i);
-  if (rc)
-    rc = file.ReadDouble( &m_custom_unit_scale );
-  if (rc)
-    rc = file.ReadString( m_custom_unit_name );
+  ON::LengthUnitSystem us = ON::LengthUnitSystem::None;
+  double meters_per_unit  = 0.0;
+  ON_wString custom_unit_name;
+  bool rc = false;
+  for (;;)
+  {
 
-  if ( !file.EndRead3dmChunk() )
+    if (1 != major_version)
+      break;
+    unsigned int i = ON_UNSET_UINT_INDEX;
+    if (false == file.ReadInt(&i))
+      break;
+    us = ON::LengthUnitSystemFromUnsigned(i);
+    if (false == file.ReadDouble(&meters_per_unit))
+      break;
+    if (false == file.ReadString(custom_unit_name))
+      break;
+    rc = true;
+    break;
+  }
+
+  if (!file.EndRead3dmChunk())
+  {
     rc = false;
+  }
+  else
+  {
+    if (ON::LengthUnitSystem::CustomUnits == us)
+    {
+      m_unit_system = us;
+      m_custom_unit_name = custom_unit_name;
+      m_meters_per_unit = meters_per_unit;
+    }
+    else
+    {
+      *this = ON_UnitSystem(us);
+    }
+  }
 
   return rc;
 }
@@ -175,11 +524,18 @@ bool ON_UnitSystem::Write( ON_BinaryArchive& file ) const
   //miles          = 10,  // 63360 inches
   //custom_unit_system = 11, // x meters with x defined in ON_3dmUnitsAndTolerances.m_custom_unit_scale
 
-  bool rc = file.WriteInt( m_unit_system );
-  if (rc)
-    rc = file.WriteDouble( m_custom_unit_scale );
-  if (rc)
-    rc = file.WriteString( m_custom_unit_name );
+  bool rc = false;
+  for (;;)
+  {
+    if (!file.WriteInt(static_cast<unsigned int>(m_unit_system)))
+      break;
+    if (!file.WriteDouble(m_meters_per_unit))
+      break;
+    if (!file.WriteString(m_custom_unit_name))
+      break;
+    rc = true;
+    break;
+  }
 
   if ( !file.EndWrite3dmChunk() )
     rc = false;
@@ -189,210 +545,82 @@ bool ON_UnitSystem::Write( ON_BinaryArchive& file ) const
 
 void ON_UnitSystem::Dump( ON_TextLog& dump ) const
 {
-  ON_wString sUnitSystem;
-  switch( m_unit_system )
+  ON_wString sUnitSystem(UnitSystemName());
+  if ( ON::LengthUnitSystem::CustomUnits == m_unit_system)
   {
-  case ON::no_unit_system:
-    sUnitSystem = "no units";
-    break;
-  case ON::angstroms:
-    sUnitSystem = "angstroms";
-    break;
-  case ON::nanometers:
-    sUnitSystem = "nanometers";
-    break;
-  case ON::microns:
-    sUnitSystem = "microns";
-    break;
-  case ON::millimeters:
-    sUnitSystem = "millimeters";
-    break;
-  case ON::decimeters:
-    sUnitSystem = "decimeters";
-    break;
-  case ON::centimeters:
-    sUnitSystem = "centimeters";
-    break;
-  case ON::meters:
-    sUnitSystem = "meters";
-    break;
-  case ON::dekameters:
-    sUnitSystem = "dekameters";
-    break;
-  case ON::hectometers:
-    sUnitSystem = "hectometers";
-    break;
-  case ON::kilometers:
-    sUnitSystem = "kilometers";
-    break;
-  case ON::megameters:
-    sUnitSystem = "megameters";
-    break;
-  case ON::gigameters:
-    sUnitSystem = "gigameters";
-    break;
-  case ON::microinches:
-    sUnitSystem = "microinches";
-    break;
-  case ON::mils:
-    sUnitSystem = "mils (= 0.001 inches)";
-    break;
-  case ON::inches:
-    sUnitSystem = "inches";
-    break;
-  case ON::feet:
-    sUnitSystem = "feet";
-    break;
-  case ON::yards:
-    sUnitSystem = "yards";
-    break;
-  case ON::miles:
-    sUnitSystem = "miles";
-    break;
-  case ON::printer_point:
-    sUnitSystem = "points (1/72 inch)";
-    break;
-  case ON::printer_pica:
-    sUnitSystem = "picas (1/6 inch)";
-    break;
-  case ON::nautical_mile:
-    sUnitSystem = "nautical miles";
-    break;
-  case ON::astronomical:
-    sUnitSystem = "astronomical units";
-    break;
-  case ON::lightyears:
-    sUnitSystem = "light years";
-    break;
-  case ON::parsecs:
-    sUnitSystem = "parsecs";
-    break;
-
-  case ON::custom_unit_system:
-    if ( m_custom_unit_name.Length() > 0 )
-    {
-      const wchar_t* wsCustomUnitName = m_custom_unit_name.Array();
-      if ( 0 != wsCustomUnitName && 0 != wsCustomUnitName[0] )
-      {
-        sUnitSystem.Format("%ls (= %g meters)",
-                           wsCustomUnitName,
-                           m_custom_unit_scale);
-      }
-    }
-    else
-      sUnitSystem.Format("user defined unit (= %g meters)",m_custom_unit_scale);
-    break;
-  default:
-    sUnitSystem = "unknown unit system";
-    break;
+    ON_wString meters_per_unit;
+    meters_per_unit.Format(L" (= %g meters )", m_meters_per_unit);
+    sUnitSystem += meters_per_unit;
   }
-  const wchar_t* wsUnitSystem = sUnitSystem.Array();
-  if ( 0 != wsUnitSystem )
-    dump.Print("Unit system: %ls\n",wsUnitSystem);
-}
-
-const ON_3dmUnitsAndTolerances ON_3dmUnitsAndTolerances::DefaultValue;
-
-void ON_3dmUnitsAndTolerances::Default()
-{
-  *this = ON_3dmUnitsAndTolerances::DefaultValue;
-  m_unit_system.m_custom_unit_name = L"Units";
-}
-
-ON_3dmUnitsAndTolerances::ON_3dmUnitsAndTolerances()
-: m_unit_system(ON::millimeters)
-, m_absolute_tolerance(0.001)
-, m_angle_tolerance(ON_PI/180.0)
-, m_relative_tolerance(0.01)
-, m_distance_display_mode(ON::decimal)
-, m_distance_display_precision(3)
-{
-  // Do not set m_unit_system.m_custom_unit_name here.
-  // Doing so creates a heap allocation in the construction of
-  // ON_3dmUnitsAndTolerances::DefaultValue
-  // and doesn't make much sense in any case.
-}
-
-ON_3dmUnitsAndTolerances::~ON_3dmUnitsAndTolerances()
-{}
-
-ON_3dmUnitsAndTolerances::ON_3dmUnitsAndTolerances(const ON_3dmUnitsAndTolerances& src )
-: m_unit_system(src.m_unit_system)
-, m_absolute_tolerance(src.m_absolute_tolerance)
-, m_angle_tolerance(src.m_angle_tolerance)
-, m_relative_tolerance(src.m_relative_tolerance)
-, m_distance_display_mode(src.m_distance_display_mode)
-, m_distance_display_precision(src.m_distance_display_precision)
-{}
-
-ON_3dmUnitsAndTolerances& ON_3dmUnitsAndTolerances::operator=(const ON_3dmUnitsAndTolerances& src )
-{
-  if ( this != &src ) 
-  {
-    m_unit_system = src.m_unit_system;
-    m_absolute_tolerance = src.m_absolute_tolerance;
-    m_angle_tolerance = src.m_angle_tolerance;
-    m_relative_tolerance = src.m_relative_tolerance;
-    m_distance_display_mode = src.m_distance_display_mode;
-    m_distance_display_precision = src.m_distance_display_precision;
-  }
-  return *this;
+  dump.Print("Unit system: %ls\n",static_cast<const wchar_t*>(sUnitSystem));
 }
 
 bool ON_3dmUnitsAndTolerances::Write( ON_BinaryArchive& file ) const
 {
   const int version = 102;
-  int i;
+  unsigned int i;
 
   // version 100 ON_3dmUnitsAndTolerances settings
   bool rc = file.WriteInt( version );
-  i = m_unit_system.m_unit_system;
+  i = static_cast<unsigned int>(m_unit_system.UnitSystem());
   if ( rc ) rc = file.WriteInt( i );
   if ( rc ) rc = file.WriteDouble( m_absolute_tolerance );
   if ( rc ) rc = file.WriteDouble( m_angle_tolerance );
   if ( rc ) rc = file.WriteDouble( m_relative_tolerance );
 
   // added in version 101
-  i = m_distance_display_mode;
+  i = static_cast<unsigned int>(m_distance_display_mode);
   if ( rc ) rc = file.WriteInt( i );
   i = m_distance_display_precision;
-  if ( i < 0 || i > 20 ) {
+  if ( i > 20 ) 
+  {
     ON_ERROR("ON_3dmUnitsAndTolerances::Write() - m_distance_display_precision out of range.");
     i = 3;
   }
   if ( rc ) rc = file.WriteInt( i );
 
   // added in version 102
-  if ( rc ) rc = file.WriteDouble( m_unit_system.m_custom_unit_scale );
-  if ( rc ) rc = file.WriteString( m_unit_system.m_custom_unit_name );
+  if ( rc ) rc = file.WriteDouble( m_unit_system.MetersPerUnit() );
+  if ( rc ) rc = file.WriteString( (ON::LengthUnitSystem::CustomUnits == m_unit_system.UnitSystem() ? m_unit_system.UnitSystemName() : ON_wString::EmptyString) );
   return rc;
 }
 
 bool ON_3dmUnitsAndTolerances::Read( ON_BinaryArchive& file )
 {
-  *this = ON_3dmUnitsAndTolerances::DefaultValue;
+  *this = ON_3dmUnitsAndTolerances::Millimeters;
   int version = 0;
   bool rc = file.ReadInt( &version );
-  if ( rc && version >= 100 && version < 200 ) {
-    int us = ON::no_unit_system;
-    rc = file.ReadInt( &us );
+  if ( rc && version >= 100 && version < 200 )
+  {
+    ON::LengthUnitSystem us = ON::LengthUnitSystem::None;
+    double meters_per_unit = 1.0;
+    ON_wString custom_unit_name;
+
+    int i = ON_UNSET_UINT_INDEX;
+    rc = file.ReadInt( &i );
     if ( rc )
-      m_unit_system.m_unit_system = ON::UnitSystem(us);
+      us = ON::LengthUnitSystemFromUnsigned(i);
     if ( rc ) rc = file.ReadDouble( &m_absolute_tolerance );
     if ( rc ) rc = file.ReadDouble( &m_angle_tolerance );
     if ( rc ) rc = file.ReadDouble( &m_relative_tolerance );
-    if ( version >= 101 ) {
-      int dm = ON::decimal;
+    if ( version >= 101 ) 
+    {
+      unsigned int dm = static_cast<unsigned int>(ON::OBSOLETE_DistanceDisplayMode::Decimal);
       if ( rc ) rc = file.ReadInt( &dm );
-      if ( rc ) m_distance_display_mode = ON::DistanceDisplayMode(dm);
+      if ( rc ) m_distance_display_mode = ON::DistanceDisplayModeFromUnsigned(dm);
       if ( rc ) rc = file.ReadInt( &m_distance_display_precision );
       if ( m_distance_display_precision < 0 || m_distance_display_precision > 20 )
         m_distance_display_precision = 3; // some beta files had bogus values stored in file
-      if ( version >= 102 ) {
-        if ( rc ) rc = file.ReadDouble( &m_unit_system.m_custom_unit_scale );
-        if ( rc ) rc = file.ReadString( m_unit_system.m_custom_unit_name );
+      if ( version >= 102 ) 
+      {
+        if ( rc ) rc = file.ReadDouble( &meters_per_unit );
+        if ( rc ) rc = file.ReadString( custom_unit_name );
       }
     }
+    if ( ON::LengthUnitSystem::CustomUnits == us )
+      m_unit_system.SetCustomUnitSystem(custom_unit_name,meters_per_unit);
+    else
+      m_unit_system.SetUnitSystem(us);
   }
   return rc;
 }
@@ -404,7 +632,7 @@ void ON_3dmUnitsAndTolerances::Dump( ON_TextLog& dump) const
   dump.Print("Angle tolerance: %g\n",m_angle_tolerance);
 }
 
-double ON_3dmUnitsAndTolerances::Scale( ON::unit_system us ) const
+double ON_3dmUnitsAndTolerances::Scale( ON::LengthUnitSystem us ) const
 {
   // Example: If us = meters and m_unit_system = centimeters,
   // then Scale() returns 100.
@@ -438,19 +666,20 @@ unsigned int ON_3dmUnitsAndTolerances::SetInvalidTolerancesToDefaultValues()
   if ( !(m_absolute_tolerance > 0.0) )
   {
     rc |= 1;
-    m_absolute_tolerance = ON_3dmUnitsAndTolerances::DefaultValue.m_absolute_tolerance;
+    // Do NOT apply scaling from mm to current units.
+    m_absolute_tolerance = ON_3dmUnitsAndTolerances::Millimeters.m_absolute_tolerance;
   }
 
   if ( !(m_angle_tolerance > 0.0 && m_angle_tolerance <= ON_PI) )
   {
     rc |= 2;
-    m_angle_tolerance = ON_3dmUnitsAndTolerances::DefaultValue.m_angle_tolerance;
+    m_angle_tolerance = ON_3dmUnitsAndTolerances::Millimeters.m_angle_tolerance;
   }
 
   if ( !( m_relative_tolerance > 0.0 && m_relative_tolerance < 1.0) )
   {
     rc |= 4;
-    m_relative_tolerance = ON_3dmUnitsAndTolerances::DefaultValue.m_relative_tolerance;
+    m_relative_tolerance = ON_3dmUnitsAndTolerances::Millimeters.m_relative_tolerance;
   }
 
   return rc;
@@ -460,6 +689,9 @@ unsigned int ON_3dmUnitsAndTolerances::SetInvalidTolerancesToDefaultValues()
 //
 // ON_3dmRenderSettings
 //
+
+ON_OBJECT_IMPLEMENT(ON_3dmRenderSettings, ON_Object, "58A5953A-57C5-4FD3-84F5-7D4240478D15");
+
 void ON_3dmRenderSettings::Dump( ON_TextLog& text_log ) const
 {
   text_log.Print("m_bCustomImageSize = %s\n",m_bCustomImageSize?"true":"false");
@@ -488,119 +720,107 @@ void ON_3dmRenderSettings::Dump( ON_TextLog& text_log ) const
   text_log.Print("m_shadowmap_offset = %g\n",m_shadowmap_offset);
 
   text_log.Print("m_bScaleBackgroundToFit = %s\n",m_bScaleBackgroundToFit?"true":"false");
+
+  text_log.Print(L"m_rendering_source = %u\n", int(m_rendering_source));
+  text_log.Print(L"m_specific_viewport = %s\n", (const wchar_t*)m_specific_viewport);
+  text_log.Print(L"m_named_view = %s\n", (const wchar_t*)m_named_view);
+  text_log.Print(L"m_snapshot = %s\n", (const wchar_t*)m_snapshot);
+
+  text_log.Print("m_bForceViewportAspectRatio = %s\n", m_bForceViewportAspectRatio ? "true" : "false");
 }
 
-void ON_3dmRenderSettings::Default()
+bool ON_3dmRenderSettings::UseV5ReadWrite(const ON_BinaryArchive& file)
 {
-  m_bCustomImageSize = false;
-  m_image_width  = 800;
-  m_image_height = 600;
-  m_bScaleBackgroundToFit = false;
-  memset(m_reserved1,0,sizeof(m_reserved1));
-  m_image_dpi = 72.0;
-  m_image_us = ON::inches;
+  if ( file.Archive3dmVersion() <= 50 )
+    return true;
+  
+  if ( file.Archive3dmVersion() > 60 )
+    return false;
 
-
-  m_ambient_light.SetRGB( 0, 0, 0);
-
-  m_background_style = 0;
-  m_background_color.SetRGB(160,160,160);
-  m_background_bottom_color.SetRGB(160,160,160);
-  m_background_bitmap_filename.Destroy();
-
-  m_bUseHiddenLights = false;
-
-  m_bDepthCue = false;
-  m_bFlatShade = false;
-
-  m_bRenderBackfaces = true;
-  m_bRenderPoints = false;
-  m_bRenderCurves = false;
-  m_bRenderIsoparams = false;
-  m_bRenderMeshEdges = false;
-  m_bRenderAnnotation = false;
-
-  m_antialias_style = 1;
-
-  m_shadowmap_style = 1;
-  m_shadowmap_width = 1000;
-  m_shadowmap_height = 1000;
-  m_shadowmap_offset = 0.75;
-
-  m_bUsesAmbientAttr      = true;
-  m_bUsesBackgroundAttr   = true;
-  m_bUsesBackfaceAttr     = false;
-  m_bUsesPointsAttr       = false;
-  m_bUsesCurvesAttr       = true;
-  m_bUsesIsoparmsAttr     = true;
-  m_bUsesMeshEdgesAttr    = false;
-  m_bUsesAnnotationAttr   = true;
-  m_bUsesHiddenLightsAttr = true;
-
-  memset(m_reserved2,0,sizeof(m_reserved2));
-}
-
-ON_3dmRenderSettings::ON_3dmRenderSettings()
-{
-  Default();
-}
-
-ON_3dmRenderSettings::~ON_3dmRenderSettings()
-{
-  m_background_bitmap_filename.Destroy();
-}
-
-ON_3dmRenderSettings::ON_3dmRenderSettings(const ON_3dmRenderSettings& src )
-{
-  Default();
-  *this = src;
-}
-
-ON_3dmRenderSettings& ON_3dmRenderSettings::operator=(const ON_3dmRenderSettings& src )
-{
-  if ( this != &src ) {
-    m_bCustomImageSize = src.m_bCustomImageSize;
-    m_image_width = src.m_image_width;
-    m_image_height = src.m_image_height;
-    m_bScaleBackgroundToFit = src.m_bScaleBackgroundToFit;
-    m_image_dpi = src.m_image_dpi;
-    m_image_us = src.m_image_us;
-    m_ambient_light = src.m_ambient_light;
-    m_background_style = src.m_background_style;
-    m_background_color = src.m_background_color;
-    m_background_bitmap_filename = src.m_background_bitmap_filename;
-    m_bUseHiddenLights = src.m_bUseHiddenLights;
-    m_bDepthCue = src.m_bDepthCue;
-    m_bFlatShade = src.m_bFlatShade;
-    m_bRenderBackfaces = src.m_bRenderBackfaces;
-    m_bRenderPoints = src.m_bRenderPoints;
-    m_bRenderCurves = src.m_bRenderCurves;
-    m_bRenderIsoparams = src.m_bRenderIsoparams;
-    m_bRenderMeshEdges = src.m_bRenderMeshEdges;
-    m_bRenderAnnotation = src.m_bRenderAnnotation;
-    m_antialias_style = src.m_antialias_style;
-    m_shadowmap_style = src.m_shadowmap_style;
-    m_shadowmap_width = src.m_shadowmap_width;
-    m_shadowmap_height = src.m_shadowmap_height;
-    m_shadowmap_offset = src.m_shadowmap_offset;
-    
-    m_background_bottom_color = src.m_background_bottom_color;
-    m_bUsesAmbientAttr      = src.m_bUsesAmbientAttr;
-    m_bUsesBackgroundAttr   = src.m_bUsesBackgroundAttr;
-    m_bUsesBackfaceAttr     = src.m_bUsesBackfaceAttr;  
-    m_bUsesPointsAttr       = src.m_bUsesPointsAttr;        
-    m_bUsesCurvesAttr       = src.m_bUsesCurvesAttr;       
-    m_bUsesIsoparmsAttr     = src.m_bUsesIsoparmsAttr;      
-    m_bUsesMeshEdgesAttr    = src.m_bUsesMeshEdgesAttr;     
-    m_bUsesAnnotationAttr   = src.m_bUsesAnnotationAttr;    
-    m_bUsesHiddenLightsAttr = src.m_bUsesHiddenLightsAttr;  
-  }
-  return *this;
+  // Prior to  November 5, 2013, version 6 files used the old V5 format.
+  unsigned int v6_2013_11_05_version = ON_VersionNumberConstruct(6,0,2013,11,5,0);
+  unsigned int archive_opennurbs_version = file.ArchiveOpenNURBSVersion();
+  return (archive_opennurbs_version < v6_2013_11_05_version);
 }
 
 bool ON_3dmRenderSettings::Write( ON_BinaryArchive& file ) const
 {
-  int i;
+  if ( ON_3dmRenderSettings::UseV5ReadWrite(file) )
+    return WriteV5(file);
+
+  // November 5, 2013 V6 files and later
+  // March 11th 2016 "1.1"- adds focal blur data
+  // June  20th 2017 "1.2"- adds rendering source data
+  if ( !file.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,3) )
+    return false;
+
+  bool rc = false;
+  for(;;)
+  {
+    if ( !file.WriteBool( m_bCustomImageSize ) ) break;
+    if ( !file.WriteInt( m_image_width ) ) break;
+    if ( !file.WriteInt( m_image_height ) ) break;
+
+    if ( !file.WriteDouble( m_image_dpi ) ) break;
+    if ( !file.WriteInt( (int)m_image_us ) ) break;
+
+    if ( !file.WriteColor( m_ambient_light ) ) break;
+
+    if ( !file.WriteInt( m_background_style ) ) break;
+    if ( !file.WriteColor( m_background_color ) ) break;
+    if ( !file.WriteColor( m_background_bottom_color ) ) break;
+    if ( !file.WriteString( m_background_bitmap_filename ) ) break;
+
+    if ( !file.WriteBool( m_bUseHiddenLights ) ) break;
+    if ( !file.WriteBool( m_bDepthCue ) ) break;
+    if ( !file.WriteBool( m_bFlatShade ) ) break;
+    if ( !file.WriteBool( m_bRenderBackfaces ) ) break;
+    if ( !file.WriteBool( m_bRenderPoints ) ) break;
+    if ( !file.WriteBool( m_bRenderCurves ) ) break;
+    if ( !file.WriteBool( m_bRenderIsoparams ) ) break;
+    if ( !file.WriteBool( m_bRenderMeshEdges ) ) break;
+    if ( !file.WriteBool( m_bRenderAnnotation ) ) break;
+    if ( !file.WriteBool( m_bScaleBackgroundToFit ) ) break;
+    if ( !file.WriteBool( m_bTransparentBackground ) ) break;
+
+    if ( !file.WriteInt( m_antialias_style ) ) break;
+    if ( !file.WriteInt( m_shadowmap_style ) ) break;
+    if ( !file.WriteInt( m_shadowmap_width ) ) break;
+    if ( !file.WriteInt( m_shadowmap_height ) ) break;
+    if ( !file.WriteDouble( m_shadowmap_offset ) ) break;
+
+	// March 11th 2016 "1.1"- adds focal blur data
+	// ALB. June 24th 2017 - this information is now on ON_3dmView.  Write default values.  Note, these values were never in Rhino 5.0 files.
+	//http://mcneel.myjetbrains.com/youtrack/issue/RH-32342
+	if (!file.WriteInt((int)0)) break;
+	if (!file.WriteDouble(100.0)) break;
+	if (!file.WriteDouble(64.0)) break;
+	if (!file.WriteDouble(0.1)) break;
+	if (!file.WriteInt(10)) break;
+
+	// June 20th 2017 "1.2"- adds rendering source data
+	//https://mcneel.myjetbrains.com/youtrack/issue/RH-39593
+	if (!file.WriteInt((int)m_rendering_source)) break;
+	if (!file.WriteString(m_specific_viewport)) break;
+	if (!file.WriteString(m_named_view)) break;
+	if (!file.WriteString(m_snapshot)) break;
+
+  // September 28th 2017 "1.3"- adds aspect ratio lock
+  if (!file.WriteBool(m_bForceViewportAspectRatio)) break;
+
+    rc = true;
+    break;
+  }  
+
+  if ( !file.EndWrite3dmChunk() )
+    rc = false;
+
+  return rc;
+}
+
+bool ON_3dmRenderSettings::WriteV5( ON_BinaryArchive& file ) const
+{
+  unsigned int i;
   // version 103: 11 November 2010
   const int version = 103;
   bool rc = file.WriteInt( version );
@@ -634,7 +854,7 @@ bool ON_3dmRenderSettings::Write( ON_BinaryArchive& file ) const
   if (rc) rc = file.WriteDouble( m_shadowmap_offset );
   // version >= 101 begins here
   if (rc) rc = file.WriteDouble( m_image_dpi );
-  i = m_image_us;
+  i = static_cast<unsigned int>(m_image_us);
   if (rc) rc = file.WriteInt( i );
   // version >= 102 begins here
   if (rc) rc = file.WriteColor( m_background_bottom_color );
@@ -647,76 +867,244 @@ bool ON_3dmRenderSettings::Write( ON_BinaryArchive& file ) const
 
 bool ON_3dmRenderSettings::Read( ON_BinaryArchive& file )
 {
-  Default();
-  int version = 0;
-  bool rc = file.ReadInt( &version );
-  if ( rc && version >= 100 && version < 200 ) 
+  *this = ON_3dmRenderSettings::Default;
+  if ( ON_3dmRenderSettings::UseV5ReadWrite(file) )
+    return ReadV5(file);
+
+  // November 5, 2013 V6 files and later
+  int major_version = 0;
+  int minor_version = 0;
+  if ( !file.BeginRead3dmChunk(TCODE_ANONYMOUS_CHUNK,&major_version,&minor_version) )
+    return false;
+
+  bool rc = false;
+  int i;
+  for(;;)
   {
-    if (rc) 
-      rc = file.ReadInt( &m_bCustomImageSize );
-    if (rc) 
-      rc = file.ReadInt( &m_image_width );
-    if (rc) 
-      rc = file.ReadInt( &m_image_height );
-    if (rc) 
-      rc = file.ReadColor( m_ambient_light );
-    if (rc) 
-      rc = file.ReadInt( &m_background_style );
-    if (rc) 
-      rc = file.ReadColor( m_background_color );
-    if (rc) 
-      rc = file.ReadString( m_background_bitmap_filename );
-    if (rc) 
-      rc = file.ReadInt( &m_bUseHiddenLights );
-    if (rc) 
-      rc = file.ReadInt( &m_bDepthCue );
-    if (rc) 
-      rc = file.ReadInt( &m_bFlatShade );
-    if (rc) 
-      rc = file.ReadInt( &m_bRenderBackfaces );
-    if (rc) 
-      rc = file.ReadInt( &m_bRenderPoints );
-    if (rc) 
-      rc = file.ReadInt( &m_bRenderCurves );
-    if (rc) 
-      rc = file.ReadInt( &m_bRenderIsoparams );
-    if (rc) 
-      rc = file.ReadInt( &m_bRenderMeshEdges );
-    if (rc) 
-      rc = file.ReadInt( &m_bRenderAnnotation );
-    if (rc) 
-      rc = file.ReadInt( &m_antialias_style );
-    if (rc) 
-      rc = file.ReadInt( &m_shadowmap_style );
-    if (rc) 
-      rc = file.ReadInt( &m_shadowmap_width );
-    if (rc) 
-      rc = file.ReadInt( &m_shadowmap_height );
-    if (rc) 
-      rc = file.ReadDouble( &m_shadowmap_offset );
-    if (rc && version >= 101) 
-    {
-      if (rc) 
-        rc = file.ReadDouble( &m_image_dpi );
-      if (rc) 
-      {
-        int i;
-        rc = file.ReadInt(&i);
-        if (rc)
-          m_image_us = ON::UnitSystem(i);
-      }
-     
-      if (rc && version >= 102) 
-      {
-        rc = file.ReadColor( m_background_bottom_color );
-        if (rc && version >= 103)
-        {
-          rc = file.ReadBool( &m_bScaleBackgroundToFit );
-        }
-      }
-    }
+    if ( 1 != major_version ) break;
+
+    if ( !file.ReadBool( &m_bCustomImageSize ) ) break;
+    if ( !file.ReadInt( &m_image_width ) ) break;
+    if ( !file.ReadInt( &m_image_height ) ) break;
+
+    if ( !file.ReadDouble( &m_image_dpi ) ) break;
+    i = ON_UNSET_UINT_INDEX;
+    if ( !file.ReadInt( &i ) ) break;
+    m_image_us = ON::LengthUnitSystemFromUnsigned(i);
+
+    if ( !file.ReadColor( m_ambient_light ) ) break;
+
+    if ( !file.ReadInt( &m_background_style ) ) break;
+    if ( !file.ReadColor( m_background_color ) ) break;
+    if ( !file.ReadColor( m_background_bottom_color ) ) break;
+    if ( !file.ReadString( m_background_bitmap_filename ) ) break;
+
+    if ( !file.ReadBool( &m_bUseHiddenLights ) ) break;
+    if ( !file.ReadBool( &m_bDepthCue ) ) break;
+    if ( !file.ReadBool( &m_bFlatShade ) ) break;
+    if ( !file.ReadBool( &m_bRenderBackfaces ) ) break;
+    if ( !file.ReadBool( &m_bRenderPoints ) ) break;
+    if ( !file.ReadBool( &m_bRenderCurves ) ) break;
+    if ( !file.ReadBool( &m_bRenderIsoparams ) ) break;
+    if ( !file.ReadBool( &m_bRenderMeshEdges ) ) break;
+    if ( !file.ReadBool( &m_bRenderAnnotation ) ) break;
+    if ( !file.ReadBool( &m_bScaleBackgroundToFit ) ) break;
+    if ( !file.ReadBool( &m_bTransparentBackground ) ) break;
+
+    if ( !file.ReadInt( &m_antialias_style ) ) break;
+    if ( !file.ReadInt( &m_shadowmap_style ) ) break;
+    if ( !file.ReadInt( &m_shadowmap_width ) ) break;
+    if ( !file.ReadInt( &m_shadowmap_height ) ) break;
+    if ( !file.ReadDouble( &m_shadowmap_offset ) ) break;
+
+	// March 11th 2016 "1.1"- adds focal blur data
+	//http://mcneel.myjetbrains.com/youtrack/issue/RH-32342
+	if (minor_version >= 1)
+	{
+		// ALB. June 24th 2017 - this information is now on ON_3dmView.  Reads the values out, but doesn't store them.
+		i = ON_UNSET_UINT_INDEX;
+		double d;
+		if (!file.ReadInt( &i)) break;
+
+		if (!file.ReadDouble(&d)) break;
+		if (!file.ReadDouble(&d)) break;
+		if (!file.ReadDouble(&d)) break;
+		if (!file.ReadInt(&i)) break;
+	}
+
+	// June 20th 2017 "1.2"- adds rendering source data
+	// https://mcneel.myjetbrains.com/youtrack/issue/RH-39593
+	if (minor_version >= 2)
+	{
+		i = ON_UNSET_UINT_INDEX;
+		if (!file.ReadInt( &i)) break;
+		m_rendering_source = (RenderingSources)i;
+
+		if (!file.ReadString(m_specific_viewport)) break;
+		if (!file.ReadString(m_named_view)) break;
+		if (!file.ReadString(m_snapshot)) break;
+	}
+
+  // September 28th 2017 "1.3"- adds aspect ratio lock
+  // https://mcneel.myjetbrains.com/youtrack/issue/RH-41608
+  if (minor_version >= 3)
+  {
+    if (!file.ReadBool(&m_bForceViewportAspectRatio)) break;
   }
+
+    rc = true;
+    break;
+  }  
+
+  if ( !file.EndRead3dmChunk() )
+    rc = false;
+
   return rc;
+}
+
+bool ON_3dmRenderSettings::ReadV5( ON_BinaryArchive& file )
+{
+  bool rc;
+  int b, i;
+  int version;
+  rc = false;
+  for(;;)
+  {
+    version = 0;
+    if ( !file.ReadInt( &version ) )
+      break;
+    if ( version < 100 )
+      break;
+    if ( version >= 200 )
+      break;
+    if ( !file.ReadInt( &b ) )
+      break;
+    m_bCustomImageSize = (0 != b);
+    if ( !file.ReadInt( &m_image_width ) )
+      break;
+    if ( !file.ReadInt( &m_image_height ) )
+      break;
+    if ( !file.ReadColor( m_ambient_light ) )
+      break;
+    if ( !file.ReadInt( &m_background_style ) )
+      break;
+    if ( !file.ReadColor( m_background_color ) )
+      break;
+    if ( !file.ReadString( m_background_bitmap_filename ) )
+      break;
+    if ( !file.ReadInt( &b ) )
+      break;
+    m_bUseHiddenLights = (0 != b);
+    if ( !file.ReadInt( &b ) )
+      break;
+    m_bDepthCue = (0 != b);
+    if ( !file.ReadInt( &b ) )
+      break;
+    m_bFlatShade = (0 != b);
+    if ( !file.ReadInt( &b ) )
+      break;
+    m_bRenderBackfaces = (0 != b);
+    if ( !file.ReadInt( &b ) )
+      break;
+    m_bRenderPoints = (0 != b);
+    if ( !file.ReadInt( &b ) )
+      break;
+    m_bRenderCurves = (0 != b);
+    if ( !file.ReadInt( &b ) )
+      break;
+    m_bRenderIsoparams = (0 != b);
+    if ( !file.ReadInt( &b ) )
+      break;
+    m_bRenderMeshEdges = (0 != b);
+    if ( !file.ReadInt( &b ) )
+      break;
+    m_bRenderAnnotation = (0 != b);
+    if ( !file.ReadInt( &m_antialias_style ) )
+      break;
+    if ( !file.ReadInt( &m_shadowmap_style ) )
+      break;
+    if ( !file.ReadInt( &m_shadowmap_width ) )
+      break;
+    if ( !file.ReadInt( &m_shadowmap_height ) )
+      break;
+    if ( !file.ReadDouble( &m_shadowmap_offset ) )
+      break;
+    
+    if ( version < 101 )
+    {
+      rc = true;
+      break;
+    }
+    if ( !file.ReadDouble( &m_image_dpi ) )
+      break;
+    if ( !file.ReadInt(&i) )
+      break;
+    m_image_us = ON::LengthUnitSystemFromUnsigned(i);
+     
+    
+    if ( version < 102 )
+    {
+      rc = true;
+      break;
+    }
+    if ( !file.ReadColor( m_background_bottom_color ) )
+      break;
+
+    if ( version < 103 )
+    {
+      rc = true;
+      break;
+    }
+    if ( !file.ReadBool( &m_bScaleBackgroundToFit ) )
+      break;
+
+    rc = true;
+    break;
+  }
+
+  return rc;
+}
+
+ON_3dmRenderSettings::RenderingSources ON_3dmRenderSettings::RenderingSource(void) const
+{
+	return m_rendering_source;
+}
+
+void ON_3dmRenderSettings::SetRenderingSource(ON_3dmRenderSettings::RenderingSources rs)
+{
+	m_rendering_source = rs;
+}
+
+ON_wString ON_3dmRenderSettings::SpecificViewport(void) const
+{
+	return m_specific_viewport;
+}
+
+void ON_3dmRenderSettings::SetSpecificViewport(const ON_wString& s)
+{
+	m_specific_viewport = s;
+}
+
+
+ON_wString ON_3dmRenderSettings::NamedView(void) const
+{
+	return m_named_view;
+}
+
+void ON_3dmRenderSettings::SetNamedView(const ON_wString& s)
+{
+	m_named_view = s;
+}
+
+
+ON_wString ON_3dmRenderSettings::Snapshot(void) const
+{
+	return m_snapshot;
+}
+
+void ON_3dmRenderSettings::SetSnapshot(const ON_wString& s)
+{
+	m_snapshot = s;
 }
 
 bool ON_3dmRenderSettings::ScaleBackgroundToFit() const
@@ -731,86 +1119,15 @@ void ON_3dmRenderSettings::SetScaleBackgroundToFit( bool bScaleBackgroundToFit )
   m_bScaleBackgroundToFit = bScaleBackgroundToFit?true:false;
 }
 
-
 //////////////////////////////////////////////////////////////////////////////////////////
 //
 // ON_3dmAnnotationSettings
 //
 
-ON_3dmAnnotationSettings::ON_3dmAnnotationSettings()
-{
-  Default();
-}
-
-ON_3dmAnnotationSettings::~ON_3dmAnnotationSettings()
-{
-}
-
-ON_3dmAnnotationSettings::ON_3dmAnnotationSettings(const ON_3dmAnnotationSettings& src)
-{
-  Default();
-  *this = src;
-
-}
-
-ON_3dmAnnotationSettings& ON_3dmAnnotationSettings::operator=(const ON_3dmAnnotationSettings& src)
-{
-  if ( this != &src ) {
-    m_dimscale = src.m_dimscale;
-    m_textheight = src.m_textheight;
-    m_dimexe = src.m_dimexe;
-    m_dimexo = src.m_dimexo;
-    m_arrowlength = src.m_arrowlength;
-    m_arrowwidth = src.m_arrowwidth;
-    m_centermark = src.m_centermark;
-    m_dimunits = src.m_dimunits;;
-    m_arrowtype = src.m_arrowtype;
-    m_angularunits = src.m_angularunits;
-    m_lengthformat = src.m_lengthformat;
-    m_angleformat = src.m_angleformat;
-    m_textalign = src.m_textalign;
-    m_resolution = src.m_resolution;
-    m_facename = src.m_facename;
-    m_world_view_text_scale = src.m_world_view_text_scale;
-    m_world_view_hatch_scale = src.m_world_view_hatch_scale;
-    m_bEnableAnnotationScaling = src.m_bEnableAnnotationScaling;
-    m_bEnableHatchScaling = src.m_bEnableHatchScaling;
-  }
-  return *this;
-}
 
 void ON_3dmAnnotationSettings::Dump( ON_TextLog& text_log ) const
 {
   // TODO
-}
-
-void ON_3dmAnnotationSettings::Default()
-{
-  memset(this,0,sizeof(*this));
-
-  m_dimscale = 1.0;       // model size / plotted size
-  m_textheight = 1.0;
-  m_dimexe = 1.0;
-  m_dimexo = 1.0;
-  m_arrowlength = 1.0;
-  m_arrowwidth = 1.0;
-  m_centermark = 1.0;
-
-  m_dimunits = ON::no_unit_system;  // units used to measure the dimension
-  m_arrowtype = 0;     // 0: filled narrow triangular arrow
-  m_angularunits = 0;  // 0: degrees, 1: radians
-  m_lengthformat = 0;  // 0: decimal, ...
-  m_angleformat = 0;   // 0: decimal degrees, ...
-  m_textalign = 0;     // 0: above line, 1: in line, 2: horizontal
-  m_resolution = 0;    // depends on m_lengthformat
-                       // for decimal, digits past the decimal point
-
-  m_facename.Destroy(); // [LF_FACESIZE] // windows font name
-
-  m_world_view_text_scale = 1.0f;
-  m_world_view_hatch_scale = 1.0f;
-  m_bEnableAnnotationScaling = 1;
-  m_bEnableHatchScaling = 1;
 }
 
 double ON_3dmAnnotationSettings::WorldViewTextScale() const
@@ -835,16 +1152,36 @@ void ON_3dmAnnotationSettings::SetWorldViewHatchScale(double world_view_hatch_sc
     m_world_view_hatch_scale = (float)world_view_hatch_scale;
 }
 
-bool ON_3dmAnnotationSettings::IsAnnotationScalingEnabled() const
+bool ON_3dmAnnotationSettings::Is_V5_AnnotationScalingEnabled() const
 {
-  return m_bEnableAnnotationScaling?true:false;
+  return m_b_V5_EnableAnnotationScaling?true:false;
 }
 
-void ON_3dmAnnotationSettings::EnableAnnotationScaling( bool bEnable )
+void ON_3dmAnnotationSettings::Enable_V5_AnnotationScaling( bool bEnable )
 {
-  m_bEnableAnnotationScaling = bEnable?1:0;
+  m_b_V5_EnableAnnotationScaling = bEnable?1:0;
 }
 
+bool ON_3dmAnnotationSettings::IsModelSpaceAnnotationScalingEnabled() const
+{
+  return m_bEnableModelSpaceAnnotationScaling ? true : false;
+}
+
+void ON_3dmAnnotationSettings::EnableModelSpaceAnnotationScaling(bool bEnable)
+{
+  m_bEnableModelSpaceAnnotationScaling = bEnable ? 1 : 0;
+}
+
+
+bool ON_3dmAnnotationSettings::IsLayoutSpaceAnnotationScalingEnabled() const
+{
+  return m_bEnableLayoutSpaceAnnotationScaling ? true : false;
+}
+
+void ON_3dmAnnotationSettings::EnableLayoutSpaceAnnotationScaling(bool bEnable)
+{
+  m_bEnableLayoutSpaceAnnotationScaling = bEnable ? 1 : 0;
+}
 
 bool ON_3dmAnnotationSettings::IsHatchScalingEnabled() const
 {
@@ -859,7 +1196,7 @@ void ON_3dmAnnotationSettings::EnableHatchScaling( bool bEnable )
 
 bool ON_3dmAnnotationSettings::Read( ON_BinaryArchive& file )
 {
-  Default();
+  *this = ON_3dmAnnotationSettings::Default;
 
   int major_version = 0;
   int minor_version = 0;
@@ -875,12 +1212,12 @@ bool ON_3dmAnnotationSettings::Read( ON_BinaryArchive& file )
       if (rc) rc = file.ReadDouble(&m_centermark);
 
       {
-        int i;
+        unsigned int i;
         if (rc) 
         {
           rc = file.ReadInt( &i );
           if (rc)
-            m_dimunits = ON::UnitSystem(i);
+            m_dimunits = ON::LengthUnitSystemFromUnsigned(i);
         }
       }
 
@@ -888,7 +1225,10 @@ bool ON_3dmAnnotationSettings::Read( ON_BinaryArchive& file )
       if (rc) rc = file.ReadInt( &m_angularunits );
       if (rc) rc = file.ReadInt( &m_lengthformat );
       if (rc) rc = file.ReadInt( &m_angleformat );
-      if (rc) rc = file.ReadInt( &m_textalign );
+
+      unsigned int obsolete_value = 0;
+      if (rc) rc = file.ReadInt(&obsolete_value);
+
       if (rc) rc = file.ReadInt( &m_resolution );
 
       if (rc) rc = file.ReadString( m_facename );
@@ -896,7 +1236,19 @@ bool ON_3dmAnnotationSettings::Read( ON_BinaryArchive& file )
       // files that do not contain m_bEnableAnnotationScaling,
       // set m_bEnableAnnotationScaling = false so the display 
       // image does not change.
-      m_bEnableAnnotationScaling = 0;
+      m_b_V5_EnableAnnotationScaling = 1;
+
+      // files that do not contain m_bEnableModelSpaceAnnotationScaling,
+      // set m_bEnableModelSpaceAnnotationScaling = true so the display 
+      // image does not change.
+      //*********** This is probably right for v5 files, but not for pre-V5 *************
+      m_bEnableModelSpaceAnnotationScaling = 1;
+
+      // files that do not contain m_bEnableLayoutSpaceAnnotationScaling,
+      // set m_bEnableLayoutAnnotationScaling = false so the display 
+      // image does not change.
+      // ********** This should be set from m_b_V5_EnableAnnotationScaling for V5 files   *************
+      m_bEnableLayoutSpaceAnnotationScaling = 1;
 
       // files that do not contain m_bEnableHatchScaling,
       // set m_bEnableHatchScaling = false so the display
@@ -909,13 +1261,31 @@ bool ON_3dmAnnotationSettings::Read( ON_BinaryArchive& file )
         double d = m_world_view_text_scale;
         if (rc) rc = file.ReadDouble(&d);
         if (rc && ON_IsValid(d) && d >= 0.0 ) m_world_view_text_scale = (float)d;
-        if (rc) rc = file.ReadChar(&m_bEnableAnnotationScaling);
+        if (rc) rc = file.ReadChar(&m_b_V5_EnableAnnotationScaling);
+        if (rc)
+        {
+          if (m_b_V5_EnableAnnotationScaling)
+          {
+            m_bEnableLayoutSpaceAnnotationScaling = 1;
+          }
+          else
+          {
+            m_bEnableLayoutSpaceAnnotationScaling = 0;
+          }
+        }
+
         if ( minor_version >= 2 )
         {
           d = m_world_view_hatch_scale;
           if (rc) rc = file.ReadDouble(&d);
           if (rc && ON_IsValid(d) && d >= 0.0) m_world_view_hatch_scale = (float)d;
           if (rc) rc = file.ReadChar(&m_bEnableHatchScaling);
+          if (minor_version >= 3)
+          {
+            // [Lowell 3-28-2013] New fields for V6
+            if (rc) rc = file.ReadChar(&m_bEnableModelSpaceAnnotationScaling);
+            if (rc) rc = file.ReadChar(&m_bEnableLayoutSpaceAnnotationScaling);
+          }
         }
       }
     }
@@ -928,11 +1298,25 @@ bool ON_3dmAnnotationSettings::Read( ON_BinaryArchive& file )
 
 bool ON_3dmAnnotationSettings::Write( ON_BinaryArchive& file ) const
 {
-  int i;
-  bool rc = file.Write3dmChunkVersion(1,2);
+  int minor_version
+    = file.Archive3dmVersion() >= 60
+    ? 3
+    : 2;
+
+  unsigned int i;
+  bool rc = file.Write3dmChunkVersion(1, minor_version);
   // March 22, 2010 - Global DimScale abandoned and moved into DimStyles, so now
   // in older files, the dimscale values are multiplied into the DimStyle lengths and
   // DimScale is written as 1.0
+
+  // March 2017 Add
+  /*
+    unsigned char m_b_V5_EnableAnnotationScaling = 1;
+
+  // [Lowell 3-28-2013] New fields for V6
+  unsigned char m_bEnableModelSpaceAnnotationScaling = 1;
+  unsigned char m_bEnableLayoutSpaceAnnotationScaling = 1;
+  */
   if (rc) rc = file.WriteDouble(1.0);
 
   if (rc) rc = file.WriteDouble(m_textheight);
@@ -942,32 +1326,19 @@ bool ON_3dmAnnotationSettings::Write( ON_BinaryArchive& file ) const
   if (rc) rc = file.WriteDouble(m_arrowwidth);
   if (rc) rc = file.WriteDouble(m_centermark);
 
-  i = m_dimunits;
+  i = static_cast<unsigned int>(m_dimunits);
   if (rc) rc = file.WriteInt( i );
   if (rc) rc = file.WriteInt( m_arrowtype );
   if (rc) rc = file.WriteInt( m_angularunits );
   if (rc) rc = file.WriteInt( m_lengthformat );
   if (rc) rc = file.WriteInt( m_angleformat );
-  int textalign = (int)m_textalign;
 
-  // 8-20-03 lw 
-  // How the hell did this get changed?
-  if( file.Archive3dmVersion() <= 2)
-  {
-    switch( m_textalign)
-    {
-    case ON::dtHorizontal:
-      textalign = 2;
-      break;
-    case ON::dtInLine:
-      textalign = 1;
-      break;
-    default:
-      textalign = 0;
-      break;
-    }
-  }
+  const unsigned int textalign 
+    = (file.Archive3dmVersion() <= 2)
+    ? 0
+    : 2;
   if (rc) rc = file.WriteInt( textalign );
+
   if (rc) rc = file.WriteInt( m_resolution );
 
   if (rc) rc = file.WriteString( m_facename );
@@ -975,12 +1346,19 @@ bool ON_3dmAnnotationSettings::Write( ON_BinaryArchive& file ) const
   // Added 25 August 2010 chunk version 1.1
   double d = m_world_view_text_scale;
   if (rc) rc = file.WriteDouble(d);
-  if (rc) rc = file.WriteChar(m_bEnableAnnotationScaling);
+  if (rc) rc = file.WriteChar(m_b_V5_EnableAnnotationScaling);
 
   // Added 14 January 2011 chunk version 1.2
   d = m_world_view_hatch_scale;
   if (rc) rc = file.WriteDouble(d);
   if (rc) rc = file.WriteChar(m_bEnableHatchScaling);
+
+  if (minor_version >= 3)
+  {
+    // [Lowell 3-28-2013] New fields for V6
+    if (rc) rc = file.WriteChar(m_bEnableModelSpaceAnnotationScaling);
+    if (rc) rc = file.WriteChar(m_bEnableLayoutSpaceAnnotationScaling);
+  }
 
   return rc;
 }
@@ -992,6 +1370,12 @@ bool ON_3dmAnnotationSettings::Write( ON_BinaryArchive& file ) const
 ON_3dmConstructionPlane::ON_3dmConstructionPlane()
 {
   Default();
+}
+
+ON_3dmConstructionPlane::ON_3dmConstructionPlane(const ON_Plane& plane)
+{
+  Default();
+  m_plane = plane;
 }
 
 ON_3dmConstructionPlane::~ON_3dmConstructionPlane()
@@ -1083,49 +1467,11 @@ bool ON_3dmConstructionPlane::Read( ON_BinaryArchive& file )
 //
 // ON_3dmConstructionPlaneGridDefaults
 //
-ON_3dmConstructionPlaneGridDefaults::ON_3dmConstructionPlaneGridDefaults()
-{
-  Default();
-}
 
-ON_3dmConstructionPlaneGridDefaults::~ON_3dmConstructionPlaneGridDefaults()
-{
-}
-
-ON_3dmConstructionPlaneGridDefaults::ON_3dmConstructionPlaneGridDefaults(const ON_3dmConstructionPlaneGridDefaults& src)
-{
-  Default();
-  *this = src;
-}
-ON_3dmConstructionPlaneGridDefaults& ON_3dmConstructionPlaneGridDefaults::operator=(const ON_3dmConstructionPlaneGridDefaults& src)
-{
-  if ( this != &src ) {
-    m_grid_spacing = src.m_grid_spacing;
-    m_snap_spacing = src.m_snap_spacing;
-    m_grid_line_count = src.m_grid_line_count;
-    m_grid_thick_frequency = src.m_grid_thick_frequency;
-    m_bShowGrid = src.m_bShowGrid;
-    m_bShowGridAxes = src.m_bShowGridAxes;
-    m_bShowWorldAxes = src.m_bShowWorldAxes;
-  }
-  return *this;
-}
 
 void ON_3dmConstructionPlaneGridDefaults::Dump(ON_TextLog& text_log) const
 {
   // TODO
-}
-
-void ON_3dmConstructionPlaneGridDefaults::Default()
-{
-  // construction grid appearance
-	m_grid_spacing = 1.0;   // distance between grid lines
-	m_snap_spacing = 1.0;   // distance between grid snap points
-	m_grid_line_count = 70;     // number of grid lines in each direction
-  m_grid_thick_frequency = 5; // thick line frequency
-  m_bShowGrid = true;
-  m_bShowGridAxes = true;
-  m_bShowWorldAxes = true;
 }
 
 bool ON_3dmConstructionPlaneGridDefaults::Write( ON_BinaryArchive& file ) const
@@ -1135,9 +1481,9 @@ bool ON_3dmConstructionPlaneGridDefaults::Write( ON_BinaryArchive& file ) const
   if (rc) rc = file.WriteDouble(m_snap_spacing);
   if (rc) rc = file.WriteInt(m_grid_line_count);
   if (rc) rc = file.WriteInt(m_grid_thick_frequency);
-  if (rc) rc = file.WriteInt(m_bShowGrid);
-  if (rc) rc = file.WriteInt(m_bShowGridAxes);
-  if (rc) rc = file.WriteInt(m_bShowWorldAxes);
+  if (rc) rc = file.WriteInt(m_bShowGrid?1:0);
+  if (rc) rc = file.WriteInt(m_bShowGridAxes?1:0);
+  if (rc) rc = file.WriteInt(m_bShowWorldAxes?1:0);
   return rc;
 }
 
@@ -1145,16 +1491,29 @@ bool ON_3dmConstructionPlaneGridDefaults::Read( ON_BinaryArchive& file )
 {
   int major_version = 0;
   int minor_version = 0;
+  
   bool rc = file.Read3dmChunkVersion(&major_version,&minor_version);
-  if (rc && major_version==1) {
+  
+  if (rc && major_version==1) 
+  {
     if (rc) rc = file.ReadDouble(&m_grid_spacing);
     if (rc) rc = file.ReadDouble(&m_snap_spacing);
     if (rc) rc = file.ReadInt(&m_grid_line_count);
     if (rc) rc = file.ReadInt(&m_grid_thick_frequency);
-    if (rc) rc = file.ReadInt(&m_bShowGrid);
-    if (rc) rc = file.ReadInt(&m_bShowGridAxes);
-    if (rc) rc = file.ReadInt(&m_bShowWorldAxes);
+    
+    int b = m_bShowGrid ? 1 : 0;
+    if (rc) rc = file.ReadInt(&b);
+    m_bShowGrid = (b != 0);
+    
+    b = m_bShowGridAxes ? 1 : 0;
+    if (rc) rc = file.ReadInt(&b);
+    m_bShowGridAxes = (b != 0);
+    
+    b = m_bShowWorldAxes ? 1 : 0;
+    if (rc) rc = file.ReadInt(&b);
+    m_bShowWorldAxes = (b != 0);
   }
+
   return rc;
 }
 
@@ -1218,7 +1577,8 @@ bool ON_3dmViewPosition::Write( ON_BinaryArchive& file ) const
   bool rc = file.Write3dmChunkVersion(1,minor_version);
   if (rc) 
   {
-    if (rc) rc = file.WriteInt( m_bMaximized );
+    int i = m_bMaximized ? 1 : 0;
+    if (rc) rc = file.WriteInt( i );
     if (rc) rc = file.WriteDouble( m_wnd_left );
     if (rc) rc = file.WriteDouble( m_wnd_right );
     if (rc) rc = file.WriteDouble( m_wnd_top );
@@ -1245,7 +1605,9 @@ bool ON_3dmViewPosition::Read( ON_BinaryArchive& file )
   Default();
   if (rc && major_version==1) 
   {
-    if (rc) rc = file.ReadInt( &m_bMaximized );
+    int i = m_bMaximized ? 1 : 0;
+    if (rc) rc = file.ReadInt( &i );
+    if (rc) m_bMaximized = (i != 0) ? true : false;
     if (rc) rc = file.ReadDouble( &m_wnd_left );
     if (rc) rc = file.ReadDouble( &m_wnd_right );
     if (rc) rc = file.ReadDouble( &m_wnd_top );
@@ -1305,7 +1667,7 @@ void ON_3dmViewTraceImage::Default()
   m_plane = ON_xy_plane;
   m_width = 0.0;
   m_height = 0.0;
-  m_bitmap_filename.Destroy();
+  m_image_file_reference = ON_FileReference::Unset;
   m_bGrayScale = true;
   m_bHidden = false;
   m_bFiltered = false;
@@ -1315,10 +1677,11 @@ bool ON_3dmViewTraceImage::Write( ON_BinaryArchive& file ) const
 {
   // opennurbs version  < 200307300 - version 1.0 or 1.1 chunk
   // opennurbs version >= 200307300 - version 1.2 chunk
-  bool rc = file.Write3dmChunkVersion(1,3);
+  const int minor_version = (file.Archive3dmVersion() >= 60) ? 4 : 3;
+  bool rc = file.Write3dmChunkVersion(1,minor_version);
   if (rc) 
   {
-    if (rc) rc = file.WriteString( m_bitmap_filename );
+    if (rc) rc = file.WriteString( m_image_file_reference.FullPath() );
     if (rc) rc = file.WriteDouble( m_width );
     if (rc) rc = file.WriteDouble( m_height );
     if (rc) rc = file.WritePlane( m_plane );
@@ -1331,6 +1694,12 @@ bool ON_3dmViewTraceImage::Write( ON_BinaryArchive& file ) const
     
     // version 1.3
     if (rc) rc = file.WriteBool( m_bFiltered );
+
+    if (rc && minor_version >= 4)
+    {
+      // version 1.4
+      if (rc) rc = m_image_file_reference.Write(true, file);
+    }
   }
   return rc;
 }
@@ -1345,7 +1714,10 @@ bool ON_3dmViewTraceImage::Read( ON_BinaryArchive& file )
   bool rc = file.Read3dmChunkVersion(&major_version,&minor_version);
   if (rc && major_version==1)
   {
-    if (rc) rc = file.ReadString( m_bitmap_filename );
+    ON_wString bitmap_filename;
+    if (rc) rc = file.ReadString( bitmap_filename );
+    if (rc)
+      m_image_file_reference.SetFullPath(bitmap_filename, false);
     if (rc) rc = file.ReadDouble( &m_width );
     if (rc) rc = file.ReadDouble( &m_height );
     if (rc) rc = file.ReadPlane( m_plane );
@@ -1360,6 +1732,11 @@ bool ON_3dmViewTraceImage::Read( ON_BinaryArchive& file )
         if ( minor_version >= 3 )
         {
           if (rc) rc = file.ReadBool( &m_bFiltered );
+
+          if (rc && minor_version >= 4)
+          {
+            rc = m_image_file_reference.Read(file);
+          }
         }
       }
     }
@@ -1378,7 +1755,7 @@ bool ON_3dmViewTraceImage::operator==( const ON_3dmViewTraceImage& other ) const
     return false;
   if ( m_height != other.m_height )
     return false;
-  if( m_bitmap_filename != other.m_bitmap_filename )
+  if( m_image_file_reference.FullPathHash() != other.m_image_file_reference.FullPathHash() )
     return false;
   if ( m_bHidden != other.m_bHidden )
     return false;
@@ -1407,7 +1784,7 @@ ON_3dmWallpaperImage::~ON_3dmWallpaperImage()
 
 bool ON_3dmWallpaperImage::operator==( const ON_3dmWallpaperImage& other ) const
 {
-  if ( m_bitmap_filename != other.m_bitmap_filename )
+  if ( m_image_file_reference.FullPathHash() != other.m_image_file_reference.FullPathHash() )
     return false;
   if ( m_bHidden != other.m_bHidden )
     return false;
@@ -1421,7 +1798,7 @@ bool ON_3dmWallpaperImage::operator!=( const ON_3dmWallpaperImage& other ) const
 
 void ON_3dmWallpaperImage::Default()
 {
-  m_bitmap_filename.Destroy();
+  m_image_file_reference = ON_FileReference::Unset;
   m_bGrayScale = true;
   m_bHidden = false;
 }
@@ -1430,13 +1807,19 @@ bool ON_3dmWallpaperImage::Write( ON_BinaryArchive& file ) const
 {
   // version  < 200307300 - version 1.0 chunk
   // version >= 200307300 - version 1.1 chunk
-  bool rc = file.Write3dmChunkVersion(1,1);
+  const int minor_version = (file.Archive3dmVersion() >= 60) ? 2 : 1;
+  bool rc = file.Write3dmChunkVersion(1,minor_version);
   if (rc) 
   {
-    if (rc) rc = file.WriteString( m_bitmap_filename );
+    if (rc) rc = file.WriteString( m_image_file_reference.FullPath() );
     if (rc) rc = file.WriteBool( m_bGrayScale );
 
     if (rc) rc = file.WriteBool( m_bHidden ); // added in 1.1 chunk
+
+    if (rc && minor_version >= 2)
+    {
+      rc = m_image_file_reference.Write(true, file);
+    }
   }
   return rc;
 }
@@ -1451,12 +1834,19 @@ bool ON_3dmWallpaperImage::Read( ON_BinaryArchive& file )
   bool rc = file.Read3dmChunkVersion(&major_version,&minor_version);
   if (rc && major_version==1)
   {
-    if (rc) rc = file.ReadString( m_bitmap_filename );
+    ON_wString bitmap_filename;
+    if (rc) rc = file.ReadString( bitmap_filename );
+    if (rc)
+      m_image_file_reference.SetFullPath(bitmap_filename,false);
     if (rc) rc = file.ReadBool( &m_bGrayScale );
 
     if ( minor_version >= 1 )
     {
       if (rc) rc = file.ReadBool( &m_bHidden );
+      if (rc && minor_version >= 2)
+      {
+        rc = m_image_file_reference.Read(file);
+      }
     }
   }
   else
@@ -1692,6 +2082,98 @@ bool ON_3dmPageSettings::Read(ON_BinaryArchive& archive)
   return rc;
 }
 
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//
+// ON_StandardDisplayModeId
+//
+
+
+
+bool ON_StandardDisplayModeId::IsStandardDisplayModeId(
+    ON_UUID id
+    )
+{
+  if ( ON_StandardDisplayModeId::Wireframe == id )
+    return true;
+  if ( ON_StandardDisplayModeId::Shaded == id )
+    return true;
+  if ( ON_StandardDisplayModeId::Rendered == id )
+    return true;
+  if ( ON_StandardDisplayModeId::Ghosted == id )
+    return true;
+  if ( ON_StandardDisplayModeId::XrayShade == id )
+    return true;
+  if ( ON_StandardDisplayModeId::RenderedShadows == id )
+    return true;
+  if ( ON_StandardDisplayModeId::Technical == id )
+    return true;
+  if ( ON_StandardDisplayModeId::Artistic == id )
+    return true;
+  if ( ON_StandardDisplayModeId::Pen == id )
+    return true;
+  if ( ON_StandardDisplayModeId::AmbientOcclusion == id)
+    return true;
+  if ( ON_StandardDisplayModeId::Raytraced == id)
+    return true;
+
+  return false;
+}
+
+
+ON::v3_display_mode ON_StandardDisplayModeId::ToV3DisplayMode(
+  ON_UUID id
+  )
+{
+  if ( ON_nil_uuid == id )
+    return ON::v3_default_display;
+
+  if ( ON_StandardDisplayModeId::Wireframe == id )
+    return ON::v3_wireframe_display;
+
+  if ( ON_StandardDisplayModeId::Shaded == id )
+    return ON::v3_shaded_display;
+
+  if ( ON_StandardDisplayModeId::Rendered == id )
+    return ON::v3_renderpreview_display;
+
+  if ( ON_StandardDisplayModeId::IsStandardDisplayModeId(id) )
+    return ON::v3_shaded_display;
+
+  return ON::v3_default_display;
+}
+
+ON_UUID ON_StandardDisplayModeId::FromV3DisplayMode(
+  ON::v3_display_mode dm
+  )
+{
+  ON_UUID id;
+  switch ( dm )
+  {
+  case ON::v3_default_display:
+    id = ON_nil_uuid;
+    break;
+
+  case ON::v3_wireframe_display:
+    id = ON_StandardDisplayModeId::Wireframe;
+    break;
+
+  case ON::v3_shaded_display:
+    id = ON_StandardDisplayModeId::Shaded;
+    break;
+
+  case ON::v3_renderpreview_display:
+    id = ON_StandardDisplayModeId::Rendered;
+    break;
+
+  default:
+    id = ON_nil_uuid;
+    break;
+  }
+
+  return id;
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////
 //
 // ON_3dmView
@@ -1707,7 +2189,7 @@ ON_3dmView::~ON_3dmView()
 
 void ON_3dmView::Dump( ON_TextLog& dump ) const
 {
-  const wchar_t* wsViewName = m_name;
+  const wchar_t* wsViewName = static_cast< const wchar_t* >(m_name);
   if ( !wsViewName )
     wsViewName = L"";
   ON::view_projection proj = m_vp.Projection();
@@ -1715,11 +2197,11 @@ void ON_3dmView::Dump( ON_TextLog& dump ) const
 
   ON_3dPoint camLoc;
   ON_3dVector camX, camY, camZ;
-  ON_BOOL32 bValidCamera = m_vp.GetCameraFrame( camLoc, camX, camY, camZ );
+  bool bValidCamera = m_vp.GetCameraFrame( camLoc, camX, camY, camZ );
   double frus_left,frus_right,frus_bottom,frus_top,frus_near,frus_far;
-  ON_BOOL32 bValidFrustum = m_vp.GetFrustum(&frus_left,&frus_right,&frus_bottom,&frus_top,&frus_near,&frus_far);
+  bool bValidFrustum = m_vp.GetFrustum(&frus_left,&frus_right,&frus_bottom,&frus_top,&frus_near,&frus_far);
   int port_left, port_right, port_bottom, port_top, port_near, port_far;
-  ON_BOOL32 bValidPort = m_vp.GetScreenPort(&port_left,&port_right,&port_bottom,&port_top,&port_near,&port_far);
+  bool bValidPort = m_vp.GetScreenPort(&port_left,&port_right,&port_bottom,&port_top,&port_near,&port_far);
 
   const char* sProjectionName;
   switch(proj)
@@ -1803,13 +2285,10 @@ void ON_3dmView::Default()
 {
   m_name.Destroy();
 
-  m_vp.Initialize();
-  // ON_3dmView::m_target is obsolete - keep it in sync with m_vp.m_target_point
-  OBSOLETE_3DM_VIEW_TARGET = m_vp.TargetPoint(); 
+  m_vp = ON_Viewport::DefaultTopViewYUp;
 
   m_cplane.Default();
   m_display_mode_id = ON_nil_uuid;
-  m_display_mode = ON::wireframe_display;
   m_view_type = ON::model_view_type;
   m_position.Default();
   if ( m_vp.Projection() == ON::parallel_view ) {
@@ -1818,31 +2297,36 @@ void ON_3dmView::Default()
   m_bShowConstructionGrid = true;
   m_bShowConstructionAxes = true;
   m_bShowWorldAxes = true;
+  m_bShowConstructionZAxis = false;
 
   m_trace_image.Default();
   m_wallpaper_image.Default();
 
   m_page_settings.Default();
 
+  m_named_view_id = ON_nil_uuid;
+
   m_bLockedProjection = false;
+
+  m_dFocalBlurDistance = 100.0;
+  m_dFocalBlurAperture = 64.0;
+  m_dFocalBlurJitter = 0.1;
+  m_uFocalBlurSampleCount = 10;
+  m_FocalBlurMode = ON_FocalBlurModes::None;
+  m_sizeRendering.cx = 640;
+  m_sizeRendering.cy = 480;
 }
 
 ON_3dPoint ON_3dmView::TargetPoint() const
 {
-  ON_3dPoint target_point = m_vp.TargetPoint();
-  if ( OBSOLETE_3DM_VIEW_TARGET != target_point )
-  {
-    ON_ERROR("Obsolete ON_3dmView::m_target is not set correctly");
-    const_cast<ON_3dmView*>(this)->OBSOLETE_3DM_VIEW_TARGET = target_point; // fix error condition
-  }
-  return target_point;
+  // This function must return the valud saved on m_vp.m_target_point.
+  // Do not modify that value here.
+  return m_vp.TargetPoint();
 }
 
 bool ON_3dmView::SetTargetPoint(ON_3dPoint target_point)
 {
-  bool rc = m_vp.SetTargetPoint(target_point);
-  OBSOLETE_3DM_VIEW_TARGET = m_vp.TargetPoint(); // keep obsolete m_target in sync with m_vp.m_target_point
-  return rc;
+  return m_vp.SetTargetPoint(target_point);
 }
 
 bool ON_3dmView::IsValid(ON_TextLog* text_log) const
@@ -1986,7 +2470,7 @@ bool ON_3dmView::Write( ON_BinaryArchive& file ) const
         rc = false;
     }
   }
-  if(rc && 0 != m_vp.FirstUserData() && file.Archive3dmVersion() >= 4) 
+  if(rc && file.Archive3dmVersion() >= 4 && file.ObjectHasUserDataToWrite(&m_vp) ) 
   {
     rc = file.BeginWrite3dmChunk( TCODE_VIEW_VIEWPORT_USERDATA, 0 );
     if(rc) 
@@ -2027,7 +2511,8 @@ bool ON_3dmView::Write( ON_BinaryArchive& file ) const
     }
   }
   if(rc) {
-    rc = file.BeginWrite3dmChunk( TCODE_VIEW_DISPLAYMODE, m_display_mode );
+    ON::v3_display_mode dm = ON_StandardDisplayModeId::ToV3DisplayMode( m_display_mode_id );
+    rc = file.BeginWrite3dmChunk( TCODE_VIEW_V3_DISPLAYMODE, dm );
     if(rc) {
       if ( !file.EndWrite3dmChunk() )
         rc = false;
@@ -2085,7 +2570,7 @@ bool ON_3dmView::Write( ON_BinaryArchive& file ) const
     rc = file.BeginWrite3dmChunk( TCODE_VIEW_WALLPAPER, 0 );
     if(rc) 
     {
-      if(rc) rc = file.WriteString(m_wallpaper_image.m_bitmap_filename);
+      if(rc) rc = file.WriteString(m_wallpaper_image.m_image_file_reference.FullPath());
       if ( !file.EndWrite3dmChunk() )
         rc = false;
     }
@@ -2117,7 +2602,7 @@ bool ON_3dmView::Write( ON_BinaryArchive& file ) const
     rc = file.BeginWrite3dmChunk( TCODE_VIEW_ATTRIBUTES, 0 );
     if (rc)
     {
-      rc = file.Write3dmChunkVersion( 1, 4 ); // (there are no 1.0 fields)
+      rc = file.Write3dmChunkVersion( 1, 8 ); // (there are no 1.0 fields)
 
       while(rc)
       {
@@ -2156,6 +2641,37 @@ bool ON_3dmView::Write( ON_BinaryArchive& file ) const
         rc = file.WriteArray(m_clipping_planes);
         if (!rc) break;
 
+        // 13 June 2013 version 1.5
+        rc = file.WriteUuid(m_named_view_id);
+        if (!rc) break;
+
+        // 8 Dec 2016 version 1.6 (ALB)
+        rc = file.WriteBool(m_bShowConstructionZAxis);
+        if (!rc) break;
+
+        // 6 June 2017 - Andy.  version 1.7 fields
+        rc = file.WriteDouble(m_dFocalBlurDistance);
+        if (!rc) break;
+
+        rc = file.WriteDouble(m_dFocalBlurAperture);
+        if (!rc) break;
+
+        rc = file.WriteDouble(m_dFocalBlurJitter);
+        if (!rc) break;
+
+        rc = file.WriteInt(m_uFocalBlurSampleCount);
+        if (!rc) break;
+
+        rc = file.WriteInt((int)m_FocalBlurMode);
+        if (!rc) break;
+
+        // 4 August 2017 - Andy.  version 1.8 fields
+        rc = file.WriteInt(m_sizeRendering.cx);
+        if (!rc) break;
+
+        rc = file.WriteInt(m_sizeRendering.cy);
+        if (!rc) break;
+
         break;
       }
 
@@ -2182,16 +2698,13 @@ bool ON_3dmView::Read( ON_BinaryArchive& file )
   // Everything in a view is in a subchunk so new records can 
   // be added to a view and old I/O code will still
   // work.
+  ON_3dPoint obsolete_target_point = ON_3dPoint::UnsetPoint;
   unsigned int tcode = 0;
   ON__INT64 big_value = 0;
   int i32;
   bool rc = true;
 
   Default();
-
-  bool bHaveTargetPoint = false;
-  bool bHaveViewport = false;
-  ON_3dPoint target_point = ON_3dPoint::UnsetPoint;
 
   while(rc) {
     rc = file.BeginRead3dmBigChunk(&tcode,&big_value);
@@ -2204,8 +2717,6 @@ bool ON_3dmView::Read( ON_BinaryArchive& file )
       break;
     case TCODE_VIEW_VIEWPORT:
       rc = m_vp.Read(file)?true:false;
-      if (rc)
-        bHaveViewport = true;
       break;
     case TCODE_VIEW_VIEWPORT_USERDATA:
       // 27 June 2008 Dale Lear
@@ -2233,7 +2744,11 @@ bool ON_3dmView::Read( ON_BinaryArchive& file )
       // used prior to 5 June 2003 and still written
       // after 5 June 2003 so older Rhinos/opennurbs
       // will not loose the filename information.
-      rc = file.ReadString(m_wallpaper_image.m_bitmap_filename);
+      {
+        ON_wString bitmap_filename;
+        rc = file.ReadString(bitmap_filename);
+        m_wallpaper_image.m_image_file_reference.SetFullPath(bitmap_filename,false);
+      }
       m_wallpaper_image.m_bGrayScale = true;
       break;
     case TCODE_VIEW_WALLPAPER_V3:
@@ -2241,13 +2756,18 @@ bool ON_3dmView::Read( ON_BinaryArchive& file )
       rc = m_wallpaper_image.Read(file);
       break;
     case TCODE_VIEW_TARGET:
-      rc = file.ReadPoint(target_point);
-      if (rc)
-        bHaveTargetPoint = true;
+      // 13 June 2013
+      // This point has been obsolete for more than 5 years 
+      // and is now ignored.  The target point is on ON_Viewport.
+      rc = file.ReadPoint(obsolete_target_point);
       break;
-    case TCODE_VIEW_DISPLAYMODE:
-      i32 = (int)big_value;
-      m_display_mode = ON::DisplayMode(i32);
+    case TCODE_VIEW_V3_DISPLAYMODE:
+      if ( ON_nil_uuid == m_display_mode_id )
+      {
+        i32 = (int)big_value;
+        ON::v3_display_mode dm = ON::V3DisplayMode(i32);
+        m_display_mode_id = ON_StandardDisplayModeId::FromV3DisplayMode(dm);
+      }
       break;
     case TCODE_VIEW_NAME:
       rc = file.ReadString(m_name);
@@ -2306,6 +2826,44 @@ bool ON_3dmView::Read( ON_BinaryArchive& file )
               {
                 rc = file.ReadArray(m_clipping_planes);
                 if (!rc) break;
+                if ( minor_version >= 5 )
+                {
+                  // 13 June 2013 version 1.5 field
+                  rc = file.ReadUuid(m_named_view_id);
+                  if (!rc) break;
+                  if (minor_version >= 6)
+                  {
+                    // 8 Dec 2016 version 1.6 field (ALB)
+                    rc = file.ReadBool(&m_bShowConstructionZAxis);
+                    if (!rc) break;
+                    if (minor_version >= 7)
+                    {
+                      // 11 May 2016 - Andy.  version 1.7 fields
+                      rc = file.ReadDouble(&m_dFocalBlurDistance);
+                      if (!rc) break;
+
+                      rc = file.ReadDouble(&m_dFocalBlurAperture);
+                      if (!rc) break;
+
+                      rc = file.ReadDouble(&m_dFocalBlurJitter);
+                      if (!rc) break;
+
+                      rc = file.ReadInt((int*)&m_uFocalBlurSampleCount);
+                      if (!rc) break;
+
+                      rc = file.ReadInt((int*)&m_FocalBlurMode);
+                      if (!rc) break;
+                      if (minor_version >= 8)
+                      {
+                        // 4 August 2017 - Andy.  version 1.8 fields
+                        rc = file.ReadInt(&m_sizeRendering.cx);
+                        if (!rc) break;
+                        rc = file.ReadInt(&m_sizeRendering.cy);
+                        if (!rc) break;
+                      }
+                    }
+                  }
+                }
               }
             }
           }
@@ -2324,52 +2882,71 @@ bool ON_3dmView::Read( ON_BinaryArchive& file )
       break;
   }
 
-  if (    bHaveViewport 
-       && bHaveTargetPoint
-       && target_point.IsValid()
-       && !OBSOLETE_3DM_VIEW_TARGET.IsValid()
-     )
-  {
-    // m_target is obsolete, but some older files
-    // have the good value stored in ON_3dmView. In this
-    // case use the good value as the target point.
-    SetTargetPoint(target_point); // sets both this->m_target and m_vp.m_target_point
-  }
-  else
-  {
-    // Assume the value on m_vp.m_target_point is the right one and
-    // Keep the obsolete m_target in sync with m_vp.m_target_point.
-    OBSOLETE_3DM_VIEW_TARGET = m_vp.TargetPoint();
-  }
+  if ( obsolete_target_point.IsValid() && m_vp.TargetPoint().IsUnset() )
+    m_vp.SetTargetPoint(obsolete_target_point);
 
   return rc;
 }
 
-ON_EarthAnchorPoint::ON_EarthAnchorPoint()
+double ON_3dmView::FocalBlurDistance(void) const
 {
-  Default();
+  return m_dFocalBlurDistance;
 }
 
-ON_EarthAnchorPoint::~ON_EarthAnchorPoint()
+void ON_3dmView::SetFocalBlurDistance(double d)
 {
+  m_dFocalBlurDistance = d;
 }
 
-void ON_EarthAnchorPoint::Default()
+double ON_3dmView::FocalBlurAperture(void) const
 {
-  m_earth_basepoint_latitude = 0.0;
-  m_earth_basepoint_longitude = 0.0;
-  m_earth_basepoint_elevation = 0.0;
-  m_earth_basepoint_elevation_zero = 0;
+  return m_dFocalBlurAperture;
+}
 
-  m_model_basepoint.Set(0.0,0.0,0.0);
-  m_model_north.Set(0.0,1.0,0.0);
-  m_model_east.Set(1.0,0.0,0.0);
+void ON_3dmView::SetFocalBlurAperture(double d)
+{
+  m_dFocalBlurAperture = d;
+}
 
-  m_id = ON_nil_uuid;
-  m_name.Destroy();
-  m_description.Destroy(); 
-  m_url.Destroy();
-  m_url_tag.Destroy();
+double ON_3dmView::FocalBlurJitter(void) const
+{
+  return m_dFocalBlurJitter;
+}
+
+void ON_3dmView::SetFocalBlurJitter(double d)
+{
+  m_dFocalBlurJitter = d;
+}
+
+unsigned int ON_3dmView::FocalBlurSampleCount(void) const
+{
+  return m_uFocalBlurSampleCount;
+}
+
+void ON_3dmView::SetFocalBlurSampleCount(unsigned int sc)
+{
+  m_uFocalBlurSampleCount = sc;
+}
+
+ON_FocalBlurModes ON_3dmView::FocalBlurMode(void) const
+{
+  return m_FocalBlurMode;
+}
+
+void ON_3dmView::SetFocalBlurMode(ON_FocalBlurModes m)
+{
+  m_FocalBlurMode = m;
+}
+
+
+ON_2iSize ON_3dmView::RenderingSize() const
+{
+  return m_sizeRendering;
+}
+
+void ON_3dmView::SetRenderingSize(const ON_2iSize& size)
+{
+  m_sizeRendering = size;
 }
 
 int ON_EarthAnchorPoint::CompareEarthLocation(const ON_EarthAnchorPoint* a, const ON_EarthAnchorPoint* b)
@@ -2383,8 +2960,8 @@ int ON_EarthAnchorPoint::CompareEarthLocation(const ON_EarthAnchorPoint* a, cons
     return 1;
   }
 
-  double xa = a->m_earth_basepoint_longitude;
-  double xb = b->m_earth_basepoint_longitude;
+  double xa = a->m_earth_longitude;
+  double xb = b->m_earth_longitude;
   if ( !ON_IsValid(xa) )
   {
     if ( ON_IsValid(xb) ) return -1;
@@ -2407,8 +2984,8 @@ int ON_EarthAnchorPoint::CompareEarthLocation(const ON_EarthAnchorPoint* a, cons
     if ( xa > xb ) return 1;
   }
 
-  xa = a->m_earth_basepoint_latitude;
-  xb = b->m_earth_basepoint_latitude;
+  xa = a->m_earth_latitude;
+  xb = b->m_earth_latitude;
   if ( !ON_IsValid(xa) )
   {
     if ( ON_IsValid(xb) ) return -1;
@@ -2431,12 +3008,15 @@ int ON_EarthAnchorPoint::CompareEarthLocation(const ON_EarthAnchorPoint* a, cons
     if ( xa > xb ) return 1;
   }
 
-  int i = a->m_earth_basepoint_elevation_zero - b->m_earth_basepoint_elevation_zero;
-  if ( i != 0 )
-    return i;
+  const unsigned int aecs = static_cast<unsigned char>(a->m_earth_coordinate_system);
+  const unsigned int becs = static_cast<unsigned char>(a->m_earth_coordinate_system);
+  if (aecs < becs)
+    return -1;
+  if (aecs > becs)
+    return 1;
 
-  xa = a->m_earth_basepoint_elevation;
-  xb = b->m_earth_basepoint_elevation;
+  xa = a->m_earth_elevation_meters;
+  xb = b->m_earth_elevation_meters;
   if ( !ON_IsValid(xa) )
   {
     if ( ON_IsValid(xb) ) return -1;
@@ -2465,7 +3045,7 @@ int ON_EarthAnchorPoint::CompareModelDirection(const ON_EarthAnchorPoint* a, con
     return 1;
   }
 
-  int i = ON_ComparePoint(3,false,&a->m_model_basepoint.x,&b->m_model_basepoint.x);
+  int i = ON_ComparePoint(3,false,&a->m_model_point.x,&b->m_model_point.x);
   if ( !i )
   {
     i = ON_ComparePoint(3,false,&a->m_model_north.x,&b->m_model_north.x);
@@ -2491,16 +3071,16 @@ int ON_EarthAnchorPoint::CompareIdentification(const ON_EarthAnchorPoint* a, con
   int i = ON_UuidCompare(a->m_id,b->m_id);
   if ( !i)
   {
-    i = a->m_name.Compare(b->m_name);
+    i = a->m_name.CompareOrdinal(b->m_name,false);
     if (!i)
     {
-      i = a->m_description.Compare(b->m_description);
+      i = a->m_description.CompareOrdinal(b->m_description,false);
       if (!i)
       {
-        i = a->m_url.CompareNoCase(b->m_url);
+        i = a->m_url.CompareOrdinal(b->m_url,true);
         if ( !i)
         {
-          i = a->m_url_tag.Compare(b->m_url_tag);
+          i = a->m_url_tag.CompareOrdinal(b->m_url_tag,false);
         }
       }
     }
@@ -2524,7 +3104,8 @@ int ON_EarthAnchorPoint::Compare(const ON_EarthAnchorPoint* a, const ON_EarthAnc
 
 bool ON_EarthAnchorPoint::Read( ON_BinaryArchive& file )
 {
-  Default();
+  *this = ON_EarthAnchorPoint::Unset;
+  
   int major_version = 0;
   int minor_version = 0;
   bool rc = file.BeginRead3dmChunk(TCODE_ANONYMOUS_CHUNK,&major_version,&minor_version);
@@ -2536,24 +3117,54 @@ bool ON_EarthAnchorPoint::Read( ON_BinaryArchive& file )
     rc = (1 == major_version);
     if (!rc) break;
 
-    rc = file.ReadDouble(&m_earth_basepoint_latitude);
+    rc = file.ReadDouble(&m_earth_latitude);
     if (!rc) break;
-    rc = file.ReadDouble(&m_earth_basepoint_longitude);
+    rc = file.ReadDouble(&m_earth_longitude);
     if (!rc) break;
-    rc = file.ReadDouble(&m_earth_basepoint_elevation);
+    rc = file.ReadDouble(&m_earth_elevation_meters);
     if (!rc) break;
-    rc = file.ReadPoint(m_model_basepoint);
+
+    if (
+      minor_version < 2 
+      && 0.0 == m_earth_latitude
+      && 0.0 == m_earth_longitude 
+      && 0.0 == m_earth_elevation_meters
+      && file.ArchiveOpenNURBSVersion() <= 2348834428
+      )
+    {
+      m_earth_latitude = ON_EarthAnchorPoint::Unset.m_earth_latitude;
+      m_earth_longitude = ON_EarthAnchorPoint::Unset.m_earth_longitude;
+      m_earth_elevation_meters = ON_EarthAnchorPoint::Unset.m_earth_elevation_meters;
+    }
+
+
+    rc = file.ReadPoint(m_model_point);
     if (!rc) break;
     rc = file.ReadVector(m_model_north);
     if (!rc) break;
     rc = file.ReadVector(m_model_east);
     if (!rc) break;
-
+   
     if ( minor_version >= 1 )
     {
       // 1.1 fields
-      rc = file.ReadInt(&m_earth_basepoint_elevation_zero);
+      int earth_basepoint_elevation_zero = ON_UNSET_INT_INDEX;
+      rc = file.ReadInt(&earth_basepoint_elevation_zero);
       if (!rc) break;
+      switch (earth_basepoint_elevation_zero)
+      {
+      case 0:
+        m_earth_coordinate_system = ON::EarthCoordinateSystem::GroundLevel;
+        break;
+      case 1:
+        m_earth_coordinate_system = ON::EarthCoordinateSystem::MeanSeaLevel;
+        break;
+      case 2:
+        m_earth_coordinate_system = ON::EarthCoordinateSystem::CenterOfEarth;
+        break;
+      default:
+        break;
+      }
       rc = file.ReadUuid(m_id);
       if (!rc) break;
       rc = file.ReadString(m_name);
@@ -2564,6 +3175,16 @@ bool ON_EarthAnchorPoint::Read( ON_BinaryArchive& file )
       if (!rc) break;
       rc = file.ReadString(m_url_tag);
       if (!rc) break;
+
+      if (minor_version >= 2)
+      {
+        unsigned int u;
+        
+        u = static_cast<unsigned char>(ON_EarthAnchorPoint::Unset.EarthCoordinateSystem());
+        rc = file.ReadInt(&u);
+        if (!rc) break;
+        m_earth_coordinate_system = ON::EarthCoordinateSystemFromUnsigned(u);
+      }
     }
 
     break;
@@ -2575,21 +3196,36 @@ bool ON_EarthAnchorPoint::Read( ON_BinaryArchive& file )
   return rc;
 }
 
+static double Internal_UnsetToZeroInV5Files(
+  const ON_BinaryArchive& file,
+  double value
+)
+{
+  // http://mcneel.myjetbrains.com/youtrack/issue/RH-34700
+  // V5 RDK sun dialog expects 0.0 for unset latitude and longitude values
+  // and crashes if it encounters ON_UNSET_VALUE.
+  return (file.Archive3dmVersion() < 60 && ON_UNSET_VALUE == value)
+      ? 0.0
+      : value;
+}
+
 bool ON_EarthAnchorPoint::Write( ON_BinaryArchive& file ) const
 {
-  bool rc = file.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,1);
+  bool rc = file.BeginWrite3dmChunk(TCODE_ANONYMOUS_CHUNK,1,2);
   if ( !rc )
     return false;
 
   for(;;)
   {
-    rc = file.WriteDouble(m_earth_basepoint_latitude);
+    const double earth_latitude = Internal_UnsetToZeroInV5Files(file, m_earth_latitude);
+    const double earth_longitude = Internal_UnsetToZeroInV5Files(file, m_earth_longitude);
+    rc = file.WriteDouble(earth_latitude);
     if (!rc) break;
-    rc = file.WriteDouble(m_earth_basepoint_longitude);
+    rc = file.WriteDouble(earth_longitude);
     if (!rc) break;
-    rc = file.WriteDouble(m_earth_basepoint_elevation);
+    rc = file.WriteDouble(m_earth_elevation_meters);
     if (!rc) break;
-    rc = file.WritePoint(m_model_basepoint);
+    rc = file.WritePoint(m_model_point);
     if (!rc) break;
     rc = file.WriteVector(m_model_north);
     if (!rc) break;
@@ -2597,7 +3233,23 @@ bool ON_EarthAnchorPoint::Write( ON_BinaryArchive& file ) const
     if (!rc) break;
 
     // 1.1 fields
-    rc = file.WriteInt(m_earth_basepoint_elevation_zero);
+    int earth_basepoint_elevation_zero;
+    switch (m_earth_coordinate_system)
+    {
+    case ON::EarthCoordinateSystem::GroundLevel:
+      earth_basepoint_elevation_zero = 0;
+      break;
+    case ON::EarthCoordinateSystem::MeanSeaLevel:
+      earth_basepoint_elevation_zero = 1;
+      break;
+    case ON::EarthCoordinateSystem::CenterOfEarth:
+      earth_basepoint_elevation_zero = 2;
+      break;
+    default:
+      earth_basepoint_elevation_zero = 0;
+      break;
+    }
+    rc = file.WriteInt(earth_basepoint_elevation_zero); // legacy value for old files
     if (!rc) break;
     rc = file.WriteUuid(m_id);
     if (!rc) break;
@@ -2610,6 +3262,11 @@ bool ON_EarthAnchorPoint::Write( ON_BinaryArchive& file ) const
     rc = file.WriteString(m_url_tag);
     if (!rc) break;
 
+    // 1.2 fields
+    unsigned int u;
+    u = static_cast<unsigned char>(ON_EarthAnchorPoint::Unset.EarthCoordinateSystem());
+    rc = file.WriteInt(u);
+    if (!rc) break;
 
     break;
   }
@@ -2652,10 +3309,29 @@ bool ON_EarthAnchorPoint::GetModelCompass(ON_Plane& model_compass) const
     if ( !mc.zaxis.Unitize() )
       return false;
   }
-  mc.origin = m_model_basepoint;
+  mc.origin = m_model_point;
   mc.UpdateEquation();
   model_compass = mc;
   return model_compass.IsValid();
+}
+
+bool ON_EarthAnchorPoint::EarthLocationIsSet() const
+{
+  return (
+    ON_IsValid(m_earth_latitude)
+    && ON_IsValid(m_earth_longitude)
+    && ON_IsValid(m_earth_elevation_meters)
+  );
+}
+
+
+bool ON_EarthAnchorPoint::ModelLocationIsSet() const
+{
+  return (
+    m_model_point.IsValid()
+    && m_model_north.IsValid()
+    && m_model_east.IsValid()
+  );
 }
 
 bool ON_EarthAnchorPoint::GetModelToEarthXform(
@@ -2663,20 +3339,26 @@ bool ON_EarthAnchorPoint::GetModelToEarthXform(
           ON_Xform& model_to_earth
           ) const
 {
+  if (false == EarthLocationIsSet() || false == ModelLocationIsSet())
+  {
+    model_to_earth = ON_Xform::IdentityTransformation;
+    return false;
+  }
+
   // The orient_model rotates the model so that
   //   xaxis runs from west to east
   //   yaxis runs from south to north
   //   zaxis points "up"
   ON_Plane model_compass;
   bool rc = GetModelCompass( model_compass );
-  model_compass.origin = m_model_basepoint;
+  model_compass.origin = m_model_point;
   model_compass.UpdateEquation();
   ON_Xform orient_model;
   orient_model.Rotation( model_compass, ON_xy_plane  );
 
-  ON_Xform coord_change(1.0);
+  ON_Xform coord_change(ON_Xform::IdentityTransformation);
 
-  const double lat_radians = m_earth_basepoint_latitude/180.0*ON_PI;
+  const double lat_radians = m_earth_latitude/180.0*ON_PI;
   const double cos_lat = cos(lat_radians);
   const double sin_lat = sin(lat_radians);
   
@@ -2694,22 +3376,348 @@ bool ON_EarthAnchorPoint::GetModelToEarthXform(
 
   const double meters_per_degree_latitude = earth_radius*ON_PI/180.0; // meters per degree of latitude
 
-  const double model_to_meters_scale = ON::UnitScale(model_unit_system, ON::meters);
+  const double model_to_meters_scale = ON::UnitScale(model_unit_system, ON::LengthUnitSystem::Meters);
   const double north_south_scale  = model_to_meters_scale/meters_per_degree_latitude;
   const double east_west_scale = ( 1.0e100*cos_lat < north_south_scale )
                                ? north_south_scale
                                : north_south_scale/cos_lat;
 
   coord_change.m_xform[0][0] = east_west_scale;
-  coord_change.m_xform[0][3] = m_earth_basepoint_longitude;
+  coord_change.m_xform[0][3] = m_earth_longitude;
   coord_change.m_xform[1][1] = north_south_scale;
-  coord_change.m_xform[1][3] = m_earth_basepoint_latitude;
+  coord_change.m_xform[1][3] = m_earth_latitude;
   coord_change.m_xform[2][2] = model_to_meters_scale;
-  coord_change.m_xform[3][2] = m_earth_basepoint_elevation;
+  coord_change.m_xform[3][2] = m_earth_elevation_meters;
 
   model_to_earth = coord_change*orient_model;
 
   return rc;
+}
+
+
+ON::EarthCoordinateSystem ON::EarthCoordinateSystemFromUnsigned(
+  unsigned int earth_location_standard_as_unsigned
+)
+{
+  switch (earth_location_standard_as_unsigned)
+  {
+    ON_ENUM_FROM_UNSIGNED_CASE(ON::EarthCoordinateSystem::Unset);
+    ON_ENUM_FROM_UNSIGNED_CASE(ON::EarthCoordinateSystem::GroundLevel);
+    ON_ENUM_FROM_UNSIGNED_CASE(ON::EarthCoordinateSystem::MeanSeaLevel);
+    ON_ENUM_FROM_UNSIGNED_CASE(ON::EarthCoordinateSystem::CenterOfEarth);
+    ON_ENUM_FROM_UNSIGNED_CASE(ON::EarthCoordinateSystem::WGS1984);
+    ON_ENUM_FROM_UNSIGNED_CASE(ON::EarthCoordinateSystem::EGM2008);
+  };
+  ON_ERROR("Invalid earth_location_standard_as_unsigned parameter value");
+  return ON::EarthCoordinateSystem::Unset;
+
+}
+
+void ON_EarthAnchorPoint::SetEarthLocation(
+  ON::EarthCoordinateSystem earth_coordinate_system,
+  const class ON_UnitSystem& elevation_unit_system,
+  double latitude_degrees,
+  double longitude_degrees,
+  double elevation
+)
+{
+  m_earth_coordinate_system = earth_coordinate_system;
+  SetLatitudeAndLongitude(latitude_degrees,longitude_degrees);
+  SetElevation(elevation_unit_system, elevation);
+}
+
+void ON_EarthAnchorPoint::SetEarthLocation(
+  ON::EarthCoordinateSystem earth_coordinate_system,
+  ON::LengthUnitSystem elevation_unit_system,
+  double latitude_degrees,
+  double longitude_degrees,
+  double elevation
+)
+{
+  ON_UnitSystem us(elevation_unit_system);
+  SetEarthLocation(earth_coordinate_system, us, latitude_degrees, longitude_degrees, elevation);
+}
+
+
+ON_3dPoint ON_EarthAnchorPoint::EarthLocation() const
+{
+  return ON_3dPoint(m_earth_latitude, m_earth_longitude, m_earth_elevation_meters);
+}
+
+ON_3dPoint ON_EarthAnchorPoint::EarthLocation(
+  ON_3dPoint unset_location
+) const
+{
+  return (EarthLocationIsSet() ? EarthLocation() : unset_location);
+}
+
+
+double ON_EarthAnchorPoint::Latitude() const
+{
+  return m_earth_latitude;
+}
+
+double ON_EarthAnchorPoint::Latitude(
+  double unset_latitude
+) const
+{
+  return (m_earth_latitude > -360.0 && m_earth_latitude < 360.0) ? m_earth_latitude : unset_latitude;
+}
+
+void ON_EarthAnchorPoint::SetLatitudeAndLongitude(
+  double latitude_degrees,
+  double longitude_degrees
+)
+{
+  const double tol = ON_ZERO_TOLERANCE;
+  const bool bSetLatitude = ON_IsValid(latitude_degrees) && fabs(latitude_degrees) <= 10000.0;
+  const bool bSetLongitude = ON_IsValid(longitude_degrees) && fabs(longitude_degrees) <= 10000.0;
+  double x, y;
+  if (bSetLatitude)
+  {
+    y = latitude_degrees;
+
+    x = 0.0;
+    while (y > 180.0)
+    {
+      x -= 360.0;
+      y = latitude_degrees + x;
+    }
+
+    x = 0.0;
+    while (y < -180.0)
+    {
+      x += 360.0;
+      y = latitude_degrees + x;
+    }
+    if (y != latitude_degrees)
+    {
+      if (fabs(y - 180.0) <= tol)
+        y = 180.0;
+      if (fabs(y + 180.0) <= tol)
+        y = -180.0;
+    }
+
+    if ( bSetLongitude && fabs(y) > 90.0 )
+    {
+      if (y > 90.0)
+        y = 180.0 - y;
+      else
+        y = -180.0 - y;
+      longitude_degrees += 180.0;
+    }
+
+    if (y != latitude_degrees)
+    {
+      if (fabs(y) <= tol)
+        y = 0.0;
+      if (fabs(y - 90.0) <= tol)
+        y = 90.0;
+      else if (fabs(y + 90.0) <= tol)
+        y = -90.0;
+    }
+
+    m_earth_latitude = y;
+  }
+  else
+  {
+    m_earth_latitude = ON_EarthAnchorPoint::Unset.m_earth_latitude;
+  }
+
+  if (bSetLongitude)
+  {
+    y = longitude_degrees;
+
+    x = 0.0;
+    while (y >= 360.0)
+    {
+      x -= 360.0;
+      y = longitude_degrees + x;
+    }
+
+    x = 0.0;
+    while (y <= -360.0)
+    {
+      x += 360.0;
+      y = longitude_degrees + x;
+    }
+
+    if (y != longitude_degrees)
+    {
+      if (fabs(y) <= tol)
+        y = 0.0;
+      if (fabs(y-360.0) <= tol)
+        y = 0.0;
+      else if (fabs(y+360.0) <= tol)
+        y = 0.0;
+    }
+
+    m_earth_longitude = y;
+  }
+  else
+  {
+    m_earth_longitude = ON_EarthAnchorPoint::Unset.m_earth_longitude;
+  }
+}
+
+void ON_EarthAnchorPoint::SetLatitude(
+  double latitude_degrees
+)
+{
+  const double x = m_earth_longitude;
+  SetLatitudeAndLongitude(latitude_degrees, ON_UNSET_VALUE);
+  m_earth_longitude = x;
+}
+
+
+double ON_EarthAnchorPoint::Longitude() const
+{
+  return m_earth_longitude;
+}
+
+double ON_EarthAnchorPoint::Longitude(
+  double unset_longitude
+) const
+{
+  return (m_earth_longitude > -360.0 && m_earth_longitude < 360.0) ? m_earth_longitude : unset_longitude;
+}
+
+  
+void ON_EarthAnchorPoint::SetLongitude(
+  double longitude_degrees
+)
+{
+  const double x = m_earth_latitude;
+  SetLatitudeAndLongitude(ON_UNSET_VALUE, longitude_degrees);
+  m_earth_latitude = x;
+}
+
+
+ON::EarthCoordinateSystem ON_EarthAnchorPoint::EarthCoordinateSystem() const
+{
+  return m_earth_coordinate_system;
+}
+
+void ON_EarthAnchorPoint::SetEarthCoordinateSystem(
+  ON::EarthCoordinateSystem earth_coordinate_system
+)
+{
+  m_earth_coordinate_system = earth_coordinate_system;
+}
+
+double ON_EarthAnchorPoint::ElevationInMeters() const
+{
+  return m_earth_elevation_meters;
+}
+
+double ON_EarthAnchorPoint::Elevation(
+  const class ON_UnitSystem& elevation_unit_system
+  ) const
+{
+  if (ON_IsValid(m_earth_elevation_meters && 0.0 != m_earth_elevation_meters && ON::LengthUnitSystem::Meters != elevation_unit_system.UnitSystem()))
+  {
+    return m_earth_elevation_meters*ON::UnitScale(elevation_unit_system, ON_UnitSystem::Meters);
+  }
+  return m_earth_elevation_meters;
+}
+
+double ON_EarthAnchorPoint::Elevation(
+  ON::LengthUnitSystem elevation_unit_system
+  ) const
+{
+  ON_UnitSystem us(elevation_unit_system);
+  return Elevation(us);
+}
+
+double ON_EarthAnchorPoint::Elevation(
+  const class ON_UnitSystem& elevation_unit_system,
+  double unset_elevation
+) const
+{
+  return ON_IsValid(m_earth_elevation_meters) ? Elevation(elevation_unit_system) : unset_elevation;
+}
+
+double ON_EarthAnchorPoint::Elevation(
+  ON::LengthUnitSystem elevation_unit_system,
+  double unset_elevation
+) const
+{
+  return ON_IsValid(m_earth_elevation_meters) ? Elevation(elevation_unit_system) : unset_elevation;
+}
+
+void ON_EarthAnchorPoint::SetElevation(
+  const class ON_UnitSystem& elevation_unit_system,
+  double elevation
+)
+{
+  if (ON_IsValid(elevation))
+  {
+    if (ON::LengthUnitSystem::Meters == elevation_unit_system.UnitSystem())
+      m_earth_elevation_meters = elevation;
+    else
+      m_earth_elevation_meters = elevation*ON::UnitScale(elevation_unit_system, ON_UnitSystem::Meters);
+  }
+  else
+  {
+    m_earth_elevation_meters = ON_EarthAnchorPoint::Unset.m_earth_elevation_meters;
+  }
+}
+
+void ON_EarthAnchorPoint::SetElevation(
+  ON::LengthUnitSystem elevation_unit_system,
+  double elevation
+)
+{
+  ON_UnitSystem us(elevation_unit_system);
+  SetElevation(us, elevation);
+}
+
+const ON_3dPoint& ON_EarthAnchorPoint::ModelPoint() const
+{
+  return m_model_point;
+}
+
+const ON_3dVector& ON_EarthAnchorPoint::ModelNorth() const
+{
+  return m_model_north;
+}
+
+const ON_3dVector& ON_EarthAnchorPoint::ModelEast() const
+{
+  return m_model_east;
+}
+
+
+void ON_EarthAnchorPoint::SetModelPoint(
+  ON_3dPoint model_point
+)
+{
+  m_model_point = model_point;
+}
+
+void ON_EarthAnchorPoint::SetModelNorth(
+  ON_3dVector model_north
+)
+{
+  m_model_north = model_north;
+}
+
+void ON_EarthAnchorPoint::SetModelEast(
+  ON_3dVector model_east
+)
+{
+  m_model_east = model_east;
+}
+
+void ON_EarthAnchorPoint::SetModelLocation(
+  ON_3dPoint model_point,
+  ON_3dVector model_north,
+  ON_3dVector model_east
+  )
+{
+  SetModelPoint(model_point);
+  SetModelNorth(model_north);
+  SetModelEast(model_east);
 }
 
 
@@ -2718,80 +3726,186 @@ bool ON_EarthAnchorPoint::GetModelToEarthXform(
 // ON_3dmSettings
 //
 
-void ON_3dmSettings::Default()
+void ON_3dmSettings::SetCurrentLayerId(
+  ON_UUID layer_id
+  )
 {
-  // default properties
-  m_model_URL.Destroy();
-  m_model_basepoint.Set(0.0,0.0,0.0);
-  m_earth_anchor_point.Default();
-  m_ModelUnitsAndTolerances = ON_3dmUnitsAndTolerances::DefaultValue;
-  m_PageUnitsAndTolerances = ON_3dmUnitsAndTolerances::DefaultValue;
-  m_RenderMeshSettings.Default();
-  m_CustomRenderMeshSettings.Default();
-
-  m_IO_settings.Default();
-  
-  // 28 Febuary 2003 Dale Lear:
-  //     Add analysis mesh default settings
-  m_AnalysisMeshSettings.DefaultAnalysisMeshParameters();
-
-  m_AnnotationSettings.Default();
-  m_named_cplanes.Empty();
-  m_named_views.Empty();
-  m_views.Empty();
-  m_active_view_id = ON_nil_uuid;
-
-  m_current_layer_index = 0;
-  m_current_font_index = 0;
-  m_current_dimstyle_index = 0;
-
-  m_current_material_index = -1; // -1 = "default" material
-  m_current_material_source = ON::material_from_layer;
-
-  m_current_color.SetRGB(0,0,0);
-  m_current_color_source = ON::color_from_layer;
-
-  m_current_linetype_index = -1;  // -1 = "default" solid line
-  m_current_linetype_source = ON::linetype_from_layer;
-
-  m_current_plot_color = ON_UNSET_COLOR;
-  m_current_plot_color_source = ON::plot_color_from_layer;
-
-  m_current_wire_density = 1;
-  m_RenderSettings.Default();
-  m_GridDefaults.Default();
-
-  m_linetype_display_scale = 1.0;
-
-  m_plugin_list.Destroy();
+  m_current_layer_id = layer_id;
+  m_V5_current_layer_index = ON_UNSET_INT_INDEX;
 }
 
-ON_3dmSettings::ON_3dmSettings()
+void ON_3dmSettings::SetV5CurrentLayerIndex(
+  int V5_current_layer_index
+)
 {
-  Default();
-};
-
-ON_3dmSettings::~ON_3dmSettings()
-{
+  m_V5_current_layer_index = V5_current_layer_index;
 }
 
-ON_3dmIOSettings::ON_3dmIOSettings()
+int ON_3dmSettings::CurrentLayerIndex() const
 {
-  Default();
+  return m_V5_current_layer_index;
 }
 
-void ON_3dmIOSettings::Default()
+ON_UUID ON_3dmSettings::CurrentLayerId() const
 {
-  m_bSaveTextureBitmapsInFile = false;
-  // 7 February 2011 - default changed to 1.
-  //m_idef_link_update = 0;
-  m_idef_link_update = 1;
+  return m_current_layer_id;
+}
+
+void ON_3dmSettings::SetCurrentMaterialId(
+  ON_UUID render_material_id
+  )
+{
+  m_current_render_material_id = render_material_id;
+  m_V5_current_render_material_index = ON_UNSET_INT_INDEX;
+}
+
+int ON_3dmSettings::CurrentMaterialIndex() const
+{
+  return m_V5_current_render_material_index;
+}
+
+ON_UUID ON_3dmSettings::CurrentMaterialId() const
+{
+  return m_current_render_material_id;
+}
+
+
+void ON_3dmSettings::SetCurrentDimensionStyleId(
+  ON_UUID dimension_style_id
+  )
+{
+  m_current_dimension_style_id = dimension_style_id;
+  m_V5_current_dimension_style_index = ON_UNSET_INT_INDEX;
+}
+
+int ON_3dmSettings::CurrentDimensionStyleIndex() const
+{
+  return m_V5_current_dimension_style_index;
+}
+
+ON_UUID ON_3dmSettings::CurrentDimensionStyleId() const
+{
+  return m_current_dimension_style_id;
+}
+
+void ON_3dmSettings::SetCurrentTextStyleId(
+  ON_UUID text_style_id
+  )
+{
+  m_current_text_style_id = text_style_id;
+  m_V5_current_text_style_index = ON_UNSET_INT_INDEX;
+}
+
+int ON_3dmSettings::CurrentTextStyleIndex() const
+{
+  return m_V5_current_text_style_index;
+}
+
+ON_UUID ON_3dmSettings::CurrentTextStyleId() const
+{
+  return m_current_text_style_id;
+}
+
+void ON_3dmSettings::SetCurrentLinePatternId(
+  ON_UUID line_pattern_id
+  )
+{
+  m_current_line_pattern_id = line_pattern_id;
+  m_V5_current_line_pattern_index = ON_UNSET_INT_INDEX;
+}
+
+int ON_3dmSettings::CurrentLinePatternIndex() const
+{
+  return m_V5_current_line_pattern_index;
+}
+
+ON_UUID ON_3dmSettings::CurrentLinePatternId() const
+{
+  return m_current_line_pattern_id;
+}
+
+void ON_3dmSettings::SetCurrentHatchPatternId(
+  ON_UUID hatch_pattern_id
+  )
+{
+  m_current_hatch_pattern_id = hatch_pattern_id;
+}
+
+ON_UUID ON_3dmSettings::CurrentHatchPatternId() const
+{
+  return m_current_hatch_pattern_id;
+}
+
+
+//void ON_3dmSettings::Default()
+//{
+//  // default properties
+//  m_model_URL.Destroy();
+//  m_model_basepoint.Set(0.0,0.0,0.0);
+//  m_earth_anchor_point.Default();
+//  m_ModelUnitsAndTolerances = ON_3dmUnitsAndTolerances::Millimeters;
+//  m_PageUnitsAndTolerances = ON_3dmUnitsAndTolerances::Millimeters;
+//
+//  m_RenderMeshSettings = ON_MeshParameters::DefaultMesh;
+//  m_CustomRenderMeshSettings = ON_MeshParameters::DefaultMesh;
+//  m_AnalysisMeshSettings = ON_MeshParameters::DefaultAnalysisMesh;
+//
+//  m_IO_settings.Default();
+//  
+//  m_AnnotationSettings.Default();
+//  m_named_cplanes.Empty();
+//  m_named_views.Empty();
+//  m_views.Empty();
+//  m_active_view_id = ON_nil_uuid;
+//
+//  m_V5_current_layer_index = ON_UNSET_INT_INDEX;
+//  m_current_layer_id = ON_nil_uuid;
+//
+//  m_V5_current_render_material_index = ON_UNSET_INT_INDEX;
+//  m_current_render_material_id = ON_nil_uuid;
+//
+//
+//  m_V5_current_text_style_index = ON_UNSET_INT_INDEX;
+//  m_current_text_style_id = ON_nil_uuid;
+//
+//  m_V5_current_dimension_style_index = 0;
+//  m_current_dimension_style_id = ON_nil_uuid;
+//
+//  m_current_color.SetRGB(0,0,0);
+//  m_current_color_source = ON::color_from_layer;
+//
+//  m_V5_current_line_pattern_index = ON_UNSET_INT_INDEX;
+//  m_current_line_pattern_id = ON_nil_uuid;
+//
+//  m_current_plot_color = ON_UNSET_COLOR;
+//  m_current_plot_color_source = ON::plot_color_from_layer;
+//
+//  m_current_wire_density = 1;
+//
+//  m_RenderSettings = ON_3dmRenderSettings::Default;
+//
+//  m_GridDefaults.Default();
+//
+//  m_linetype_display_scale = 1.0;
+//
+//  m_plugin_list.Destroy();
+//}
+
+
+ON_MeshParameters::MESH_STYLE ON_3dmSettings::RenderMeshStyle(
+  ON_MeshParameters::MESH_STYLE no_match_found_result
+  ) const
+{
+  return m_RenderMeshSettings.GeometrySettingsRenderMeshStyle(
+     &m_CustomRenderMeshSettings,
+     no_match_found_result
+    );
 }
 
 
 bool ON_3dmIOSettings::Read(ON_BinaryArchive& file)
 {
-  Default();
+  *this = ON_3dmIOSettings::Default;
 
   int major_version = 0;
   int minor_version = 0;
@@ -2950,8 +4064,6 @@ static bool ON_3dmSettings_Read_v1_TCODE_VIEW(ON_BinaryArchive& file, ON_3dmView
           100, // screen_height,
           view.m_vp
           );
-    // keep obsolete view.m_target in sync with view.m_vp.m_target_point
-    view.OBSOLETE_3DM_VIEW_TARGET = view.m_vp.TargetPoint(); 
     break;
   }
 
@@ -3046,7 +4158,7 @@ static bool ON_3dmSettings_Read_v1_TCODE_UNIT_AND_TOLERANCES(
   bool rc = true;
   int v = 0;
   int us = 0;
-  UnitsAndTolerances = ON_3dmUnitsAndTolerances::DefaultValue;
+  UnitsAndTolerances = ON_3dmUnitsAndTolerances::Millimeters;
   if (rc) 
     rc = file.ReadInt( &v ); // should get v = 1
   if (rc) 
@@ -3054,40 +4166,40 @@ static bool ON_3dmSettings_Read_v1_TCODE_UNIT_AND_TOLERANCES(
   switch (us) 
   {
   case 0: // NO_UNIT_SYSTEM:
-    UnitsAndTolerances.m_unit_system.m_unit_system = ON::no_unit_system;
+    UnitsAndTolerances.m_unit_system.SetUnitSystem(ON::LengthUnitSystem::None);
     break;
   case 1: // MICRONS:
-    UnitsAndTolerances.m_unit_system.m_unit_system = ON::microns;
+    UnitsAndTolerances.m_unit_system.SetUnitSystem(ON::LengthUnitSystem::Microns);
     break;
   case 2: // MILLIMETERS:
-    UnitsAndTolerances.m_unit_system.m_unit_system = ON::millimeters;
+    UnitsAndTolerances.m_unit_system.SetUnitSystem(ON::LengthUnitSystem::Millimeters);
     break;
   case 3: // CENTIMETERS:
-    UnitsAndTolerances.m_unit_system.m_unit_system = ON::centimeters;
+    UnitsAndTolerances.m_unit_system.SetUnitSystem(ON::LengthUnitSystem::Centimeters);
     break;
   case 4: // METERS:
-    UnitsAndTolerances.m_unit_system.m_unit_system = ON::meters;
+    UnitsAndTolerances.m_unit_system.SetUnitSystem(ON::LengthUnitSystem::Meters);
     break;
   case 5: // KILOMETERS:
-    UnitsAndTolerances.m_unit_system.m_unit_system = ON::kilometers;
+    UnitsAndTolerances.m_unit_system.SetUnitSystem(ON::LengthUnitSystem::Kilometers);
     break;
   case 6: // MICROINCHES:
-    UnitsAndTolerances.m_unit_system.m_unit_system = ON::microinches;
+    UnitsAndTolerances.m_unit_system.SetUnitSystem(ON::LengthUnitSystem::Microinches);
     break;
   case 7: // MILS:
-    UnitsAndTolerances.m_unit_system.m_unit_system = ON::mils;
+    UnitsAndTolerances.m_unit_system.SetUnitSystem(ON::LengthUnitSystem::Mils);
     break;
   case 8: // INCHES:
-    UnitsAndTolerances.m_unit_system.m_unit_system = ON::inches;
+    UnitsAndTolerances.m_unit_system.SetUnitSystem(ON::LengthUnitSystem::Inches);
     break;
   case 9: // FEET:
-    UnitsAndTolerances.m_unit_system.m_unit_system = ON::feet;
+    UnitsAndTolerances.m_unit_system.SetUnitSystem(ON::LengthUnitSystem::Feet);
     break;
   case 10: // MILES:
-    UnitsAndTolerances.m_unit_system.m_unit_system = ON::miles;
+    UnitsAndTolerances.m_unit_system.SetUnitSystem(ON::LengthUnitSystem::Miles);
     break;
   default: // NO_UNIT_SYSTEM:
-    UnitsAndTolerances.m_unit_system.m_unit_system = ON::no_unit_system;
+    UnitsAndTolerances.m_unit_system.SetUnitSystem(ON::LengthUnitSystem::None);
     break;
   }
   if (rc) rc = file.ReadDouble( &UnitsAndTolerances.m_absolute_tolerance );
@@ -3164,12 +4276,22 @@ static bool ON_3dmSettings_Read_v1_TCODE_VIEWPORT(ON_BinaryArchive& file, ON_3dm
         view.m_trace_image.m_plane.CreateFromFrame(origin,xaxis,yaxis);
         if (rc) rc = file.ReadDouble(&view.m_trace_image.m_width);
         if (rc) rc = file.ReadDouble(&view.m_trace_image.m_height);
-        if (rc) rc = ON_3dmSettings_Read_v1_TCODE_NAME(file,view.m_trace_image.m_bitmap_filename);
+        if (rc)
+        {
+          ON_wString bitmap_filename;
+          rc = ON_3dmSettings_Read_v1_TCODE_NAME(file, bitmap_filename);
+          if (rc) view.m_trace_image.m_image_file_reference.SetFullPath(bitmap_filename,false);
+        }
       }
       break;
       
     case TCODE_VIEWPORT_WALLPAPER:
-      rc = ON_3dmSettings_Read_v1_TCODE_NAME(file,view.m_wallpaper_image.m_bitmap_filename);
+      {
+        ON_wString bitmap_filename;
+        rc = ON_3dmSettings_Read_v1_TCODE_NAME(file, bitmap_filename);
+        if (rc)
+          view.m_wallpaper_image.m_image_file_reference.SetFullPath(bitmap_filename,false);
+      }
       break;
 						
     case TCODE_HIDE_TRACE:
@@ -3184,15 +4306,18 @@ static bool ON_3dmSettings_Read_v1_TCODE_VIEWPORT(ON_BinaryArchive& file, ON_3dm
         view.m_position.m_bMaximized = true;
       break; 
 
-    case TCODE_VIEWPORT_DISPLAY_MODE: // short TCODE with display mode value
-      switch ( big_value ) 
+    case TCODE_VIEWPORT_V1_DISPLAYMODE: // short TCODE with display mode value
+      if ( ON_nil_uuid == view.m_display_mode_id )
       {
-      case 0: // wireframe working mode
-        view.m_display_mode = ON::wireframe_display;
-        break;
-      case 1: // shaded working mode
-        view.m_display_mode = ON::shaded_display;
-        break;
+        switch ( big_value ) 
+        {
+        case 0: // wireframe working mode
+          view.m_display_mode_id = ON_StandardDisplayModeId::Wireframe;
+          break;
+        case 1: // shaded working mode
+          view.m_display_mode_id = ON_StandardDisplayModeId::Shaded;
+          break;
+        }
       }
       break;
 						
@@ -3207,10 +4332,10 @@ static bool ON_3dmSettings_Read_v1_TCODE_VIEWPORT(ON_BinaryArchive& file, ON_3dm
 
 bool ON_3dmSettings::Read_v1( ON_BinaryArchive& file )
 {
-  bool bGotSomething = false;
+  //bool bGotSomething = false;
   bool rc = false;
   // read settings from old version 1 file
-  size_t pos0 = file.CurrentPosition();
+  ON__UINT64 pos0 = file.CurrentPosition();
 
   // need to start at the beginning of the file
   ON__UINT32 tcode;
@@ -3221,12 +4346,15 @@ bool ON_3dmSettings::Read_v1( ON_BinaryArchive& file )
   for ( chunk_count = 0; rc; chunk_count++ )
   {
     rc = file.BeginRead3dmBigChunk( &tcode, &big_value );
-    if ( !rc ) 
+    if (!rc)
+    {
+      rc = true;
       break; // assume we are at the end of the file
+    }
 
     switch(tcode) {
     case TCODE_VIEWPORT:
-      bGotSomething = true;
+      //bGotSomething = true;
       {
         ON_3dmView view;
         rc = ON_3dmSettings_Read_v1_TCODE_VIEWPORT(file, view);
@@ -3236,7 +4364,7 @@ bool ON_3dmSettings::Read_v1( ON_BinaryArchive& file )
       break;
 
     case TCODE_NAMED_CPLANE:
-      bGotSomething = true;
+      //bGotSomething = true;
       {
         ON_3dmConstructionPlane cplane;
         rc = ON_3dmSettings_Read_v1_TCODE_NAMED_CPLANE(file,cplane);
@@ -3246,7 +4374,7 @@ bool ON_3dmSettings::Read_v1( ON_BinaryArchive& file )
       break;
 
     case TCODE_NAMED_VIEW:
-      bGotSomething = true;
+      //bGotSomething = true;
       {
         ON_3dmView view;
         rc = ON_3dmSettings_Read_v1_TCODE_NAMED_VIEW(file, view);
@@ -3256,7 +4384,7 @@ bool ON_3dmSettings::Read_v1( ON_BinaryArchive& file )
       break;
     
     case TCODE_UNIT_AND_TOLERANCES:
-      bGotSomething = true;
+      //bGotSomething = true;
       rc = ON_3dmSettings_Read_v1_TCODE_UNIT_AND_TOLERANCES(file,m_ModelUnitsAndTolerances);
       break;
     }
@@ -3264,8 +4392,10 @@ bool ON_3dmSettings::Read_v1( ON_BinaryArchive& file )
     rc = file.EndRead3dmChunk();
   }
 
-  file.SeekFromStart(pos0);
-  return bGotSomething;
+  if (false == file.SeekFromStart(pos0))
+    rc = false;
+
+  return rc;
 }
 
 bool ON_3dmSettings::Read_v2(ON_BinaryArchive& file )
@@ -3273,6 +4403,8 @@ bool ON_3dmSettings::Read_v2(ON_BinaryArchive& file )
   bool rc = true;
   ON__UINT32 tcode;
   ON__INT64 big_value;
+
+  bool bHave3dmRenderSettings = false;
 
   while(rc) 
   {
@@ -3362,8 +4494,16 @@ bool ON_3dmSettings::Read_v2(ON_BinaryArchive& file )
               rc = false;
             else 
             {
-              ON_3dmView& cplane = m_named_views.AppendNew();
-              rc = cplane.Read(file);
+              ON_3dmView& namedView = m_named_views.AppendNew();
+              rc = namedView.Read(file);
+
+			  //Named views were attached to the named view table without an id.
+			  //the documentation says it will always have one, so this code ensures that the ids are non-nil.
+			  //http://mcneel.myjetbrains.com/youtrack/issue/RH-19520
+			  if (ON_nil_uuid == namedView.m_named_view_id)
+			  {
+				  ON_CreateUuid(namedView.m_named_view_id);
+			  }
             }
             if ( !file.EndRead3dmChunk() )
             {
@@ -3425,7 +4565,8 @@ bool ON_3dmSettings::Read_v2(ON_BinaryArchive& file )
       }
       else
       {
-        m_current_layer_index = (int)big_value;
+        m_V5_current_layer_index = (int)big_value;
+        m_current_layer_id = ON_nil_uuid;
       }
       break;
       
@@ -3437,7 +4578,8 @@ bool ON_3dmSettings::Read_v2(ON_BinaryArchive& file )
       else
       {
         // in archives with opennurbs version >= 200106100
-        m_current_font_index = (int)big_value;
+        m_V5_current_text_style_index = (int)big_value;
+        m_current_text_style_id = ON_nil_uuid;
       }
       break;
       
@@ -3449,16 +4591,18 @@ bool ON_3dmSettings::Read_v2(ON_BinaryArchive& file )
       else
       {
         // in archives with opennurbs version >= 200106100
-        m_current_dimstyle_index = (int)big_value;
+        m_V5_current_dimension_style_index = (int)big_value;
+        m_current_dimension_style_id = ON_nil_uuid;
       }
       break;
       
     case TCODE_SETTINGS_CURRENT_MATERIAL_INDEX:
       {
         int i32 = 0;
-        if (rc) rc = file.ReadInt( &m_current_material_index );
+        if (rc) rc = file.ReadInt( &m_V5_current_render_material_index );
         if (rc) rc = file.ReadInt( &i32 );
         if (rc) m_current_material_source = ON::ObjectMaterialSource(i32);
+        m_current_render_material_id = ON_nil_uuid;
       }
       break;
       
@@ -3483,7 +4627,23 @@ bool ON_3dmSettings::Read_v2(ON_BinaryArchive& file )
       break;
       
     case TCODE_SETTINGS_RENDER:
-      rc = m_RenderSettings.Read(file);
+      rc = m_RenderSettings.Read(file)?true:false;
+      if (rc)
+        bHave3dmRenderSettings = true;
+      break;
+
+      
+    case TCODE_SETTINGS_RENDER_USERDATA:
+      if (bHave3dmRenderSettings)
+      {
+        // 2016-Nov-28 RH-33298 Dale Lear
+        // ON_3dmRenderSettings user data in ON_3dmSettings
+        //   I added support for saving userdata attached to the m_RenderSettings ON_3dmRenderSettings.
+        //   Ideally, the ON_3dmRenderSettings would be read by calling file.ReadObject(), but
+        //   userdata support is being added years after millions of files have been written by calling
+        //   ON_3dmRenderSettings.Write()/Read().
+        rc = file.ReadObjectUserData(m_RenderSettings);
+      }
       break;
 
     case TCODE_SETTINGS_GRID_DEFAULTS:
@@ -3516,7 +4676,8 @@ bool ON_3dmSettings::Read_v2(ON_BinaryArchive& file )
             if (!rc) break;
             m_current_plot_color_source = ON::PlotColorSource(i);
 
-            rc = file.ReadInt(&m_current_linetype_index);
+            m_current_line_pattern_id = ON_nil_uuid;
+            rc = file.ReadInt(&m_V5_current_line_pattern_index);
             if (!rc) break;
 
             rc = file.ReadInt(&i);
@@ -3559,6 +4720,29 @@ bool ON_3dmSettings::Read_v2(ON_BinaryArchive& file )
                       {
                         // 7 June 2006
                         m_CustomRenderMeshSettings.Read(file);
+
+                        if (rc && minor_version >= 7 )
+                        {
+                          // V6 and later files use ids for the "current" table elements.
+                          m_V5_current_layer_index = ON_UNSET_INT_INDEX;
+                          m_V5_current_render_material_index = ON_UNSET_INT_INDEX;
+                          m_V5_current_line_pattern_index = ON_UNSET_INT_INDEX;
+                          m_V5_current_text_style_index = ON_UNSET_INT_INDEX;
+                          m_V5_current_dimension_style_index = ON_UNSET_INT_INDEX;
+                          // 30 September 2015
+                          rc = file.ReadUuid(m_current_layer_id);
+                          if (!rc) break;
+                          rc = file.ReadUuid(m_current_render_material_id);
+                          if (!rc) break;
+                          rc = file.ReadUuid(m_current_line_pattern_id);
+                          if (!rc) break;
+                          rc = file.ReadUuid(m_current_text_style_id);
+                          if (!rc) break;
+                          rc = file.ReadUuid(m_current_dimension_style_id);
+                          if (!rc) break;
+                          rc = file.ReadUuid(m_current_hatch_pattern_id);
+                          if (!rc) break;
+                        }
                       }
                     }
                   }
@@ -3591,7 +4775,7 @@ bool ON_3dmSettings::Read(ON_BinaryArchive& file )
 {
   bool rc = false;
 
-  Default();
+  *this = ON_3dmSettings::Default;
 
   if ( 1 == file.Archive3dmVersion() ) 
   {
@@ -3611,39 +4795,39 @@ static bool ON_3dmSettings_Write_v1_TCODE_UNIT_AND_TOLERANCES(ON_BinaryArchive& 
   bool rc = true;
   int v = 1, us = 0;
   if (rc) rc = file.WriteInt( v ); // v = 1
-  switch (UnitsAndTolerances.m_unit_system.m_unit_system) 
+  switch (UnitsAndTolerances.m_unit_system.UnitSystem()) 
   {
-  case ON::no_unit_system: 
+  case ON::LengthUnitSystem::None: 
     us=0; // NO_UNIT_SYSTEM
     break;
-  case ON::microns: 
+  case ON::LengthUnitSystem::Microns: 
     us=1; // MICRONS
     break;
-  case ON::millimeters:
+  case ON::LengthUnitSystem::Millimeters:
     us=2; // MILLIMETERS
     break;
-  case ON::centimeters:
+  case ON::LengthUnitSystem::Centimeters:
     us=3; // CENTIMETERS
     break;
-  case ON::meters:
+  case ON::LengthUnitSystem::Meters:
     us=4; // METERS
     break;
-  case ON::kilometers:
+  case ON::LengthUnitSystem::Kilometers:
     us=5; // KILOMETERS
     break;
-  case ON::microinches:
+  case ON::LengthUnitSystem::Microinches:
     us=6; // MICROINCHES
     break;
-  case ON::mils:
+  case ON::LengthUnitSystem::Mils:
     us=7; // MILS
     break;
-  case ON::inches:
+  case ON::LengthUnitSystem::Inches:
     us=8; // INCHES
     break;
-  case ON::feet:
+  case ON::LengthUnitSystem::Feet:
     us=9; // FEET
     break;
-  case ON::miles:
+  case ON::LengthUnitSystem::Miles:
     us=10; // MILES
     break;
   default:
@@ -3797,7 +4981,8 @@ bool ON_3dmSettings::Write_v2(ON_BinaryArchive& file) const
 
   // TCODE_SETTINGS_CURRENT_LAYER_INDEX
   if (rc) {
-    rc = file.BeginWrite3dmChunk( TCODE_SETTINGS_CURRENT_LAYER_INDEX, m_current_layer_index );
+    int V5_index = m_V5_current_layer_index >= 0 ? m_V5_current_layer_index : 0;
+    rc = file.BeginWrite3dmChunk( TCODE_SETTINGS_CURRENT_LAYER_INDEX, V5_index );
     if ( !file.EndWrite3dmChunk() )
       rc = false;
   }
@@ -3806,7 +4991,8 @@ bool ON_3dmSettings::Write_v2(ON_BinaryArchive& file) const
   if (rc) {
     rc = file.BeginWrite3dmChunk( TCODE_SETTINGS_CURRENT_MATERIAL_INDEX, 0 );
     if (rc) {
-      rc = file.WriteInt( m_current_material_index );
+      int V5_index = m_V5_current_render_material_index >= 0 ? m_V5_current_render_material_index : -1;
+      rc = file.WriteInt( V5_index );
       i = m_current_material_source;
       if (rc) rc = file.WriteInt( i );
       if ( !file.EndWrite3dmChunk() )
@@ -3837,12 +5023,41 @@ bool ON_3dmSettings::Write_v2(ON_BinaryArchive& file) const
   }
 
   // TCODE_SETTINGS_RENDER
-  if (rc) {
+  if (rc) 
+  {
     rc = file.BeginWrite3dmChunk( TCODE_SETTINGS_RENDER, 0 );
-    if (rc) {
-      rc = m_RenderSettings.Write(file);
+    if (rc) 
+    {
+      rc = m_RenderSettings.Write(file)?true:false;
       if ( !file.EndWrite3dmChunk() )
         rc = false;
+    }
+    if (rc && file.Archive3dmVersion() >= 60 && file.ObjectHasUserDataToWrite(&m_RenderSettings) )
+    {
+      // 2016-Nov-28 RH-33298 Dale Lear
+      // ON_3dmRenderSettings user data in ON_3dmSettings
+      //   I added support for saving userdata attached to the m_RenderSettings ON_3dmRenderSettings.
+      //   Ideally, the ON_3dmRenderSettings would be read by calling file.WriteObject(), but
+      //   userdata support is being added years after millions of files have been written by calling
+      //   ON_3dmRenderSettings.Write()/Read().
+      rc = file.BeginWrite3dmChunk( TCODE_SETTINGS_RENDER_USERDATA, 0 );
+      if(rc) 
+      {
+        rc = file.WriteObjectUserData(m_RenderSettings);
+        // write a "fake" TCODE_OPENNURBS_CLASS_END end of class mark so I can use
+        // ON_BinaryArchive::ReadObjectUserData() to read the m_RenderSettings user data.
+        if ( file.BeginWrite3dmChunk( TCODE_OPENNURBS_CLASS_END, 0 ) ) 
+        {
+          if ( !file.EndWrite3dmChunk() )
+            rc = false;
+        }
+        else
+        {
+          rc = false;
+        }
+        if ( !file.EndWrite3dmChunk() ) // end of TCODE_SETTINGS_RENDER_USERDATA
+          rc = false;
+      }
     }
   }
 
@@ -3868,14 +5083,16 @@ bool ON_3dmSettings::Write_v2(ON_BinaryArchive& file) const
 
   // TCODE_SETTINGS_CURRENT_FONT_INDEX - added 10 June 2002
   if (rc) {
-    rc = file.BeginWrite3dmChunk( TCODE_SETTINGS_CURRENT_FONT_INDEX, m_current_font_index );
+    int V5_index = m_V5_current_text_style_index >= 0 ? m_V5_current_text_style_index : 0;
+    rc = file.BeginWrite3dmChunk( TCODE_SETTINGS_CURRENT_FONT_INDEX, V5_index );
     if ( !file.EndWrite3dmChunk() )
       rc = false;
   }
     
   // TCODE_SETTINGS_CURRENT_DIMSTYLE_INDEX - added 10 June 2002
   if (rc) {
-    rc = file.BeginWrite3dmChunk( TCODE_SETTINGS_CURRENT_DIMSTYLE_INDEX, m_current_dimstyle_index );
+    int V5_index = m_V5_current_dimension_style_index >= 0 ? m_V5_current_dimension_style_index : 0;
+    rc = file.BeginWrite3dmChunk( TCODE_SETTINGS_CURRENT_DIMSTYLE_INDEX, V5_index );
     if ( !file.EndWrite3dmChunk() )
       rc = false;
   }
@@ -3896,7 +5113,8 @@ bool ON_3dmSettings::Write_v2(ON_BinaryArchive& file) const
         // 1.4 - 18 April 2006
         // 1.5 - 21 April 2006
         // 1.6 -  7 June  2006
-        rc = file.Write3dmChunkVersion(1,6);
+        // 1.7 - 30 September 2015
+        rc = file.Write3dmChunkVersion(1,7);
 
         // version 1.0 fields 
         rc = file.WriteDouble( m_linetype_display_scale );
@@ -3908,7 +5126,8 @@ bool ON_3dmSettings::Write_v2(ON_BinaryArchive& file) const
         rc = file.WriteInt(m_current_plot_color_source);
         if (!rc) break;
 
-        rc = file.WriteInt(m_current_linetype_index);
+        int V5_index = m_V5_current_line_pattern_index >= 0 ? m_V5_current_line_pattern_index : -1;
+        rc = file.WriteInt(V5_index);
         if (!rc) break;
 
         rc = file.WriteInt(m_current_linetype_source);
@@ -3946,6 +5165,21 @@ bool ON_3dmSettings::Write_v2(ON_BinaryArchive& file) const
 
         // 7 June 2006 1.6 fields
         rc = m_CustomRenderMeshSettings.Write(file);
+        if (!rc) break;
+
+        // 1.7 - 30 September 2015
+        //  switching from indices to ids
+        rc = file.WriteUuid(m_current_layer_id);
+        if (!rc) break;
+        rc = file.WriteUuid(m_current_render_material_id);
+        if (!rc) break;
+        rc = file.WriteUuid(m_current_line_pattern_id);
+        if (!rc) break;
+        rc = file.WriteUuid(m_current_text_style_id);
+        if (!rc) break;
+        rc = file.WriteUuid(m_current_dimension_style_id);
+        if (!rc) break;
+        rc = file.WriteUuid(m_current_hatch_pattern_id);
         if (!rc) break;
 
         break;
@@ -3987,7 +5221,7 @@ void ON_3dmSettings::Dump( ON_TextLog& dump ) const
 {
   int i;
 
-  const wchar_t* model_URL = m_model_URL;
+  const wchar_t* model_URL = static_cast< const wchar_t* >(m_model_URL);
   if ( model_URL && *model_URL ) 
   {
     dump.Print("Model URL: %ls\n",model_URL);
@@ -4067,13 +5301,24 @@ void ON_3dmSettings::Dump( ON_TextLog& dump ) const
     dump.Print("Current display color source = %d\n",m_current_color_source);
     dump.Print("Current plot color rgb");dump.PrintRGB(m_current_plot_color); dump.Print(":\n");
     dump.Print("Current plot color source = %d\n",m_current_plot_color_source);
-    dump.Print("Current material index = %d\n",m_current_material_index);
+    if ( ON_UNSET_INT_INDEX != m_V5_current_render_material_index)
+      dump.Print("Current V5 material index = %d\n",m_V5_current_render_material_index);
     dump.Print("Current material source = %d\n",m_current_material_source);
-    dump.Print("Current linetype index = %d\n",m_current_linetype_index);
+    if ( ON_UNSET_INT_INDEX != m_V5_current_line_pattern_index)
+      dump.Print("Current V5 linetype index = %d\n",m_V5_current_line_pattern_index);
     dump.Print("Current linetype source = %d\n",m_current_linetype_source);
-    dump.Print("Current layer index = %d\n",m_current_layer_index);
-    dump.Print("Current font index = %d\n",m_current_font_index);
-    dump.Print("Current dimstyle index = %d\n",m_current_dimstyle_index);
+    if ( ON_UNSET_INT_INDEX != m_V5_current_layer_index)
+      dump.Print("Current V5 layer index = %d\n",m_V5_current_layer_index);
+    if (false == dump.IsTextHash())
+    {
+      // The legacy m_V5_current_text_style_index varies
+      // depending on what application writes the file.
+      // It must be ignored when comparing content.
+      if (ON_UNSET_INT_INDEX != m_V5_current_text_style_index)
+        dump.Print("Current font index = %d\n", m_V5_current_text_style_index);
+    }
+    if ( ON_UNSET_INT_INDEX != m_V5_current_dimension_style_index)
+      dump.Print("Current V5 dimstyle index = %d\n",m_V5_current_dimension_style_index);
     dump.Print("Current wire density = %d\n",m_current_wire_density);
     dump.Print("Linetype diaplay scale = %g\n",m_linetype_display_scale);
   }

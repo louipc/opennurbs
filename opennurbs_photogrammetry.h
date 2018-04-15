@@ -68,7 +68,7 @@ public:
   // Camera position unit system
   //
   bool UnitSystemIsSet() const;
-  bool SetUnitSystem( ON::unit_system unit_system );
+  bool SetUnitSystem( ON::LengthUnitSystem unit_system );
   bool SetUnitSystem ( ON_UnitSystem unit_system );
   ON_UnitSystem UnitSystem() const;
   bool GetUnitSystem( ON_UnitSystem& unit_system ) const;

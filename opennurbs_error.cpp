@@ -16,6 +16,15 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
+
 // openNURBS Geometry Library Errors and Warnings
 //
 //   If an error condition occurs during a openNURBS Geometry Library
@@ -31,16 +40,23 @@
 //   ON_Warning()
 //
 
+#define ON_MAX_ERROR_MESSAGE_COUNT 50
+
 static int ON_ERROR_COUNT = 0;
 static int ON_WARNING_COUNT = 0;
 static int ON_MATH_ERROR_COUNT = 0;
-static int ON_DEBUG_ERROR_MESSAGE_OPTION = 0; 
+
+// 0 = no break
+// 1 = break on errors, warnings, and asserts
+
+
+static int ON_DEBUG_ERROR_MESSAGE_OPTION = 0;
+
 
 int ON_GetErrorCount(void)
 {
   return ON_ERROR_COUNT;	
 }	
-
 
 int ON_GetWarningCount(void)
 {
@@ -51,6 +67,7 @@ int ON_GetMathErrorCount(void)
 {
   return ON_MATH_ERROR_COUNT;	
 }	
+
 
 int ON_GetDebugErrorMessage(void)
 {
@@ -63,13 +80,6 @@ void ON_EnableDebugErrorMessage( int bEnableDebugErrorMessage )
   ON_DEBUG_ERROR_MESSAGE_OPTION = bEnableDebugErrorMessage ? 1 : 0;
 }
 
-// The sMessage[] string is used by ON_Error() and ON_Warning() 
-// to hold the message.  The static function ON_FormatMessage() 
-// is used to do most of the actual formatting.  
-
-#define MAX_MSG_LENGTH 2048
-static char sMessage[MAX_MSG_LENGTH];
-static bool ON_FormatMessage(const char*, va_list );
 
 void ON_MathError( 
         const char* sModuleName,
@@ -79,20 +89,30 @@ void ON_MathError(
 {
   ON_MATH_ERROR_COUNT++; // <- Good location for a debugger breakpoint.
 
-  if ( !sModuleName)
+  if ( 0 == sModuleName)
     sModuleName = "";
-  if ( !sErrorType )
+  if ( 0 == sErrorType )
     sErrorType = "";
-  if ( !sFunctionName )
+  if ( 0 == sFunctionName )
     sFunctionName = "";
 
-  ON_Error(__FILE__,__LINE__,
-           "Math library or floating point ERROR # %d module=%s type=%s function=%s",
-           ON_MATH_ERROR_COUNT, 
-           sModuleName, // rhino.exe, opennurbs.dll, etc.
-           sErrorType,   
-           sFunctionName 
-           );
+  if ( 0 != sModuleName[0] || 0 != sErrorType[0] || 0 != sFunctionName[0] )
+  {
+    ON_ErrorEx(__FILE__,__LINE__,sFunctionName,
+              "Math library or floating point ERROR # %d module=%s type=%s function=%s",
+              ON_MATH_ERROR_COUNT, 
+              sModuleName, // rhino.exe, opennurbs.dll, etc.
+              sErrorType,   
+              sFunctionName
+              );
+  }
+  else
+  {
+    ON_ErrorEx(__FILE__,__LINE__,sFunctionName,
+              "Math library or floating point ERROR # %d",
+              ON_MATH_ERROR_COUNT
+              );
+  }
 }	
 
 static void ON_IncrementErrorCount()
@@ -110,226 +130,226 @@ bool ON_IsNotValid()
   return false;
 }
 
-static bool ON_PrintErrorHeader(
+static void ON_PrintErrorMessage(
     int type, // 0 = warning, 1 = error, 2 = assert
     const char* sFileName, 
     int line_number,
-    const char* sFunctionName
+    const char* sFunctionName,
+    const char* sFormat,
+    va_list args
     )
 {
-  bool bPrintMessage = false;
-  sMessage[0] = 0;
+  if ( 0 == ON_DEBUG_ERROR_MESSAGE_OPTION )
+    return;
 
-#if defined(ON_COMPILER_MSC)
-  // use sprintf_s() ...
-  size_t sz = (sizeof(sMessage)/sizeof(sMessage[0])) - 1;
-#define ON_SPRINTF4(s,count,fname,ln,func) sprintf_s(sMessage,sz,s,count,fname,ln,func)
-#define ON_SPRINTF3(s,count,fname,ln) sprintf_s(sMessage,sz,s,count,fname,ln)
-#define ON_SPRINTF1(s,count) sprintf_s(sMessage,sz,s,count)
-#else
-  // use sprintf() ...
-#define ON_SPRINTF4(s,count,fname,ln,func) sprintf(sMessage,s,count,fname,ln,func)
-#define ON_SPRINTF3(s,count,fname,ln) sprintf(sMessage,s,count,fname,ln)
-#define ON_SPRINTF1(s,count) sprintf(sMessage,s,count)
+  if ( 0 == type )
+  {
+    // too many warnings - warning messages are suppressed
+    if ( ON_WARNING_COUNT > ON_MAX_ERROR_MESSAGE_COUNT )
+      return;
+  }
+  else if ( 1 == type || 2 == type )
+  {
+    // too many errors, asserts, etc. - error messages are suppressed
+    if ( ON_ERROR_COUNT > ON_MAX_ERROR_MESSAGE_COUNT )
+      return;
+  }
+  else
+  {
+    return;
+  }
+
+  
+  char buffer[1024];
+  const size_t buffer_capacity = sizeof(buffer)/sizeof(buffer[0]);
+  buffer[0] = 0;
+  buffer[buffer_capacity-1] = 0;
+
+  if ( 0 == type )
+  {
+    if ( ON_WARNING_COUNT < ON_MAX_ERROR_MESSAGE_COUNT )
+    {
+      if (0 == sFileName )
+        sFileName = "";
+      if ( sFunctionName && sFunctionName[0] )
+        ON_String::FormatIntoBuffer( buffer, buffer_capacity, "openNURBS WARNING # %d %s.%d %s()",ON_WARNING_COUNT,sFileName,line_number,sFunctionName);
+      else
+        ON_String::FormatIntoBuffer( buffer, buffer_capacity, "openNURBS WARNING # %d %s.%d",ON_WARNING_COUNT,sFileName,line_number);
+    }
+    else if ( ON_WARNING_COUNT == ON_MAX_ERROR_MESSAGE_COUNT )
+    {
+      ON_String::FormatIntoBuffer( buffer, buffer_capacity, "openNURBS WARNING # %d ... Suspending warning messages." ,ON_WARNING_COUNT);
+      sFormat = 0;
+    }
+  }
+  else
+  {
+    if ( ON_ERROR_COUNT < ON_MAX_ERROR_MESSAGE_COUNT )
+    {
+      if (0 == sFileName )
+        sFileName = "";
+      if ( sFunctionName && sFunctionName[0] )
+        ON_String::FormatIntoBuffer( buffer, buffer_capacity, "openNURBS ERROR # %d %s.%d %s()",ON_ERROR_COUNT,sFileName,line_number,sFunctionName);
+      else
+        ON_String::FormatIntoBuffer( buffer, buffer_capacity, "openNURBS ERROR # %d %s.%d",ON_ERROR_COUNT,sFileName,line_number);
+    }
+    else if ( ON_ERROR_COUNT == ON_MAX_ERROR_MESSAGE_COUNT )
+    {
+      ON_String::FormatIntoBuffer( buffer, buffer_capacity, "openNURBS ERROR # %d ... Suspending error messages.", ON_ERROR_COUNT );
+      sFormat = 0;
+    }
+  }
+
+  if ( (0 != buffer[0] && 0 == buffer[buffer_capacity-1]) )
+  {
+    if ( 0 != sFormat && 0 != sFormat[0] )
+    {
+      for ( size_t i = 0; i < buffer_capacity; i++ )
+      {
+        if ( 0 == buffer[i])
+        {
+          if ( i + 32 < buffer_capacity )
+          {
+            buffer[i++] = ':';
+            buffer[i++] = 32; // space
+            buffer[i] = 0;
+            ON_String::FormatVargsIntoBuffer(buffer + i, buffer_capacity-i, sFormat, args );
+          }
+          break;
+        }
+      }
+    }
+    ON_ErrorMessage(type,buffer);
+  }
+}
+
+#if defined(__ANDROID__)
+static void ON_PrintErrorMessage(
+                                 int type, // 0 = warning, 1 = error, 2 = assert
+                                 const char* sFileName,
+                                 int line_number,
+                                 const char* sFunctionName,
+                                 const char* sFormat,
+                                 int empty_args
+                                 )
+{
+  va_list empty_va;
+  ON_PrintErrorMessage(type, sFileName, line_number, sFunctionName, sFormat, empty_va);
+}
 #endif
 
-  if ( ON_DEBUG_ERROR_MESSAGE_OPTION )
+void ON_VARGS_FUNC_CDECL ON_Error(
+  const char* sFileName, 
+  int line_number,
+  const char* sFormat,
+  ...)
+{
+  ON_IncrementErrorCount();
+
+  if ( 0 != ON_DEBUG_ERROR_MESSAGE_OPTION && ON_ERROR_COUNT <= ON_MAX_ERROR_MESSAGE_COUNT )
   {
-    if ( 0 == type )
+    if (sFormat && sFormat[0]) 
     {
-      if ( ON_WARNING_COUNT < 50 )
-      {
-        if (0 == sFileName )
-          sFileName = "";
-        if ( sFunctionName && sFunctionName[0] )
-          ON_SPRINTF4("openNURBS WARNING # %d %s.%d %s(): ",ON_WARNING_COUNT,sFileName,line_number,sFunctionName);
-        else
-          ON_SPRINTF3("openNURBS WARNING # %d %s.%d ",ON_WARNING_COUNT,sFileName,line_number);
-        bPrintMessage = true;
-      }
-      else if ( 50 == ON_ERROR_COUNT )
-      {
-        ON_SPRINTF1("openNURBS WARNING # %d - Too many warnings.  No more printed messages.",ON_WARNING_COUNT);
-        bPrintMessage = true;
-      }
+      va_list args;
+      va_start(args, sFormat);
+      ON_PrintErrorMessage(1,sFileName,line_number,0,sFormat,args);
+      va_end(args);
     }
-    else if ( 1 == type || 2 == type )
+    else
     {
-      if ( ON_ERROR_COUNT < 50 )
-      {
-        if (0 == sFileName )
-          sFileName = "";
-        if ( sFunctionName && sFunctionName[0] )
-          ON_SPRINTF4("openNURBS ERROR # %d %s.%d %s(): ",ON_ERROR_COUNT,sFileName,line_number,sFunctionName);
-        else
-          ON_SPRINTF3("openNURBS ERROR # %d %s.%d ",ON_ERROR_COUNT,sFileName,line_number);
-        bPrintMessage = true;
-      }
-      else if ( 50 == ON_ERROR_COUNT )
-      {
-        ON_SPRINTF1("openNURBS ERROR # %d - Too many errors.  No more printed messages.",ON_ERROR_COUNT);
-        bPrintMessage = true;
-      }
+      ON_PrintErrorMessage(1,sFileName,line_number,0,0,0);
     }
   }
 
-#undef ON_SPRINTF4
-#undef ON_SPRINTF3
-#undef ON_SPRINTF1
-
-  return bPrintMessage;
 }
 
-void ON_Error(const char* sFileName, int line_number, 
+void ON_VARGS_FUNC_CDECL ON_ErrorEx(const char* sFileName, int line_number, const char* sFunctionName,
               const char* sFormat, ...)
 {
   ON_IncrementErrorCount();
 
-  bool bPrintMessage = ON_PrintErrorHeader(1,sFileName,line_number,0);
-
-  if ( bPrintMessage )
+  if ( 0 != ON_DEBUG_ERROR_MESSAGE_OPTION && ON_ERROR_COUNT <= ON_MAX_ERROR_MESSAGE_COUNT )
   {
     if (sFormat && sFormat[0]) 
     {
-      // append formatted error message to sMessage[]
       va_list args;
       va_start(args, sFormat);
-      bPrintMessage = ON_FormatMessage(sFormat,args);
+      ON_PrintErrorMessage(1,sFileName,line_number,sFunctionName,sFormat,args);
       va_end(args);
     }
-    if ( bPrintMessage )
-      ON_ErrorMessage(1,sMessage);
-  }
-}
-
-void ON_ErrorEx(const char* sFileName, int line_number, const char* sFunctionName, 
-              const char* sFormat, ...)
-{
-  ON_IncrementErrorCount();
-
-  bool bPrintMessage = ON_PrintErrorHeader(1,sFileName,line_number,sFunctionName);
-
-  if ( bPrintMessage )
-  {
-    if (sFormat && sFormat[0]) 
+    else
     {
-      // append formatted error message to sMessage[]
-      va_list args;
-      va_start(args, sFormat);
-      bPrintMessage = ON_FormatMessage(sFormat,args);
-      va_end(args);
+      ON_PrintErrorMessage(1,sFileName,line_number,sFunctionName,0,0);
     }
-    if ( bPrintMessage )
-      ON_ErrorMessage(1,sMessage);
   }
+
 }
 
-void ON_Warning(const char* sFileName, int line_number, 
+void ON_VARGS_FUNC_CDECL ON_Warning(const char* sFileName, int line_number,
                 const char* sFormat, ...)
 {
   ON_IncrementWarningCount();
 
-  bool bPrintMessage = ON_PrintErrorHeader(0,sFileName,line_number,0);
-
-  if ( bPrintMessage )
+  if ( 0 != ON_DEBUG_ERROR_MESSAGE_OPTION && ON_WARNING_COUNT <= ON_MAX_ERROR_MESSAGE_COUNT )
   {
     if (sFormat && sFormat[0]) 
     {
-      // append formatted error message to sMessage[]
       va_list args;
       va_start(args, sFormat);
-      bPrintMessage = ON_FormatMessage(sFormat,args);
+      ON_PrintErrorMessage(0,sFileName,line_number,0,sFormat,args);
       va_end(args);
     }
-    if ( bPrintMessage )
-      ON_ErrorMessage(0,sMessage);
+    else
+    {
+      ON_PrintErrorMessage(0,sFileName,line_number,0,0,0);
+    }
   }
+
 }
 
 
-void ON_WarningEx(const char* sFileName, int line_number, const char* sFunctionName,
+void ON_VARGS_FUNC_CDECL ON_WarningEx(const char* sFileName, int line_number, const char* sFunctionName,
                 const char* sFormat, ...)
 {
   ON_IncrementWarningCount();
 
-  bool bPrintMessage = ON_PrintErrorHeader(0,sFileName,line_number,sFunctionName);
-
-  if ( bPrintMessage )
+  if ( 0 != ON_DEBUG_ERROR_MESSAGE_OPTION && ON_WARNING_COUNT <= ON_MAX_ERROR_MESSAGE_COUNT )
   {
     if (sFormat && sFormat[0]) 
     {
-      // append formatted error message to sMessage[]
       va_list args;
       va_start(args, sFormat);
-      bPrintMessage = ON_FormatMessage(sFormat,args);
+      ON_PrintErrorMessage(0,sFileName,line_number,sFunctionName,sFormat,args);
       va_end(args);
     }
-    if ( bPrintMessage )
-      ON_ErrorMessage(0,sMessage);
-  }
-}
-
-void ON_Assert(int bCondition,
-               const char* sFileName, int line_number, 
-               const char* sFormat, ...)
-{
-  if ( !bCondition ) 
-  {
-    ON_IncrementErrorCount();
-
-    bool bPrintMessage = ON_PrintErrorHeader(2,sFileName,line_number,0);
-
-    if ( bPrintMessage )
+    else
     {
-      if (sFormat && sFormat[0]) 
-      {
-        // append formatted error message to sMessage[]
-        va_list args;
-        va_start(args, sFormat);
-        bPrintMessage = ON_FormatMessage(sFormat,args);
-        va_end(args);
-      }
-      if ( bPrintMessage )
-        ON_ErrorMessage(2,sMessage);
+      ON_PrintErrorMessage(0,sFileName,line_number,sFunctionName,0,0);
     }
   }
+
 }
 
-void ON_AssertEx(int bCondition,
+void ON_VARGS_FUNC_CDECL ON_REMOVE_ASAP_AssertEx(int bCondition,
                const char* sFileName, int line_number, const char* sFunctionName,
                const char* sFormat, ...)
 {
-  if ( !bCondition ) 
+  if ( false == bCondition)
   {
-    ON_IncrementErrorCount();
-
-    bool bPrintMessage = ON_PrintErrorHeader(2,sFileName,line_number,sFunctionName);
-
-    if ( bPrintMessage )
+    if ( 0 != ON_DEBUG_ERROR_MESSAGE_OPTION && ON_ERROR_COUNT <= ON_MAX_ERROR_MESSAGE_COUNT )
     {
       if (sFormat && sFormat[0]) 
       {
-        // append formatted error message to sMessage[]
         va_list args;
         va_start(args, sFormat);
-        bPrintMessage = ON_FormatMessage(sFormat,args);
+        ON_PrintErrorMessage(1,sFileName,line_number,sFunctionName,sFormat,args);
         va_end(args);
       }
-      if ( bPrintMessage )
-        ON_ErrorMessage(2,sMessage);
+      else
+      {
+        ON_PrintErrorMessage(1,sFileName,line_number,sFunctionName,0,0);
+      }
     }
   }
 }
 
-static bool ON_FormatMessage(const char* format, va_list args)
-{
-  // appends formatted message to sMessage[]
-  int len = ((int)strlen(sMessage));
-  if (len < 0 )
-    return false;
-  if (MAX_MSG_LENGTH-1-len < 2)
-    return false;
-  sMessage[MAX_MSG_LENGTH-1] = 0;
-  on_vsnprintf(sMessage+len, MAX_MSG_LENGTH-1-len, format, args);
-  return true;
-}	

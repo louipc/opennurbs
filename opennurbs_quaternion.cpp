@@ -16,6 +16,14 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
 ON_Quaternion ON_CrossProduct( const ON_Quaternion& p, const ON_Quaternion& q)
 {
   return ON_Quaternion(0.0, p.c*q.d - p.d*q.c, p.d*q.b - p.b*q.d, p.b*q.c - p.c*q.d);
@@ -270,14 +278,14 @@ bool ON_Quaternion::GetRotation(ON_Xform& xform) const
   }
   else if ( IsZero() )
   {
-    xform.Zero();
+    xform = ON_Xform::Zero4x4;
     rc = false;
   }
   else
   {
     // something is seriously wrong
     ON_ERROR("ON_Quaternion::GetRotation(ON_Xform) quaternion is invalid");
-    xform.Identity();
+    xform = ON_Xform::IdentityTransformation;
     rc = false;
   }
 

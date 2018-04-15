@@ -23,16 +23,8 @@
 #if !defined(OPENNURBS_CURVE_INC_)
 #define OPENNURBS_CURVE_INC_
 
-class ON_Curve;
-class ON_Plane;
-class ON_Arc;
-class ON_NurbsCurve;
-class ON_CurveTree;
-
-
 ////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////
-
 
 class ON_CLASS ON_MeshCurveParameters
 {
@@ -85,34 +77,46 @@ public:
   double m_reserved4;
 };
 
+/*
+Description:
+  ON_Curve is a pure virtual class for curve objects
+  - Any class derived from ON_Curve should have a
+      ON_OBJECT_DECLARE(ON_...);
+    at the beginning of its class definition and a
+      ON_OBJECT_IMPLEMENT( ON_..., ON_Curve );
+    in a .cpp file.
+Example:
+  - See the definition of ON_NurbsCurve for an example.
+*/
 class ON_CLASS ON_Curve : public ON_Geometry
 {
-  // pure virtual class for curve objects
-
-  // Any object derived from ON_Curve should have a
-  //   ON_OBJECT_DECLARE(ON_...);
-  // as the last line of its class definition and a
-  //   ON_OBJECT_IMPLEMENT( ON_..., ON_baseclass );
-  // in a .cpp file.
-  //
-  // See the definition of ON_Object for details.
   ON_OBJECT_DECLARE(ON_Curve);
 
 public:
-  // virtual ON_Object::DestroyRuntimeCache override
-  void DestroyRuntimeCache( bool bDelete = true );
-
-public:
-  ON_Curve();
+  ON_Curve() ON_NOEXCEPT;
+  virtual ~ON_Curve();
   ON_Curve(const ON_Curve&);
   ON_Curve& operator=(const ON_Curve&);
-  virtual ~ON_Curve();
+
+#if defined(ON_HAS_RVALUEREF)
+  // rvalue copy constructor
+  ON_Curve( ON_Curve&& ) ON_NOEXCEPT;
+
+  // The rvalue assignment operator calls ON_Object::operator=(ON_Object&&)
+  // which could throw exceptions.  See the implementation of
+  // ON_Object::operator=(ON_Object&&) for details.
+  ON_Curve& operator=( ON_Curve&& );
+#endif
+
+public:
+  // virtual ON_Object::DestroyRuntimeCache override
+  void DestroyRuntimeCache( bool bDelete = true ) override;
 
   // virtual ON_Object::SizeOf override
-  unsigned int SizeOf() const;
+  unsigned int SizeOf() const override;
 
   // virtual ON_Geometry override
-  bool EvaluatePoint( const class ON_ObjRef& objref, ON_3dPoint& P ) const;
+  bool EvaluatePoint( const class ON_ObjRef& objref, ON_3dPoint& P ) const override;
 
   /*
   Description:
@@ -134,29 +138,29 @@ public:
   //   overrides virtual ON_Object::ObjectType.
   // Returns:
   //   ON::curve_object
-  ON::object_type ObjectType() const;
+  ON::object_type ObjectType() const override;
+
+  // virtual ON_Geometry GetTightBoundingBox override		
+  bool GetTightBoundingBox( class ON_BoundingBox& tight_bbox, bool bGrowBox = false, const class ON_Xform* xform = nullptr ) const override;
 
   /*
-	Description:
-    Get tight bounding box of the curve.
-	Parameters:
-		tight_bbox - [in/out] tight bounding box
-		bGrowBox -[in]	(default=false)			
-      If true and the input tight_bbox is valid, then returned
-      tight_bbox is the union of the input tight_bbox and the 
-      curve's tight bounding box.
-		xform -[in] (default=NULL)
-      If not NULL, the tight bounding box of the transformed
-      curve is calculated.  The curve is not modified.
-	Returns:
-    True if the returned tight_bbox is set to a valid 
-    bounding box.
+  Description:
+    overrides virtual ON_Geometry::Transform().
+    ON_Curve::Transform() calls ON_Geometry::Transform(xform),
+    which calls ON_Object::TransformUserData(xform), and then
+    calls this->DestroyCurveTree().
+  Parameters:
+    xform - [in] transformation to apply to object.
+  Remarks:
+    Classes derived from ON_Curve should call
+    ON_Curve::Transform() to handle user data
+    transformations and curve tree destruction
+    and then transform their definition.
   */
-	bool GetTightBoundingBox( 
-			ON_BoundingBox& tight_bbox, 
-      int bGrowBox = false,
-			const ON_Xform* xform = 0
-      ) const;
+  bool Transform( 
+    const ON_Xform& xform
+    ) override;
+
 
   ////////////////////////////////////////////////////////////////////
   // curve interface
@@ -168,7 +172,7 @@ public:
   //   t1 - [out] domain is [*t0, *t1]
   // Returns:
   //   true if successful.
-  ON_BOOL32 GetDomain( double* t0, double* t1 ) const;
+  bool GetDomain( double* t0, double* t1 ) const;
 
   // Returns:
   //   domain of the curve.
@@ -193,7 +197,7 @@ public:
   // Returns:
   //   true if successful.
   virtual
-  ON_BOOL32 SetDomain( 
+  bool SetDomain( 
         double t0, 
         double t1 
         );
@@ -210,7 +214,7 @@ public:
     true if successful.
   */
   virtual 
-  ON_BOOL32 ChangeClosedCurveSeam( 
+  bool ChangeClosedCurveSeam( 
             double t 
             );
 
@@ -245,7 +249,7 @@ public:
   // Returns:
   //   true if successful
   virtual
-  ON_BOOL32 GetSpanVector(
+  bool GetSpanVector(
         double* knots
         ) const = 0; // 
 
@@ -255,7 +259,7 @@ public:
   // The "side" parameter determines which span is selected when t is at the
   // end of a span.
   virtual
-  ON_BOOL32 GetSpanVectorIndex(
+  bool GetSpanVectorIndex(
         double t ,               // [IN] t = evaluation parameter
         int side,                // [IN] side 0 = default, -1 = from below, +1 = from above
         int* span_vector_index,  // [OUT] span vector index
@@ -276,7 +280,7 @@ public:
   // Returns:
   //   degree
   virtual 
-  ON_BOOL32 GetParameterTolerance( // returns tminus < tplus: parameters tminus <= s <= tplus
+  bool GetParameterTolerance( // returns tminus < tplus: parameters tminus <= s <= tplus
          double t,       // [IN] t = parameter in domain
          double* tminus, // [OUT] tminus
          double* tplus   // [OUT] tplus
@@ -291,7 +295,7 @@ public:
   //   and the maximum distance from any point on the curve to
   //   the line segment connecting the curve's ends is <= tolerance.
   virtual
-  ON_BOOL32 IsLinear(
+  bool IsLinear(
         double tolerance = ON_ZERO_TOLERANCE 
         ) const;
 
@@ -302,9 +306,9 @@ public:
     all of whose segments are some form of polyline.  IsPolyline tests
     a curve to see if it can be represented as a polyline.
   Parameters:
-    pline_points - [out] if not NULL and true is returned, then the
+    pline_points - [out] if not nullptr and true is returned, then the
         points of the polyline form are returned here.
-    t - [out] if not NULL and true is returned, then the parameters of
+    t - [out] if not nullptr and true is returned, then the parameters of
         the polyline points are returned here.
   Returns:
     @untitled table
@@ -313,15 +317,15 @@ public:
   */
   virtual
   int IsPolyline(
-        ON_SimpleArray<ON_3dPoint>* pline_points = NULL,
-        ON_SimpleArray<double>* pline_t = NULL
+        ON_SimpleArray<ON_3dPoint>* pline_points = nullptr,
+        ON_SimpleArray<double>* pline_t = nullptr
         ) const;
 
   // Description:
   //   Test a curve to see if the locus if its points is an arc or circle.
   // Parameters:
-  //   plane - [in] if not NULL, test is performed in this plane
-  //   arc - [out] if not NULL and true is returned, then arc parameters
+  //   plane - [in] if not nullptr, test is performed in this plane
+  //   arc - [out] if not nullptr and true is returned, then arc parameters
   //               are filled in
   //   tolerance - [in] tolerance to use when checking
   // Returns:
@@ -329,9 +333,9 @@ public:
   //   specified points.  If ON_Arc.m_angle is 2.0*ON_PI, then the curve
   //   is a circle.
   virtual
-  ON_BOOL32 IsArc(
-        const ON_Plane* plane = NULL,
-        ON_Arc* arc = NULL,
+  bool IsArc(
+        const ON_Plane* plane = nullptr,
+        ON_Arc* arc = nullptr,
         double tolerance = ON_ZERO_TOLERANCE
         ) const;
 
@@ -340,18 +344,18 @@ public:
   Parameters:
     t - [in] curve parameter
     plane - [in]
-      if not NULL, test is performed in this plane
+      if not nullptr, test is performed in this plane
     arc - [out]
-      if not NULL and true is returned, then arc parameters
+      if not nullptr and true is returned, then arc parameters
        are filled in
     tolerance - [in]
       tolerance to use when checking
     t0 - [out]
-      if not NULL, and then *t0 is set to the parameter
+      if not nullptr, and then *t0 is set to the parameter
       at the start of the G2 curve segment that was
       tested.
     t1 - [out]
-      if not NULL, and then *t0 is set to the parameter
+      if not nullptr, and then *t0 is set to the parameter
       at the start of the G2 curve segment that was
       tested.
   Returns:
@@ -368,23 +372,23 @@ public:
 
   virtual
   bool IsEllipse(
-      const ON_Plane* plane = NULL,
-      ON_Ellipse* ellipse = NULL,
+      const ON_Plane* plane = nullptr,
+      ON_Ellipse* ellipse = nullptr,
       double tolerance = ON_ZERO_TOLERANCE
       ) const;
 
   // Description:
   //   Test a curve to see if it is planar.
   // Parameters:
-  //   plane - [out] if not NULL and true is returned,
+  //   plane - [out] if not nullptr and true is returned,
   //                 the plane parameters are filled in.
   //   tolerance - [in] tolerance to use when checking
   // Returns:
   //   true if there is a plane such that the maximum distance from
   //   the curve to the plane is <= tolerance.
   virtual
-  ON_BOOL32 IsPlanar(
-        ON_Plane* plane = NULL,
+  bool IsPlanar(
+        ON_Plane* plane = nullptr,
         double tolerance = ON_ZERO_TOLERANCE
         ) const;
 
@@ -397,7 +401,7 @@ public:
   //   true if the maximum distance from the curve to the
   //   test_plane is <= tolerance.
   virtual
-  ON_BOOL32 IsInPlane(
+  bool IsInPlane(
         const ON_Plane& test_plane,
         double tolerance = ON_ZERO_TOLERANCE
         ) const = 0;
@@ -429,14 +433,14 @@ public:
   // Returns:
   //   true if the curve is closed.
   virtual 
-  ON_BOOL32 IsClosed() const;
+  bool IsClosed() const;
 
   // Description:
   //   Test a curve to see if it is periodic.
   // Returns:
   //   true if the curve is closed and at least C2 at the start/end.
   virtual 
-  ON_BOOL32 IsPeriodic() const;
+  bool IsPeriodic() const;
 
   /*
   Description:
@@ -456,7 +460,7 @@ public:
     hint - [in/out] if GetNextDiscontinuity will be called 
        repeatedly, passing a "hint" with initial value *hint=0
        will increase the speed of the search.       
-    dtype - [out] if not NULL, *dtype reports the kind of 
+    dtype - [out] if not nullptr, *dtype reports the kind of 
         discontinuity found at *t.  A value of 1 means the first 
         derivative or unit tangent was discontinuous.  A value 
         of 2 means the second derivative or curvature was 
@@ -464,15 +468,15 @@ public:
         closed, a locus discontinuity test was applied, and
         t1 is at the start of end of the curve.
         If 'c', the type of continuity to test for 
-        is ON::Gsmooth_continuous and the curvature changes 
+        is ON::continuity::Gsmooth_continuous and the curvature changes 
         from curved to 0 or 0 to curved and there is no 
         tangency kink dtype is returns 3
     cos_angle_tolerance - [in] default = cos(1 degree) Used only
-        when c is ON::G1_continuous or ON::G2_continuous.  If the
+        when c is ON::continuity::G1_continuous or ON::continuity::G2_continuous.  If the
         cosine of the angle between two tangent vectors is 
         <= cos_angle_tolerance, then a G1 discontinuity is reported.
     curvature_tolerance - [in] (default = ON_SQRT_EPSILON) Used 
-        only when c is ON::G2_continuous.  If K0 and K1 are 
+        only when c is ON::continuity::G2_continuous.  If K0 and K1 are 
         curvatures evaluated from above and below and 
         |K0 - K1| > curvature_tolerance, then a curvature 
         discontinuity is reported.
@@ -498,8 +502,8 @@ public:
                   double t0,
                   double t1,
                   double* t,
-                  int* hint=NULL,
-                  int* dtype=NULL,
+                  int* hint=nullptr,
+                  int* dtype=nullptr,
                   double cos_angle_tolerance=ON_DEFAULT_ANGLE_TOLERANCE_COSINE,
                   double curvature_tolerance=ON_SQRT_EPSILON
                   ) const;
@@ -519,16 +523,16 @@ public:
     d2_tolerance - [in] if the difference between two second derivatives is
         greater than d2_tolerance, then the curve is not C2.
     cos_angle_tolerance - [in] default = cos(1 degree) Used only when
-        c is ON::G1_continuous or ON::G2_continuous.  If the cosine
+        c is ON::continuity::G1_continuous or ON::continuity::G2_continuous.  If the cosine
         of the angle between two tangent vectors 
         is <= cos_angle_tolerance, then a G1 discontinuity is reported.
     curvature_tolerance - [in] (default = ON_SQRT_EPSILON) Used only when
-        c is ON::G2_continuous or ON::Gsmooth_continuous.  
-        ON::G2_continuous:
+        c is ON::continuity::G2_continuous or ON::continuity::Gsmooth_continuous.  
+        ON::continuity::G2_continuous:
           If K0 and K1 are curvatures evaluated
           from above and below and |K0 - K1| > curvature_tolerance,
           then a curvature discontinuity is reported.
-        ON::Gsmooth_continuous:
+        ON::continuity::Gsmooth_continuous:
           If K0 and K1 are curvatures evaluated from above and below
           and the angle between K0 and K1 is at least twice angle tolerance
           or ||K0| - |K1|| > (max(|K0|,|K1|) > curvature_tolerance,
@@ -541,7 +545,7 @@ public:
   bool IsContinuous(
     ON::continuity c,
     double t, 
-    int* hint = NULL,
+    int* hint = nullptr,
     double point_tolerance=ON_ZERO_TOLERANCE,
     double d1_tolerance=ON_ZERO_TOLERANCE,
     double d2_tolerance=ON_ZERO_TOLERANCE,
@@ -557,7 +561,7 @@ public:
   // Remarks:
   //   If reveresed, the domain changes from [a,b] to [-b,-a]
   virtual 
-  ON_BOOL32 Reverse()=0;
+  bool Reverse()=0;
 
 
   /*
@@ -569,14 +573,16 @@ public:
     true if successful.
   Remarks:
     Some end points cannot be moved.  Be sure to check return
-    code.
+    code. 
+    ON_Curve::SetStartPoint() returns true if start_point is the same as the start of the curve,
+    false otherwise. 
   See Also:
     ON_Curve::SetEndPoint
     ON_Curve::PointAtStart
     ON_Curve::PointAtEnd
   */
   virtual
-  ON_BOOL32 SetStartPoint(
+  bool SetStartPoint(
           ON_3dPoint start_point
           );
 
@@ -590,13 +596,15 @@ public:
   Remarks:
     Some end points cannot be moved.  Be sure to check return
     code.
+    ON_Curve::SetEndPoint() returns true if end_point is the same as the end of the curve,
+    false otherwise. 
   See Also:
     ON_Curve::SetStartPoint
     ON_Curve::PointAtStart
     ON_Curve::PointAtEnd
   */
   virtual
-  ON_BOOL32 SetEndPoint(
+  bool SetEndPoint(
           ON_3dPoint end_point
           );
   
@@ -692,7 +700,7 @@ public:
   // See Also:
   //   ON_Curve::PointAt, ON_Curve::TangentAt,
   //   ON_Curve::Ev1Der, Ev2Der
-  ON_BOOL32 FrameAt( double t, ON_Plane& plane) const;
+  bool FrameAt( double t, ON_Plane& plane) const;
 
   // Description:
   //   Evaluate point at a parameter with error checking.
@@ -710,7 +718,7 @@ public:
   //   ON_Curve::PointAt
   //   ON_Curve::EvTangent
   //   ON_Curve::Evaluate
-  ON_BOOL32 EvPoint(
+  bool EvPoint(
          double t,
          ON_3dPoint& point, 
          int side = 0,
@@ -735,7 +743,7 @@ public:
   //   ON_Curve::Ev2Der
   //   ON_Curve::EvTangent
   //   ON_Curve::Evaluate
-  ON_BOOL32 Ev1Der(
+  bool Ev1Der(
          double t,
          ON_3dPoint& point,
          ON_3dVector& first_derivative,
@@ -761,7 +769,7 @@ public:
   //   ON_Curve::Ev1Der
   //   ON_Curve::EvCurvature
   //   ON_Curve::Evaluate
-  ON_BOOL32 Ev2Der(
+  bool Ev2Der(
          double t,
          ON_3dPoint& point,
          ON_3dVector& first_derivative,
@@ -788,7 +796,7 @@ public:
     ON_Curve::TangentAt
     ON_Curve::Ev1Der
   */
-  ON_BOOL32 EvTangent(
+  bool EvTangent(
          double t,
          ON_3dPoint& point,
          ON_3dVector& tangent,
@@ -816,7 +824,7 @@ public:
     ON_Curve::Ev2Der
     ON_EvCurvature
   */
-  ON_BOOL32 EvCurvature(
+  bool EvCurvature(
          double t,
          ON_3dPoint& point,
          ON_3dVector& tangent,
@@ -851,7 +859,7 @@ public:
     ON_Curve::Ev2Der
   */
   virtual 
-  ON_BOOL32 Evaluate(
+  bool Evaluate(
          double t,
          int der_count,
          int v_stride,
@@ -861,6 +869,7 @@ public:
          ) const = 0;
 
   
+
   /*
   Parameters:
     min_length -[in]
@@ -898,6 +907,7 @@ public:
     ON_Line* span_line
     ) const;
 
+
   // Description:
   //   Removes portions of the curve outside the specified interval.
   // Parameters:
@@ -907,7 +917,7 @@ public:
   // Returns:
   //   true if successful.
   virtual
-  ON_BOOL32 Trim(
+  bool Trim(
     const ON_Interval& domain
     );
 
@@ -930,8 +940,8 @@ public:
   Description:
     Splits (divides) the curve at the specified parameter.  
     The parameter must be in the interior of the curve's domain.
-    The pointers passed to Split must either be NULL or point to
-    an ON_Curve object of the same type.  If the pointer is NULL,
+    The pointers passed to Split must either be nullptr or point to
+    an ON_Curve object of the same type.  If the pointer is nullptr,
     then a curve will be created in Split().  You may pass "this"
     as left_side or right_side.
   Parameters:
@@ -954,7 +964,7 @@ public:
     in crv, and return the right side in right_side.
   */
   virtual
-  ON_BOOL32 Split(
+  bool Split(
       double t,
       ON_Curve*& left_side,
       ON_Curve*& right_side
@@ -967,7 +977,7 @@ public:
     nurbs_curve - [out] NURBS representation returned here
     tolerance - [in] tolerance to use when creating NURBS
         representation.
-    subdomain - [in] if not NULL, then the NURBS representation
+    subdomain - [in] if not nullptr, then the NURBS representation
         for this portion of the curve is returned.
   Returns:
     0   unable to create NURBS representation
@@ -994,7 +1004,7 @@ public:
   int GetNurbForm(
         ON_NurbsCurve& nurbs_curve,
         double tolerance = 0.0,
-        const ON_Interval* subdomain = NULL
+        const ON_Interval* subdomain = nullptr
         ) const;
   /*
   Description:
@@ -1027,15 +1037,15 @@ public:
   Description:
     Get a NURBS curve representation of this curve.
   Parameters:
-    pNurbsCurve - [in/out] if not NULL, this ON_NurbsCurve
+    pNurbsCurve - [in/out] if not nullptr, this ON_NurbsCurve
     will be used to store the NURBS representation
     of the curve will be returned.
     tolerance - [in] tolerance to use when creating NURBS
         representation.
-    subdomain - [in] if not NULL, then the NURBS representation
+    subdomain - [in] if not nullptr, then the NURBS representation
         for this portion of the curve is returned.
   Returns:
-    NULL or a NURBS representation of the curve.
+    nullptr or a NURBS representation of the curve.
   Remarks:
     See ON_Surface::GetNurbForm for important details about
     the NURBS surface parameterization.
@@ -1043,9 +1053,9 @@ public:
     ON_Curve::GetNurbForm
   */
   ON_NurbsCurve* NurbsCurve(
-        ON_NurbsCurve* pNurbsCurve = NULL,
+        ON_NurbsCurve* pNurbsCurve = nullptr,
         double tolerance = 0.0,
-        const ON_Interval* subdomain = NULL
+        const ON_Interval* subdomain = nullptr
         ) const;
 
   // Description:
@@ -1062,7 +1072,7 @@ public:
   // See Also:
   //   ON_Curve::GetNurbForm, ON_Curve::GetNurbFormParameterFromCurveParameter
   virtual
-  ON_BOOL32 GetCurveParameterFromNurbFormParameter(
+  bool GetCurveParameterFromNurbFormParameter(
         double nurbs_t,
         double* curve_t
         ) const;
@@ -1081,7 +1091,7 @@ public:
   // See Also:
   //   ON_Curve::GetNurbForm, ON_Curve::GetCurveParameterFromNurbFormParameter
   virtual
-  ON_BOOL32 GetNurbFormParameterFromCurveParameter(
+  bool GetNurbFormParameterFromCurveParameter(
         double curve_t,
         double* nurbs_t
         ) const;
@@ -1095,6 +1105,7 @@ public:
   //   then call DestroyCurveTree();  The curve tree is 
   //   created as needed.
   void DestroyCurveTree();
+
 
   /*
 	Description:
@@ -1131,25 +1142,20 @@ private:
 };
 
 #if defined(ON_DLL_TEMPLATE)
-// This stuff is here because of a limitation in the way Microsoft
-// handles templates and DLLs.  See Microsoft's knowledge base 
-// article ID Q168958 for details.
-#pragma warning( push )
-#pragma warning( disable : 4231 )
 ON_DLL_TEMPLATE template class ON_CLASS ON_SimpleArray<ON_Curve*>;
-#pragma warning( pop )
+ON_DLL_TEMPLATE template class ON_CLASS ON_SimpleArray<const ON_Curve*>;
 #endif
 
 class ON_CLASS ON_CurveArray : public ON_SimpleArray<ON_Curve*>
 {
 public:
   ON_CurveArray( int = 0 );
-  ~ON_CurveArray(); // deletes any non-NULL curves
+  ~ON_CurveArray(); // deletes any non-nullptr curves
 
   bool Write( ON_BinaryArchive& ) const;
   bool Read( ON_BinaryArchive& );
 
-  void Destroy(); // deletes curves, sets pointers to NULL, sets count to zero
+  void Destroy(); // deletes curves, sets pointers to nullptr, sets count to zero
 
   bool Duplicate( ON_CurveArray& ) const; // operator= copies the pointer values
                                           // duplicate copies the curves themselves
@@ -1163,8 +1169,8 @@ public:
       If true and the input tight_bbox is valid, then returned
       tight_bbox is the union of the input tight_bbox and the 
       tight bounding box of the bezier curve.
-		xform -[in] (default=NULL)
-      If not NULL, the tight bounding box of the transformed
+		xform -[in] (default=nullptr)
+      If not nullptr, the tight bounding box of the transformed
       bezier is calculated.  The bezier curve is not modified.
 	Returns:
     True if the returned tight_bbox is set to a valid 
@@ -1172,8 +1178,8 @@ public:
   */
 	bool GetTightBoundingBox( 
 			ON_BoundingBox& tight_bbox, 
-      int bGrowBox = false,
-			const ON_Xform* xform = 0
+      bool bGrowBox = false,
+			const ON_Xform* xform = nullptr
       ) const;
 };
 
@@ -1188,7 +1194,7 @@ Parameters:
     decreasing interval, then the portion of the curve across the
     start/end is returned.
 Returns:
-  trimmed curve or NULL if input is invalid.
+  trimmed curve or nullptr if input is invalid.
 */
 ON_DECL
 ON_Curve* ON_TrimCurve( 
@@ -1221,6 +1227,14 @@ bool ON_ForceMatchCurveEnds(
                             );
 
 /*
+OBSOLETE. Use int ON_JoinCurves(const ON_SimpleArray<const ON_Curve*>& InCurves,
+                                ON_SimpleArray<ON_Curve*>& OutCurves,
+                                double join_tol,
+                                double kink_tol,
+                                bool bPreserveDirection = false,
+                                ON_SimpleArray<int>* key = 0
+                               );
+
 Description:
   Join all contiguous curves of an array of ON_Curves.
 Parameters:
@@ -1243,6 +1257,39 @@ ON_DECL
 int ON_JoinCurves(const ON_SimpleArray<const ON_Curve*>& InCurves,
                   ON_SimpleArray<ON_Curve*>& OutCurves,
                   double join_tol,
+                  bool bPreserveDirection = false,
+                  ON_SimpleArray<int>* key = 0
+                 );
+
+/*
+Description:
+  Join all contiguous curves of an array of ON_Curves.
+Parameters:
+  InCurves - [in] Array of curves to be joined (not modified)
+  OutCurves - [out] Resulting joined curves and copies of curves that were not joined to anything
+                    are appended.
+  join_tol - [in] Distance tolerance used to decide if endpoints are close enough
+  kink_tol - [in] Angle in radians.  If > 0.0, then curves within join_tol will only be joined if the angle between them
+                  is less than kink_tol. If <= 0, then the angle will be ignored and only join_tol will be used.
+  bUseTanAngle - [in] If true, choose the best match using angle between tangents.  
+                      If false, best match is the closest. This is used whether or not kink_tol is positive.
+  bPreserveDirection - [in] If true, curve endpoints will be compared to curve startpoints.
+                            If false, all start and endpoints will be compared, and copies of input 
+                            curves may be reversed in output.
+  key     -  [out] if key is not null, InCurves[i] was joined into OutCurves[key[i]].
+Returns:
+  Number of curves added to Outcurves
+Remarks:
+  Closed curves are copied to OutCurves. 
+  Curves that cannot be joined to others are copied to OutCurves.  When curves are joined, the results
+  are ON_PolyCurves. All members of InCurves must have same dimension, at most 3.
+  */
+ON_DECL
+int ON_JoinCurves(const ON_SimpleArray<const ON_Curve*>& InCurves,
+                  ON_SimpleArray<ON_Curve*>& OutCurves,
+                  double join_tol,
+                  double kink_tol,
+                  bool bUseTanAngle,
                   bool bPreserveDirection = false,
                   ON_SimpleArray<int>* key = 0
                  );
@@ -1365,7 +1412,7 @@ Description:
 Paramters:
   curve - [in] simple (no self intersections) closed planar curve
   xform - [in] Transformation to map the curve to the xy plane. If the
-               curve is parallel to the xy plane, you may pass NULL.
+               curve is parallel to the xy plane, you may pass nullptr.
 Returns:
   +1: The curve's orientation is counter clockwise in the xy plane.
   -1: The curve's orientation is clockwise in the xy plane.
@@ -1386,7 +1433,7 @@ Paramters:
   domain - [in]
     optional sub-domain. (null if entire curve should be used).
   xform - [in] Transformation to map the curve to the xy plane. If the
-               curve is parallel to the xy plane, you may pass NULL.
+               curve is parallel to the xy plane, you may pass nullptr.
   bReverseCurve - [in]
 Returns:
   1/2 the sum of (p[i].x-p[i+1].x)*(p[i].y+p[i+1].y), where p[i] 

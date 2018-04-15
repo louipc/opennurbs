@@ -16,6 +16,14 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
 static void SwapRow( double matrix[4][4], int i0, int i1 )
 {
   double* p0;
@@ -337,18 +345,42 @@ ON_Xform::ON_Xform()
   m_xform[3][3] = 1.0;
 }
 
-ON_Xform::ON_Xform( int d )
+ON_Xform::ON_Xform(
+  double x
+)
 {
   memset( m_xform, 0, sizeof(m_xform) );
-  m_xform[0][0] = m_xform[1][1] = m_xform[2][2] = (double)d;
+  m_xform[0][0] = x;
+  m_xform[1][1] = x;
+  m_xform[2][2] = x;
   m_xform[3][3] = 1.0;
 }
 
-ON_Xform::ON_Xform( double d )
+const ON_Xform ON_Xform::DiagonalTransformation(
+  double d
+)
 {
-  memset( m_xform, 0, sizeof(m_xform) );
-  m_xform[0][0] = m_xform[1][1] = m_xform[2][2] = d;
-  m_xform[3][3] = 1.0;
+  return ON_Xform::DiagonalTransformation(d, d, d);
+}
+
+const ON_Xform ON_Xform::DiagonalTransformation(
+  const ON_3dVector& diagnoal
+)
+{
+  return ON_Xform::DiagonalTransformation(diagnoal.x, diagnoal.y, diagnoal.z);
+}
+
+const ON_Xform ON_Xform::DiagonalTransformation(
+  double d0,
+  double d1,
+  double d2
+)
+{
+  ON_Xform xform(ON_Xform::IdentityTransformation);
+  xform.m_xform[0][0] = d0;
+  xform.m_xform[1][1] = d1;
+  xform.m_xform[2][2] = d2;
+  return xform;
 }
 
 #if defined(ON_COMPILER_MSC)
@@ -478,43 +510,14 @@ ON_Xform::ON_Xform( const ON_Matrix& m )
 
 double* ON_Xform::operator[](int i)
 {
-  return ( i >= 0 && i < 4 ) ? &m_xform[i][0] : NULL;
+  return ( i >= 0 && i < 4 ) ? &m_xform[i][0] : nullptr;
 }
 
 const double* ON_Xform::operator[](int i) const
 {
-  return ( i >= 0 && i < 4 ) ? &m_xform[i][0] : NULL;
+  return ( i >= 0 && i < 4 ) ? &m_xform[i][0] : nullptr;
 }
 
-///////////////////////////////////////////////////////////////
-//
-// ON_Xform operator=
-//
-
-ON_Xform& ON_Xform::operator=( int d )
-{
-  memset( m_xform, 0, sizeof(m_xform) );
-  m_xform[0][0] = m_xform[1][1] = m_xform[2][2] = (double)d;
-  m_xform[3][3] = 1.0;
-  return *this;
-}
-
-ON_Xform& ON_Xform::operator=( float d )
-{
-  memset( m_xform, 0, sizeof(m_xform) );
-  m_xform[0][0] = m_xform[1][1] = m_xform[2][2] = (double)d;
-  m_xform[3][3] = 1.0;
-  return *this;
-}
-
-ON_Xform& ON_Xform::operator=( double d )
-{
-  memset( m_xform, 0, sizeof(m_xform) );
-  m_xform[0][0] = m_xform[1][1] = m_xform[2][2] = d;
-  m_xform[3][3] = 1.0;
-  return *this;
-}
-  
 ///////////////////////////////////////////////////////////////
 //
 // ON_Xform operator* operator- operator+
@@ -611,11 +614,6 @@ ON_Xform ON_Xform::operator-( const ON_Xform& rhs ) const
 //
 
 
-void ON_Xform::Zero()
-{
-  memset( m_xform, 0, sizeof(m_xform) );
-}
-
 void ON_Xform::Identity()
 {
   memset( m_xform, 0, sizeof(m_xform) );
@@ -647,27 +645,55 @@ void ON_Xform::Scale( const ON_3dVector& v )
   m_xform[3][3] = 1.0;
 }
 
+
 void ON_Xform::Scale
   (
   ON_3dPoint fixed_point,
   double scale_factor
   )
 {
+  *this = ON_Xform::ScaleTransformation(fixed_point, scale_factor);
+}
+
+const ON_Xform ON_Xform::ScaleTransformation(
+  const ON_3dPoint& fixed_point,
+  double scale_factor
+)
+{
+  return ON_Xform::ScaleTransformation(fixed_point, scale_factor, scale_factor, scale_factor);
+}
+
+const ON_Xform ON_Xform::ScaleTransformation(
+  const ON_3dPoint& fixed_point,
+  double x_scale_factor,
+  double y_scale_factor,
+  double z_scale_factor
+)
+{
+  const ON_Xform s(ON_Xform::DiagonalTransformation(x_scale_factor, y_scale_factor, z_scale_factor));
   if ( fixed_point.x == 0.0 && fixed_point.y == 0.0 && fixed_point.z == 0.0 )
   {
-    Scale( scale_factor, scale_factor, scale_factor );
+    return s;
   }
-  else
-  {
-    ON_Xform t0, t1, s;
-    t0.Translation( ON_origin - fixed_point );
-    s.Scale( scale_factor, scale_factor, scale_factor );
-    t1.Translation( fixed_point - ON_origin );
-    operator=(t1*s*t0);
-  }
+
+  const ON_3dVector delta = fixed_point - ON_3dPoint::Origin;
+  ON_Xform t0(ON_Xform::TranslationTransformation(-delta));
+  ON_Xform t1(ON_Xform::TranslationTransformation(delta));
+  return (t1*s*t0);
 }
 
 void ON_Xform::Scale
+(
+  const ON_Plane& plane,
+  double x_scale_factor,
+  double y_scale_factor,
+  double z_scale_factor
+)
+{
+  *this = ON_Xform::ScaleTransformation(plane, x_scale_factor, z_scale_factor, y_scale_factor);
+}
+
+const ON_Xform ON_Xform::ScaleTransformation
   (
   const ON_Plane& plane,
   double x_scale_factor,
@@ -675,19 +701,35 @@ void ON_Xform::Scale
   double z_scale_factor
   )
 {
-  Shear( plane, x_scale_factor*plane.xaxis, y_scale_factor*plane.yaxis, z_scale_factor*plane.zaxis );
+  return 
+    (x_scale_factor == y_scale_factor && x_scale_factor == z_scale_factor)
+    ? ON_Xform::ScaleTransformation(plane.origin,x_scale_factor)
+    : ON_Xform::ShearTransformation( plane, x_scale_factor*plane.xaxis, y_scale_factor*plane.yaxis, z_scale_factor*plane.zaxis );
 }
 
 void ON_Xform::Shear
-  (
+(
   const ON_Plane& plane,
   const ON_3dVector& x1,
   const ON_3dVector& y1,
   const ON_3dVector& z1
+)
+{
+  *this = ON_Xform::ShearTransformation(plane, x1, y1, z1);
+}
+
+const ON_Xform ON_Xform::ShearTransformation(
+    const ON_Plane& plane,
+    const ON_3dVector& x1,
+    const ON_3dVector& y1,
+    const ON_3dVector& z1
   )
 {
-  ON_Xform t0, t1, s0(1), s1(1);
-  t0.Translation( ON_origin - plane.origin );
+  const ON_3dVector delta = plane.origin - ON_3dPoint::Origin;
+  const ON_Xform t0(ON_Xform::TranslationTransformation(-delta));
+  const ON_Xform t1(ON_Xform::TranslationTransformation(delta));
+  ON_Xform s0(ON_Xform::IdentityTransformation);
+  ON_Xform s1(ON_Xform::IdentityTransformation);
   s0.m_xform[0][0] = plane.xaxis.x;
   s0.m_xform[0][1] = plane.xaxis.y;
   s0.m_xform[0][2] = plane.xaxis.z;
@@ -706,26 +748,44 @@ void ON_Xform::Shear
   s1.m_xform[0][2] = z1.x;
   s1.m_xform[1][2] = z1.y;
   s1.m_xform[2][2] = z1.z;
-  t1.Translation( plane.origin - ON_origin );
-  operator=(t1*s1*s0*t0);
+  return (t1*s1*s0*t0);
 }
 
-void ON_Xform::Translation( double x, double y, double z )
+void ON_Xform::Translation( double dx, double dy, double dz )
 {
-  Identity();
-  m_xform[0][3] = x;
-  m_xform[1][3] = y;
-  m_xform[2][3] = z;
-  m_xform[3][3] = 1.0;
+  *this = ON_Xform::TranslationTransformation(dx,dy,dz);
 }
 
-void ON_Xform::Translation( const ON_3dVector& v )
+void ON_Xform::Translation( const ON_3dVector& delta )
 {
-  Identity();
-  m_xform[0][3] = v.x;
-  m_xform[1][3] = v.y;
-  m_xform[2][3] = v.z;
-  m_xform[3][3] = 1.0;
+  *this = ON_Xform::TranslationTransformation(delta);
+}
+
+const ON_Xform ON_Xform::TranslationTransformation(
+  const ON_2dVector& delta
+)
+{
+  return ON_Xform::TranslationTransformation(delta.x, delta.y, 0.0);
+}
+
+const ON_Xform ON_Xform::TranslationTransformation(
+  const ON_3dVector& delta
+)
+{
+  return ON_Xform::TranslationTransformation(delta.x, delta.y, delta.z);
+}
+
+const ON_Xform ON_Xform::TranslationTransformation(
+  double dx,
+  double dy,
+  double dz
+)
+{
+  ON_Xform xform(ON_Xform::IdentityTransformation);
+  xform.m_xform[0][3] = dx;
+  xform.m_xform[1][3] = dy;
+  xform.m_xform[2][3] = dz;
+  return xform;
 }
 
 void ON_Xform::PlanarProjection( const ON_Plane& plane )
@@ -777,6 +837,33 @@ void ON_Xform::ActOnRight(double x,double y,double z,double w,double v[4]) const
     v[3] = m_xform[0][3]*x + m_xform[1][3]*y + m_xform[2][3]*z + m_xform[3][3]*w;
   }
 }
+
+const ON_Xform operator*(double c, const ON_Xform& xform)
+{
+  ON_Xform cx(xform);
+  double* p = &cx.m_xform[0][0];
+  double* p1 = p + 16;
+  while (p < p1)
+  {
+    const double x = *p;
+    *p++ = c*x;
+  }
+  return cx;
+}
+
+const ON_Xform operator*(const ON_Xform& xform, double c)
+{
+  ON_Xform xc(xform);
+  double* p = &xc.m_xform[0][0];
+  double* p1 = p + 16;
+  while (p < p1)
+  {
+    const double x = *p;
+    *p++ = x*c;
+  }
+  return xc;
+}
+
 
 ON_2dPoint ON_Xform::operator*( const ON_2dPoint& p ) const
 {
@@ -847,20 +934,82 @@ ON_3dVector ON_Xform::operator*( const ON_3dVector& v ) const
 
 bool ON_Xform::IsValid() const
 {
-  int i;
   const double* x = &m_xform[0][0];
-  bool rc = true;
-  for (i = 0; i < 16 && rc; i++)
+  const double* x16 = x + 16;
+  while ( x < x16 )
   {
-    rc = ON_IsValid(*x++);
+    const double t = *x++;
+    if (ON_IS_VALID(t))
+      continue;
+    return false; // t is not valid
   }
-  return rc;
+  return true;
+}
+
+bool ON_Xform::IsNan() const
+{
+  const double* x = &m_xform[0][0];
+  const double* x16 = x + 16;
+  while ( x < x16 )
+  {
+    const double t = *x++;
+    if (!(t == t))
+      return true; // t is a nan
+  }
+  return false;
+}
+
+bool ON_Xform::operator==(const ON_Xform& rhs) const
+{
+  // Intentionally returns false if any coefficient is a nan.
+  const double* x = &m_xform[0][0];
+  const double* x16 = x + 16;
+  const double* y = &rhs.m_xform[0][0];
+  while (x < x16)
+  {
+    if (*x++ == *y++)
+      continue;
+    return false; // not equal or a nan
+  }
+  return true;
+}
+
+bool ON_Xform::operator!=(const ON_Xform& rhs) const
+{
+  // Intentionally returns false if any coefficient is a nan.
+  const double* x = &m_xform[0][0];
+  const double* x16 = x + 16;
+  const double* y = &rhs.m_xform[0][0];
+  while (x < x16)
+  {
+    double a = *x++;
+    double b = *y++;
+    if (a == b)
+      continue;
+    if (a != b)
+    {
+      while (x < x16)
+      {
+        a = *x++;
+        b = *y++;
+        if (a == a && b == b)
+          continue;
+        return false; // a or b is a nan.
+      }
+      return true;  // no nans and at least one not equal equalcoefficient.
+    }
+  }
+  return false; // nans or equal
 }
 
 bool ON_Xform::IsIdentity( double zero_tolerance ) const
 {
   // The code below will return false if m_xform[][] contains
   // a nan value.
+
+  if (!(zero_tolerance >= 0.0 && zero_tolerance < ON_UNSET_POSITIVE_VALUE))
+    return false;
+
   const double* v = &m_xform[0][0];
   for ( int i = 0; i < 3; i++ )
   {
@@ -877,82 +1026,145 @@ bool ON_Xform::IsIdentity( double zero_tolerance ) const
   }
   if ( !(fabs( 1.0 - *v ) <= zero_tolerance) )
     return false;
+
   return true;
 }
 
 bool ON_Xform::IsNotIdentity( double zero_tolerance ) const
 {
-  // The code below will return false if m_xform[][] contains
-  // a nan value.
+  // It is intentional that this functions returns false if any coefficient is a nan or unset value.
+  return (zero_tolerance >= 0.0  && zero_tolerance < ON_UNSET_POSITIVE_VALUE &&  false == ON_Xform::IsIdentity(zero_tolerance) && IsValid());
+}
+
+bool ON_Xform::IsValidAndNotZeroAndNotIdentity(
+  double zero_tolerance
+) const
+{
+  if (false == IsValid())
+    return false;
+
+  if (!(zero_tolerance >= 0.0 && zero_tolerance < ON_UNSET_POSITIVE_VALUE))
+    return false;
+
+  int one_count = 0;
+  int zero_count = 0;
   const double* v = &m_xform[0][0];
   for ( int i = 0; i < 3; i++ )
   {
-    if ( fabs(1.0 - *v++) > zero_tolerance )
+    if (fabs(1.0 - *v) <= zero_tolerance)
+    {
+      // this diagonal coefficient = 1
+      one_count++;
+      if (zero_count > 0)
+        return true;
+    }
+    else if (fabs(*v) <= zero_tolerance)
+    {
+      // this diagonal coefficient = 0
+      zero_count++;
+      if (one_count > 0)
+        return true;
+    }
+    else
+    {
+      // this diagonal coefficient != 1 and != 0
       return true;
-    if ( fabs(*v++) > zero_tolerance )
+    }
+
+    // If any off diagonal coefficient is not zero, return true
+    v++;
+    if ( !(fabs(*v++) <= zero_tolerance) )
       return true;
-    if ( fabs(*v++) > zero_tolerance )
+    if ( !(fabs(*v++) <= zero_tolerance) )
       return true;
-    if ( fabs(*v++) > zero_tolerance )
+    if ( !(fabs(*v++) <= zero_tolerance) )
       return true;
-    if ( fabs(*v++) > zero_tolerance )
+    if ( !(fabs(*v++) <= zero_tolerance) )
       return true;
   }
-  if ( fabs( 1.0 - *v ) > zero_tolerance )
+
+  if (!(fabs(1.0 - *v) <= zero_tolerance))
+  {
+    if (3 == zero_count && fabs(1.0 - *v) <= zero_tolerance)
+      return false; // every matrix coefficient = 0
+
+    // otherwise, xform[3][3] != 1 so return true.
     return true;
+  }
 
-  return false;
-}
+  if (3 == one_count || 3 == zero_count)
+    return false;
 
-bool ON_Xform::IsTranslation( double zero_tolerance ) const
-{
-  const double* v = &m_xform[0][0];
-  if ( fabs(1.0 - *v++) > zero_tolerance )
-    return false;
-  if ( fabs(*v++) >  zero_tolerance )
-    return false;
-  if ( fabs(*v++) >  zero_tolerance )
-    return false;
-  v++;
-  if ( fabs(*v++) >  zero_tolerance )
-    return false;
-  if ( fabs(1.0 - *v++) > zero_tolerance )
-    return false;
-  if ( fabs(*v++) >  zero_tolerance )
-    return false;
-  v++;
-  if ( fabs(*v++) >  zero_tolerance )
-    return false;
-  if ( fabs(*v++) >  zero_tolerance )
-    return false;
-  if ( fabs(1.0 - *v++) > zero_tolerance )
-    return false;
-  v++;
-  if ( fabs(*v++) >  zero_tolerance )
-    return false;
-  if ( fabs(*v++) >  zero_tolerance )
-    return false;
-  if ( fabs(*v++) >  zero_tolerance )
-    return false;
-  if ( fabs( 1.0 - *v ) > zero_tolerance )
-    return false;
   return true;
 }
 
 
-int ON_Xform::Compare( const ON_Xform& other ) const
+bool ON_Xform::IsTranslation( double zero_tolerance ) const
+{
+  if (!(zero_tolerance >= 0.0 && zero_tolerance < ON_UNSET_POSITIVE_VALUE))
+    return false;
+
+  const double* v = &m_xform[0][0];
+  if ( fabs(1.0 - *v++) > zero_tolerance )
+    return false;
+  if ( fabs(*v++) >  zero_tolerance )
+    return false;
+  if ( fabs(*v++) >  zero_tolerance )
+    return false;
+  v++;
+  if ( fabs(*v++) >  zero_tolerance )
+    return false;
+  if ( fabs(1.0 - *v++) > zero_tolerance )
+    return false;
+  if ( fabs(*v++) >  zero_tolerance )
+    return false;
+  v++;
+  if ( fabs(*v++) >  zero_tolerance )
+    return false;
+  if ( fabs(*v++) >  zero_tolerance )
+    return false;
+  if ( fabs(1.0 - *v++) > zero_tolerance )
+    return false;
+  v++;
+  if ( fabs(*v++) >  zero_tolerance )
+    return false;
+  if ( fabs(*v++) >  zero_tolerance )
+    return false;
+  if ( fabs(*v++) >  zero_tolerance )
+    return false;
+  if ( fabs( 1.0 - *v ) > zero_tolerance )
+    return false;
+
+  return IsValid();
+}
+
+
+int ON_Xform::Compare( const ON_Xform& rhs ) const
 {
   const double* a = &m_xform[0][0];
-  const double* b = &other.m_xform[0][0];
-  int i = 16;
-  while(i--)
+  const double* b = &rhs.m_xform[0][0];
+  const double* a16 = a + 16;
+  while ( a < a16 )
   {
-    if ( *a < *b )
+    const double x = *a++;
+    const double y = *b++;
+    if ( x < y )
       return -1;
-    if ( *a > *b )
+    if ( x > y )
       return 1;
-    a++;
-    b++;
+    if (x == y)
+      continue;
+
+    if (!(x == x))
+    {
+      // x is a nan
+      if (!(y == y))
+        continue; // x and y are nans
+      return 1; // x is a nan and y is not.
+    }
+
+    // y is a nan and x is not a nan.
+    return -1;
   }
   return 0;
 }
@@ -960,55 +1172,51 @@ int ON_Xform::Compare( const ON_Xform& other ) const
 int ON_Xform::IsSimilarity() const
 {
   int rc = 0;
-  if (    m_xform[3][0] != 0.0 
-       || m_xform[3][1] != 0.0
-       || m_xform[3][2] != 0.0
-       || m_xform[3][3] != 1.0 )
+  if (IsAffine())
   {
-    rc = 0;
-  }
-  else
-  {
-    double tol = 1.0e-4;
-    double dottol = 1.0e-3;
-    double det = Determinant();
-    if ( fabs(det) <= ON_SQRT_EPSILON )
+    const double tol = 1.0e-4;
+    const double dottol = 1.0e-3;
+    const double det = Determinant();
+	// GBA (28-Nov-17) note: det = lambda^3 when this xform is a dialation by lambda.
+	// The new threshold allows for lambda~>1e-5.  I had an example of
+	// a change of coordintes from millimeters to meters (lambda=1e-3) that
+	// was not being reported as a similarity transformation.
+    if ( fabs(det) > ON_EPSILON )
     {
-      // projection or worse
-      rc = 0;
-    }
-    else
-    {
-      ON_3dVector X(m_xform[0][0],m_xform[1][0],m_xform[2][0]);
-      ON_3dVector Y(m_xform[0][1],m_xform[1][1],m_xform[2][1]);
-      ON_3dVector Z(m_xform[0][2],m_xform[1][2],m_xform[2][2]);
-      double sx = X.Length();
-      double sy = Y.Length();
-      double sz = Z.Length();
-      if (   sx == 0.0 || sy == 0.0 || sz == 0.0 
-          || fabs(sx-sy) > tol || fabs(sy-sz) > tol || fabs(sz-sx) > tol )
+      const ON_3dVector X(m_xform[0][0],m_xform[1][0],m_xform[2][0]);
+      const ON_3dVector Y(m_xform[0][1],m_xform[1][1],m_xform[2][1]);
+      const ON_3dVector Z(m_xform[0][2],m_xform[1][2],m_xform[2][2]);
+      const double sx = X.Length();
+      const double sy = Y.Length();
+      const double sz = Z.Length();
+      if (   
+        sx > 0.0 && sy > 0.0 && sz > 0.0 
+        && fabs(sx-sy) <= tol
+        && fabs(sy-sz) <= tol
+        && fabs(sz-sx) <= tol )
       {
-        // non-uniform scale or worse
-        rc = 0;
-      }
-      else
-      {
-        double xy = (X*Y)/(sx*sy);
-        double yz = (Y*Z)/(sy*sz);
-        double zx = (Z*X)/(sz*sx);
-        if ( fabs(xy) > dottol || fabs(yz) > dottol || fabs(zx) > dottol )
-        {
-          // shear or worse
-          rc = 0;
-        }
-        else
+        const double xy = (X*Y)/(sx*sy);
+        const double yz = (Y*Z)/(sy*sz);
+        const double zx = (Z*X)/(sz*sx);
+        if ( fabs(xy) <= dottol && fabs(yz) <= dottol && fabs(zx) <= dottol )
         {
           rc = (det > 0.0) ? 1 : -1;
         }
       }
     }
   }
+
   return rc;
+}
+
+bool ON_Xform::IsAffine() const
+{
+  return (
+    0.0 == m_xform[3][0] 
+    && 0.0 == m_xform[3][1] 
+    && 0.0 == m_xform[3][2] 
+    && 1.0 == m_xform[3][3] 
+    && IsValid());
 }
 
 
@@ -1017,12 +1225,21 @@ bool ON_Xform::IsZero() const
   const double* v = &m_xform[0][0];
   for ( int i = 0; i < 15; i++ )
   {
-    if ( *v++ != 0.0 )
-      return false;
+    if ( !(*v++ == 0.0 ) )
+      return false; // nonzero or nan
   }
-  return true;
+  return (m_xform[3][3] == m_xform[3][3]);
 }
 
+bool ON_Xform::IsZero4x4() const
+{
+  return (0.0 == m_xform[3][3] && IsZero());
+}
+  
+bool ON_Xform::IsZeroTransformation() const
+{
+  return (1.0 == m_xform[3][3] && IsZero());
+}
 
 void ON_Xform::Transpose()
 {
@@ -1153,8 +1370,8 @@ double ON_Xform::GetMappingXforms( ON_Xform& P_xform, ON_Xform& N_xform ) const
   }
   else
   {
-    P_xform.Identity();
-    N_xform.Identity();
+    P_xform = ON_Xform::IdentityTransformation;
+    N_xform = ON_Xform::IdentityTransformation;
     d = 0.0;
   }
   return d;
@@ -1200,7 +1417,7 @@ void ON_Xform::Rotation(
         ON_3dPoint center
         )
 {
-  Identity();
+  *this = ON_Xform::IdentityTransformation;
 
   for(;;)
   {
@@ -1341,15 +1558,13 @@ void ON_Xform::Rotation(   // (not strictly a rotation)
   // transformation maps P0 to P1, P0+X0 to P1+X1, ...
 
   // T0 translates point P0 to (0,0,0)
-  ON_Xform T0;
-  T0.Translation( -P0.x, -P0.y, -P0.z );
+  const ON_Xform T0(ON_Xform::TranslationTransformation(ON_3dPoint::Origin - P0));
 
   ON_Xform R;
   R.Rotation(X0,Y0,Z0,X1,Y1,Z1);
 
-  // T1 translates (0,0,0) to point o1
-  ON_Xform T1;
-  T1.Translation( P1 );
+  // T1 translates (0,0,0) to point P1
+  ON_Xform T1(ON_Xform::TranslationTransformation(P1 - ON_3dPoint::Origin));
 
   *this = T1*R*T0;
 }
@@ -1417,9 +1632,8 @@ bool ON_Xform::ChangeBasis(
 {
   // Q = a0*X0 + b0*Y0 + c0*Z0 = a1*X1 + b1*Y1 + c1*Z1
   // then this transform will map the point (a0,b0,c0) to (a1,b1,c1)
+  *this = ON_Xform::ZeroTransformation;
 
-  Zero();
-  m_xform[3][3] = 1.0;
   double a,b,c,d;
   a = X1*Y1;
   b = X1*Z1;
@@ -1566,11 +1780,10 @@ bool ON_Xform::ChangeBasis(
   ON_Xform F0(P0,X0,Y0,Z0);		// Frame 0
 
   // T1 translates by -P1
-  ON_Xform T1;
-  T1.Translation( -P1.x, -P1.y, -P1.z );
+  ON_Xform T1(ON_Xform::TranslationTransformation(ON_3dPoint::Origin - P1));
 	
   ON_Xform CB;
-  rc = CB.ChangeBasis(ON_xaxis, ON_yaxis, ON_zaxis,X1,Y1,Z1);
+  rc = CB.ChangeBasis(ON_3dVector::XAxis, ON_3dVector::YAxis, ON_3dVector::ZAxis,X1,Y1,Z1);
 
   *this = CB*T1*F0;
   return rc;
@@ -1613,7 +1826,7 @@ void ON_Xform::CameraToWorld(
 }
 
 bool ON_Xform::CameraToClip(
-      ON_BOOL32 bPerspective,
+      bool bPerspective,
       double left,      double right,
       double bottom,    double top,
       double near_dist, double far_dist
@@ -1644,39 +1857,55 @@ bool ON_Xform::CameraToClip(
   }
   else 
   {
-    // perspective projection
-
+    // OpenNURBS uses a "right handed" camera coordinate system.
+    // The camera X axis points horizontally left to right.
+    // The camera Y axis points vertically bottom to top.
+    // The camera Y axis points vertically bottom to top.
+    // The camera Z axis points from back to front.
+    //
+    // If n = frustum near distance, f = frustum far distance
+    // and 0 < n < f, then the perspective projection matrix is:
+    //
     //  2n/(r-l)     0        (r+l)/(r-l)     0
     //    0        2n/(t-b)   (t+b)/(t-b)     0
     //    0          0        (f+n)/(f-n)  2fn/(f-n)
     //    0          0            -1          0
     //
-    // To get a linear map from camera z to clip z, apply the linear
+    // Note that the "near frustum plane" is camera Z = -n and
+    // the far frustum plane is camera Z = -f. Put another way
+    // the camera Z coordinate is negative "depth".
+    //
+    // If (X,Y,Z,W) denotes camera coordinates, then as the value of
+    // camera Z/W coordinate approaches -infinity from above,
+    // (depth approaches +infinity from below), the value of 
+    // clipping z/w approaches -(f+n)/(f-n) from above. 
+    //
+    // As camera coordinate Z/W approaches zero from below, 
+    // (depth approaches zero from above), the value of
+    // clipping z/w approaches +infinity from below.
+    //
+    // The perspective projection transformation will map "points behind
+    // the camera" (camera Z coordinate > 0) to a clipping coordinate
+    // in the interval ( -infinity, -(f+n)/(f-n) ).
+    //
+    // To get a linear map from camera z to [-1,1], apply the linear
     // fractional transformation that maps [-1,1] -> [-1,1]
     //
-    //   f(s): s -> (a*s + b)/(a + bs),
+    //   L(s): s -> (a*s + b)/(a + bs),
     //
-    //  where a = (n+f) and b = (f-n), to clip z.
+    // where a = (n+f) and b = (f-n), to the z coordinate 
+    // of the perspective projection transformation.
     //
-    // The inverse of f is g
+    // Specifically, if M is the perspective transformation matrix above, 
+    // and transpose(x,y,z,w) = M*transpose(X,Y,(1-s)*n + s*f,1), then
+    // (a*z + b*w)/(a*w + b*z) = 1 - 2s. 
     //
-    //   g(t): t -> (a*t - b)/(a - b*t)
+    // Note that L(s) has a pole at s = -(f+n)/(f-n).
     //
-    // to the z coordinate after applying this transformation
-    //d = 1.0/(right-left);
-    //m_xform[0][0] = 2.0*near_dist*d; 
-    //m_xform[0][2] = (right+left)*d; 
-    //m_xform[0][1] = m_xform[0][3] = 0.0;
-
-    //d = 1.0/(top-bottom);
-    //m_xform[1][1] = 2.0*near_dist*d; 
-    //m_xform[1][2] = (top+bottom)*d; 
-    //m_xform[1][0] = m_xform[1][3] = 0.0;
-
-    //d = 1.0/(far_dist-near_dist);
-    //m_xform[2][2] = (far_dist+near_dist)*d; 
-    //m_xform[2][3] = 2.0*near_dist*far_dist*d; 
-    //m_xform[2][0] = m_xform[2][1] = 0.0;
+    // The inverse of the linear fractional transformation L is G
+    //
+    //   G(t): t -> (a*t - b)/(a - b*t)
+    //
 
     dd = (right-left);
     m_xform[0][0] = 2.0*near_dist/dd; 
@@ -1693,13 +1922,14 @@ bool ON_Xform::CameraToClip(
     m_xform[2][3] = 2.0*near_dist*far_dist/dd; 
     m_xform[2][0] = m_xform[2][1] = 0.0;
 
-    m_xform[3][0] = m_xform[3][1] = m_xform[3][3] = 0.0; m_xform[3][2] = -1.0;
+    m_xform[3][0] = m_xform[3][1] = m_xform[3][3] = 0.0; 
+    m_xform[3][2] = -1.0;
   }
   return true;
 }
 
 bool ON_Xform::ClipToCamera(
-      ON_BOOL32 bPerspective,
+      bool bPerspective,
       double left,      double right,
       double bottom,    double top,
       double near_dist, double far_dist
@@ -1871,7 +2101,7 @@ int ON_Xform::ClipFlag3d( const double* point ) const
 }
 
 int ON_Xform::ClipFlag4d( int count, int stride, const double* point, 
-                            ON_BOOL32 bTestZ ) const
+                            bool bTestZ ) const
 {
   int clip = 1|2|4|8;
   if ( bTestZ)
@@ -1885,7 +2115,7 @@ int ON_Xform::ClipFlag4d( int count, int stride, const double* point,
 }
 
 int ON_Xform::ClipFlag3d( int count, int stride, const double* point, 
-                            ON_BOOL32 bTestZ ) const
+                            bool bTestZ ) const
 {
   int clip = 1|2|4|8;
   if ( bTestZ)
@@ -1927,7 +2157,7 @@ ON_Xform& ON_Xform::operator=(const ON_Matrix& src)
   const int maxi = (i>4)?4:i;
   j = src.ColCount();
   const int maxj = (j>4)?4:j;
-  Identity();
+  *this = ON_Xform::IdentityTransformation;
   for ( i = 0; i < maxi; i++ ) for ( j = 0; j < maxj; j++ ) {
     m_xform[i][j] = src.m[i][j];
   }
@@ -1941,7 +2171,8 @@ bool ON_Xform::IntervalChange(
   )
 {
   bool rc = false;
-  Identity();
+
+  *this = ON_Xform::IdentityTransformation;
   if (   dir >= 0 
        && dir <= 3 
        && old_interval[0] != ON_UNSET_VALUE

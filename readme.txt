@@ -1,13 +1,11 @@
-/* $Header: $ */
-/* $NoKeywords: $ */
-
 More Information:
   Please see 
 
     http://en.wiki.mcneel.com/default.aspx/McNeel/OpenNURBS.html
 
-  for information about opennurbs including supported compilers, build
-  instructions, and a description of the examples.
+  for information about opennurbs including supported compilers, 
+  build instructions, 
+  and a description of the examples.
 
 Technical support:
   http://discourse.mcneel.com/category/opennurbs

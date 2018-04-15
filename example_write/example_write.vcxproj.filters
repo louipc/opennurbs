@@ -24,5 +24,8 @@
     <ClInclude Include="..\example_userdata\example_ud.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\examples.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

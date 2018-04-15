@@ -17,11 +17,9 @@
 #if !defined(ON_ARRAY_DEFS_INC_)
 #define ON_ARRAY_DEFS_INC_
 
-#if defined(ON_COMPILER_MSC)
-
 // When this file is parsed with /W4 warnings, two bogus warnings
 // are generated.
-#pragma warning(push)
+#pragma ON_PRAGMA_WARNING_PUSH
 
 // The ON_ClassArray<T>::DestroyElement template function generates a
 //   C4100: 'x' : unreferenced formal parameter 
@@ -29,15 +27,14 @@
 // This appears to be caused by a bug in the compiler warning code 
 // or the way templates are expanded. This pragma is needed squelch the
 // bogus warning.
-#pragma warning(disable:4100)
+#pragma ON_PRAGMA_WARNING_DISABLE_MSC(4100)
 
 // The ON_CompareIncreasing and ON_CompareDecreasing templates generate a
 //   C4211: nonstandard extension used : redefined extern to static
 // warning.  Microsoft's compiler appears to have a little trouble 
 // when static functions are declared before they are defined in a 
 // single .cpp file. This pragma is needed squelch the bogus warning.
-#pragma warning(disable:4211)
-#endif
+#pragma ON_PRAGMA_WARNING_DISABLE_MSC(4211)
 
 // The main reason the definitions of the functions for the 
 // ON_SimpleArray and ON_ClassArray templates are in this separate
@@ -48,6 +45,7 @@
 // spot.  If you need the definitions in the file, then you
 // should include opennurbs_array.h and let it take care of
 // including this file.
+
 
 /////////////////////////////////////////////////////////////////////////////////////
 //  Class ON_SimpleArray<>
@@ -62,17 +60,17 @@ T* ON_SimpleArray<T>::Realloc(T* ptr,int capacity)
 }
 
 template <class T>
-ON_SimpleArray<T>::ON_SimpleArray()
-                          : m_a(0),
-                            m_count(0),
-                            m_capacity(0)
+ON_SimpleArray<T>::ON_SimpleArray() ON_NOEXCEPT
+  : m_a(nullptr)
+  , m_count(0)
+  , m_capacity(0)
 {}
 
 template <class T>
-ON_SimpleArray<T>::ON_SimpleArray( int c )
-                          : m_a(0),
-                            m_count(0),
-                            m_capacity(0)
+ON_SimpleArray<T>::ON_SimpleArray( size_t c )
+  : m_a(nullptr)
+  , m_count(0)
+  , m_capacity(0)
 {
   if ( c > 0 ) 
     SetCapacity( c );
@@ -81,9 +79,9 @@ ON_SimpleArray<T>::ON_SimpleArray( int c )
 // Copy constructor
 template <class T>
 ON_SimpleArray<T>::ON_SimpleArray( const ON_SimpleArray<T>& src )
-                          : m_a(0),
-                            m_count(0),
-                            m_capacity(0)
+  : m_a(0)
+  , m_count(0)
+  , m_capacity(0)
 {
   *this = src; // operator= defined below
 }
@@ -97,7 +95,7 @@ ON_SimpleArray<T>::~ON_SimpleArray()
 template <class T>
 ON_SimpleArray<T>& ON_SimpleArray<T>::operator=( const ON_SimpleArray<T>& src )
 {
-  if( &src != this ) {
+  if( this != &src ) {
     if ( src.m_count <= 0 ) {
       m_count = 0;
     }
@@ -107,12 +105,45 @@ ON_SimpleArray<T>& ON_SimpleArray<T>::operator=( const ON_SimpleArray<T>& src )
       }
       if ( m_a ) {
         m_count = src.m_count;
-        memcpy( m_a, src.m_a, m_count*sizeof(T) );
+        memcpy( (void*)(m_a), (void*)(src.m_a), m_count*sizeof(T) );
       }
     }
   }  
   return *this;
 }
+
+#if defined(ON_HAS_RVALUEREF)
+
+// Clone constructor
+template <class T>
+ON_SimpleArray<T>::ON_SimpleArray( ON_SimpleArray<T>&& src ) ON_NOEXCEPT
+  : m_a(src.m_a)
+  , m_count(src.m_count)
+  , m_capacity(src.m_capacity)
+{
+  src.m_a = 0;
+  src.m_count = 0;
+  src.m_capacity = 0;
+}
+
+// Clone assignment
+template <class T>
+ON_SimpleArray<T>& ON_SimpleArray<T>::operator=( ON_SimpleArray<T>&& src ) ON_NOEXCEPT
+{
+  if( this != &src ) 
+  {
+    this->Destroy();
+    m_a = src.m_a;
+    m_count = src.m_count;
+    m_capacity = src.m_capacity;
+    src.m_a = 0;
+    src.m_count = 0;
+    src.m_capacity = 0;
+  }  
+  return *this;
+}
+
+#endif
 
 // emergency destroy ///////////////////////////////////////////////////
 
@@ -212,6 +243,21 @@ T& ON_SimpleArray<T>::operator[]( ON__UINT64 i )
   return m_a[i]; 
 }
 
+
+#if defined(ON_RUNTIME_APPLE)
+template <class T>
+T& ON_SimpleArray<T>::operator[](size_t i )
+{ 
+#if defined(ON_DEBUG)
+  if ( i > (size_t)m_capacity )
+  {
+    ON_ERROR("ON_SimpleArray[i]: i out of range.");
+  }
+#endif
+  return m_a[i]; 
+}
+#endif
+
 template <class T>
 const T& ON_SimpleArray<T>::operator[](int i) const
 {
@@ -261,6 +307,19 @@ const T& ON_SimpleArray<T>::operator[](ON__UINT64 i) const
   return m_a[i];
 }
 
+#if defined(ON_RUNTIME_APPLE)
+template <class T>
+const T& ON_SimpleArray<T>::operator[](size_t i) const
+{
+#if defined(ON_DEBUG)
+  if ( i > (size_t)m_capacity )
+  {
+    ON_ERROR("ON_SimpleArray[i]: i out of range.");
+  }
+#endif
+  return m_a[i];
+}
+#endif
 
 template <class T>
 ON_SimpleArray<T>::operator T*()
@@ -415,7 +474,7 @@ T& ON_SimpleArray<T>::AppendNew()
     int new_capacity = NewCapacity();
     Reserve( new_capacity );
   }
-  memset( &m_a[m_count], 0, sizeof(T) );
+  memset( (void*)(&m_a[m_count]), 0, sizeof(T) );
   return m_a[m_count++];
 }
 
@@ -458,7 +517,7 @@ void ON_SimpleArray<T>::Append( int count, const T* p )
         newcapacity = count + m_count;
       Reserve( newcapacity );
     }
-    memcpy( m_a + m_count, p, count*sizeof(T) );
+    memcpy( (void*)(m_a + m_count), (void*)(p), count*sizeof(T) );
     m_count += count;
   }
 }
@@ -491,7 +550,7 @@ void ON_SimpleArray<T>::Remove( int i )
   if ( i >= 0 && i < m_count ) {
     Move( i, i+1, m_count-1-i );
     m_count--;
-    memset( &m_a[m_count], 0, sizeof(T) );
+    memset( (void*)(&m_a[m_count]), 0, sizeof(T) );
   }
 } 
 
@@ -499,7 +558,7 @@ template <class T>
 void ON_SimpleArray<T>::Empty()
 {
   if ( m_a )
-    memset( m_a, 0, m_capacity*sizeof(T) );
+    memset( (void*)(m_a), 0, m_capacity*sizeof(T) );
   m_count = 0;
 }
 
@@ -705,9 +764,9 @@ bool ON_SimpleArray<T>::Permute( const int* index )
   if ( m_a && m_count > 0 && index ) {
     int i;
     T* buffer = (T*)onmalloc(m_count*sizeof(buffer[0]));
-    memcpy( buffer, m_a, m_count*sizeof(T) );
+    memcpy( (void*)(buffer), (void*)(m_a), m_count*sizeof(T) );
     for (i = 0; i < m_count; i++ )
-      memcpy( m_a+i, buffer+index[i], sizeof(T) ); // must use memcopy and not operator=
+      memcpy( (void*)(m_a+i), (void*)(buffer+index[i]), sizeof(T) ); // must use memcopy and not operator=
     onfree(buffer);
     rc = true;
   }
@@ -718,7 +777,7 @@ template <class T>
 void ON_SimpleArray<T>::Zero()
 {
   if ( m_a && m_capacity > 0 ) {
-    memset( m_a, 0, m_capacity*sizeof(T) );
+    memset( (void*)(m_a), 0, m_capacity*sizeof(T) );
   }
 }
 
@@ -726,17 +785,18 @@ template <class T>
 void ON_SimpleArray<T>::MemSet( unsigned char value )
 {
   if ( m_a && m_capacity > 0 ) {
-    memset( m_a, value, m_capacity*sizeof(T) );
+    memset( (void*)(m_a), value, m_capacity*sizeof(T) );
   }
 }
 
 // memory managment ////////////////////////////////////////////////////
 
 template <class T>
-void ON_SimpleArray<T>::Reserve( int newcap ) 
+T* ON_SimpleArray<T>::Reserve( size_t newcap ) 
 {
-  if( m_capacity < newcap )
+  if( (size_t)m_capacity < newcap )
     SetCapacity( newcap );
+  return m_a;
 }
 
 template <class T>
@@ -761,19 +821,30 @@ void ON_SimpleArray<T>::SetCount( int count )
 }
 
 template <class T>
-void ON_SimpleArray<T>::SetCapacity( int capacity ) 
+T* ON_SimpleArray<T>::SetCapacity( size_t new_capacity ) 
 {
+  if (0 == m_capacity)
+  {
+    // Allow "expert" users of ON_SimpleArray<>.SetArray(*,*,0) to clean up after themselves
+    // and deals with the case when the forget to clean up after themselves.
+    m_a = nullptr;
+    m_count = 0;
+  }
+
   // sets capacity to input value
+  int capacity = (new_capacity > 0 && new_capacity < ON_UNSET_UINT_INDEX) 
+               ? (int)new_capacity 
+               : 0;
   if ( capacity != m_capacity ) {
     if( capacity > 0 ) {
       if ( m_count > capacity )
         m_count = capacity;
-      // NOTE: Realloc() does an allocation if the first argument is NULL.
+      // NOTE: Realloc() does an allocation if the first argument is nullptr.
       m_a = Realloc( m_a, capacity );
       if ( m_a ) {
         if ( capacity > m_capacity ) {
           // zero new memory
-          memset( m_a + m_capacity, 0, (capacity-m_capacity)*sizeof(T) );
+          memset( (void*) (m_a + m_capacity), 0, (capacity-m_capacity)*sizeof(T) );
         }
         m_capacity = capacity;
       }
@@ -788,6 +859,7 @@ void ON_SimpleArray<T>::SetCapacity( int capacity )
       m_count = m_capacity = 0;
     }
   }
+  return m_a;
 }
 
 template <class T>
@@ -883,10 +955,36 @@ ON_ObjectArray<T>& ON_ObjectArray<T>::operator=( const ON_ObjectArray<T>& src)
   return *this;
 }
 
+#if defined(ON_HAS_RVALUEREF)
+
+// Clone constructor
+template <class T>
+ON_ObjectArray<T>::ON_ObjectArray( ON_ObjectArray<T>&& src )
+  : ON_ClassArray<T>(std::move(src))
+{}
+
+// Clone assignment
+template <class T>
+ON_ObjectArray<T>& ON_ObjectArray<T>::operator=( ON_ObjectArray<T>&& src )
+{
+  if( this != &src ) 
+  {
+    this->Destroy();
+    m_a = src.m_a;
+    m_count = src.m_count;
+    m_capacity = src.m_capacity;
+    src.m_a = 0;
+    src.m_count = 0;
+    src.m_capacity = 0;
+  }  
+  return *this;
+}
+
+#endif
 
 template <class T>
-ON_ObjectArray<T>::ON_ObjectArray( int c )
-                  : ON_ClassArray<T>(c)
+ON_ObjectArray<T>::ON_ObjectArray( size_t c )
+  : ON_ClassArray<T>(c)
 {
 }
 
@@ -934,17 +1032,17 @@ ON__UINT32 ON_ObjectArray<T>::DataCRC(ON__UINT32 current_remainder) const
 }
 
 template <class T>
-ON_ClassArray<T>::ON_ClassArray()
-                          : m_a(0),
-                            m_count(0),
-                            m_capacity(0)                            
+ON_ClassArray<T>::ON_ClassArray() ON_NOEXCEPT
+  : m_a(nullptr)
+  , m_count(0)
+  , m_capacity(0)                            
 {}
 
 template <class T>
-ON_ClassArray<T>::ON_ClassArray( int c )
-                          : m_a(0),
-                            m_count(0),
-                            m_capacity(0)                            
+ON_ClassArray<T>::ON_ClassArray( size_t c )
+  : m_a(nullptr)
+  , m_count(0)
+  , m_capacity(0)                            
 {
   if ( c > 0 ) 
     SetCapacity( c );
@@ -953,9 +1051,9 @@ ON_ClassArray<T>::ON_ClassArray( int c )
 // Copy constructor
 template <class T>
 ON_ClassArray<T>::ON_ClassArray( const ON_ClassArray<T>& src )
-                          : m_a(0),
-                            m_count(0),
-                            m_capacity(0)                            
+  : m_a(nullptr)
+  , m_count(0)
+  , m_capacity(0)                            
 {
   *this = src; // operator= defined below
 }
@@ -970,7 +1068,7 @@ template <class T>
 ON_ClassArray<T>& ON_ClassArray<T>::operator=( const ON_ClassArray<T>& src )
 {
   int i;
-  if( &src != this ) {
+  if( this != &src ) {
     if ( src.m_count <= 0 ) {
       m_count = 0;
     }
@@ -988,6 +1086,39 @@ ON_ClassArray<T>& ON_ClassArray<T>::operator=( const ON_ClassArray<T>& src )
   }  
   return *this;
 }
+
+#if defined(ON_HAS_RVALUEREF)
+
+// Clone constructor
+template <class T>
+ON_ClassArray<T>::ON_ClassArray( ON_ClassArray<T>&& src ) ON_NOEXCEPT
+  : m_a(src.m_a)
+  , m_count(src.m_count)
+  , m_capacity(src.m_capacity)
+{
+  src.m_a = 0;
+  src.m_count = 0;
+  src.m_capacity = 0;
+}
+
+// Clone assignment
+template <class T>
+ON_ClassArray<T>& ON_ClassArray<T>::operator=( ON_ClassArray<T>&& src ) ON_NOEXCEPT
+{
+  if( this != &src ) 
+  {
+    this->Destroy();
+    m_a = src.m_a;
+    m_count = src.m_count;
+    m_capacity = src.m_capacity;
+    src.m_a = 0;
+    src.m_count = 0;
+    src.m_capacity = 0;
+  }  
+  return *this;
+}
+
+#endif
 
 // emergency destroy ///////////////////////////////////////////////////
 
@@ -1080,6 +1211,20 @@ T& ON_ClassArray<T>::operator[]( ON__UINT64 i )
   return m_a[i]; 
 }
 
+#if defined(ON_RUNTIME_APPLE)
+template <class T>
+T& ON_ClassArray<T>::operator[](size_t i )
+{ 
+#if defined(ON_DEBUG)
+  if ( i > (size_t)m_capacity )
+  {
+    ON_ERROR("ON_ClassArray[i]: i out of range.");
+  }
+#endif
+  return m_a[i]; 
+}
+#endif
+
 template <class T>
 const T& ON_ClassArray<T>::operator[](int i) const
 {
@@ -1127,6 +1272,20 @@ const T& ON_ClassArray<T>::operator[](ON__UINT64 i) const
 #endif
   return m_a[i];
 }
+
+#if defined(ON_RUNTIME_APPLE)
+template <class T>
+const T& ON_ClassArray<T>::operator[](size_t i) const
+{
+#if defined(ON_DEBUG)
+  if ( i > (size_t)m_capacity )
+  {
+    ON_ERROR("ON_ClassArray[i]: i out of range.");
+  }
+#endif
+  return m_a[i];
+}
+#endif
 
 template <class T>
 ON_ClassArray<T>::operator T*()
@@ -1433,9 +1592,9 @@ void ON_ClassArray<T>::Reverse()
   int i = 0;  
   int j = m_count-1;
   for ( /*empty*/; i < j; i++, j-- ) {
-    memcpy( t, &m_a[i], sizeof(T) );
-    memcpy( &m_a[i], &m_a[j], sizeof(T) );
-    memcpy( &m_a[j], t, sizeof(T) );
+    memcpy( (void*)(t), (void*)(&m_a[i]), sizeof(T) );
+    memcpy( (void*)(&m_a[i]), (void*)(&m_a[j]), sizeof(T) );
+    memcpy( (void*)(&m_a[j]), (void*)(t), sizeof(T) );
   }
 }
 
@@ -1444,9 +1603,9 @@ void ON_ClassArray<T>::Swap( int i, int j )
 {
   if ( i != j && i >= 0 && j >= 0 && i < m_count && j < m_count ) {
     char t[sizeof(T)];
-    memcpy( t,       &m_a[i], sizeof(T) );
-    memcpy( &m_a[i], &m_a[j], sizeof(T) );
-    memcpy( &m_a[j], t,       sizeof(T) );
+    memcpy( (void*)(t),       (void*)(&m_a[i]), sizeof(T) );
+    memcpy( (void*)(&m_a[i]), (void*)(&m_a[j]), sizeof(T) );
+    memcpy( (void*)(&m_a[j]), (void*)(t),       sizeof(T) );
   }
 }
 
@@ -1464,14 +1623,8 @@ int ON_ClassArray<T>::Search( const T* key, int (*compar)(const T*,const T*) ) c
 template <class T>
 int ON_ClassArray<T>::BinarySearch( const T* key, int (*compar)(const T*,const T*) ) const
 {
-  const T* found = (key&&m_a&&m_count>0) ? (const T*)bsearch( key, m_a, m_count, sizeof(T), (int(*)(const void*,const void*))compar ) : 0;
-#if defined(ON_COMPILER_MSC1300)
-  // for 32 and 64 bit compilers - the (int) converts 64 bit size_t 
-  return found ? ((int)(found - m_a)) : -1;
-#else
-  // for lamer 64 bit compilers
-  return found ? ((int)((((ON__UINT64)found) - ((ON__UINT64)m_a))/sizeof(T))) : -1;
-#endif
+  const T* found = (key&&m_a&&m_count>0) ? (const T*)bsearch( key, m_a, m_count, sizeof(T), (int(*)(const void*,const void*))compar ) : nullptr;
+  return (nullptr != found && found >= m_a) ? ((int)(found - m_a)) : -1;
 }
 
 template <class T>
@@ -1481,14 +1634,8 @@ int ON_ClassArray<T>::BinarySearch( const T* key, int (*compar)(const T*,const T
     count = m_count;
   if ( count <= 0 )
     return -1;
-  const T* found = (key&&m_a&&m_count>0) ? (const T*)bsearch( key, m_a, count, sizeof(T), (int(*)(const void*,const void*))compar ) : 0;
-#if defined(ON_COMPILER_MSC1300)
-  // for 32 and 64 bit compilers - the (int) converts 64 bit size_t 
-  return found ? ((int)(found - m_a)) : -1;
-#else
-  // for lamer 64 bit compilers
-  return found ? ((int)((((ON__UINT64)found) - ((ON__UINT64)m_a))/sizeof(T))) : -1;
-#endif
+  const T* found = (key&&m_a&&m_count>0) ? (const T*)bsearch( key, m_a, count, sizeof(T), (int(*)(const void*,const void*))compar ) : nullptr;
+  return (nullptr != found && found >= m_a) ? ((int)(found - m_a)) : -1;
 }
 
 template <class T>
@@ -1608,9 +1755,9 @@ bool ON_ClassArray<T>::Permute( const int* index )
   {
     int i;
     T* buffer = (T*)onmalloc(m_count*sizeof(buffer[0]));
-    memcpy( buffer, m_a, m_count*sizeof(T) );
+    memcpy( (void*)(buffer), (void*)(m_a), m_count*sizeof(T) );
     for (i = 0; i < m_count; i++ )
-      memcpy( m_a+i, buffer+index[i], sizeof(T) ); // must use memcopy and not operator=
+      memcpy( (void*)(m_a+i), (void*)(buffer+index[i]), sizeof(T) ); // must use memcopy and not operator=
     onfree(buffer);
     rc = true;
   }
@@ -1635,10 +1782,11 @@ void ON_ClassArray<T>::Zero()
 // memory managment ////////////////////////////////////////////////////
 
 template <class T>
-void ON_ClassArray<T>::Reserve( int newcap ) 
+T* ON_ClassArray<T>::Reserve( size_t newcap ) 
 {
-  if( m_capacity < newcap )
+  if( (size_t)m_capacity < newcap )
     SetCapacity( newcap );
+  return m_a;
 }
 
 template <class T>
@@ -1663,11 +1811,22 @@ void ON_ClassArray<T>::SetCount( int count )
 }
 
 template <class T>
-void ON_ClassArray<T>::SetCapacity( int capacity ) 
+T* ON_ClassArray<T>::SetCapacity( size_t new_capacity ) 
 {
+  if (0 == m_capacity)
+  {
+    // Allow "expert" users of ON_SimpleArray<>.SetArray(*,*,0) to clean up after themselves
+    // and deals with the case when the forget to clean up after themselves.
+    m_a = nullptr;
+    m_count = 0;
+  }
   // uses "placement" for class construction/destruction
   int i;
-  if ( capacity < 1 ) {
+  int capacity = (new_capacity > 0 && new_capacity < ON_UNSET_UINT_INDEX)
+               ? (int)new_capacity 
+               : 0;
+
+  if ( capacity <= 0 ) {
     if ( m_a ) {
       for ( i = m_capacity-1; i >= 0; i-- ) {
         DestroyElement(m_a[i]);
@@ -1717,6 +1876,7 @@ void ON_ClassArray<T>::SetCapacity( int capacity )
       m_count = 0;
     }
   }
+  return m_a;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
@@ -1724,7 +1884,6 @@ void ON_ClassArray<T>::SetCapacity( int capacity )
 /////////////////////////////////////////////////////////////////////////////////////
 
 template< class T>
-static
 int ON_CompareIncreasing( const T* a, const T* b)
 {
 	if( *a < *b ) 
@@ -1735,7 +1894,6 @@ int ON_CompareIncreasing( const T* a, const T* b)
 }
 
 template< class T>
-static
 int ON_CompareDecreasing( const T* a, const T* b)
 {
 	if( *b < *a ) 
@@ -1745,8 +1903,6 @@ int ON_CompareDecreasing( const T* a, const T* b)
 	return 0;
 }
 
-#if defined(ON_COMPILER_MSC)
-#pragma warning(pop)
-#endif
+#pragma ON_PRAGMA_WARNING_POP
 
 #endif

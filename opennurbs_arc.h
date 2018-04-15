@@ -35,7 +35,14 @@ class ON_CLASS ON_Arc : public ON_Circle
 {
 public:
   // Create a radius one arc with angle = 2*pi
-  ON_Arc();
+  ON_Arc() = default;
+  ~ON_Arc() = default;
+  ON_Arc(const ON_Arc&) = default;
+  ON_Arc& operator=(const ON_Arc&) = default;
+
+  ON_Arc& operator=( const ON_Circle& );
+
+  static const ON_Arc UnitCircle; // unit circle in the xy plane
 
   /*
   Description:
@@ -285,11 +292,6 @@ public:
     const ON_3dPoint& end_point
     );
 
-  ON_Arc& operator=( const ON_Circle& );
-
-
-  ~ON_Arc();
-
   // Description:
   //   Creates a text dump of the arc listing the normal, center
   //   radius, start point, end point, and angle.
@@ -338,16 +340,16 @@ public:
       If true and the input tight_bbox is valid, then returned
       tight_bbox is the union of the input tight_bbox and the 
       arc's tight bounding box.
-		xform -[in] (default=NULL)
-      If not NULL, the tight bounding box of the transformed
+		xform -[in] (default=nullptr)
+      If not nullptr, the tight bounding box of the transformed
       arc is calculated.  The arc is not modified.
 	Returns:
     True if a valid tight_bbox is returned.
   */
 	bool GetTightBoundingBox( 
 			ON_BoundingBox& tight_bbox, 
-      int bGrowBox = false,
-			const ON_Xform* xform = 0
+      bool bGrowBox = false,
+			const ON_Xform* xform = nullptr
       ) const;
 
   // Returns:
@@ -593,7 +595,7 @@ private:
   friend bool ON_BinaryArchive::WriteArc( const ON_Arc& );
 
   // increasing interval with start and end angle in radians
-  ON_Interval m_angle;
+  ON_Interval m_angle = ON_Interval::ZeroToTwoPi;
 };
 
 #endif

@@ -16,6 +16,14 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
 ON_COMPONENT_INDEX::ON_COMPONENT_INDEX() 
                    : m_type(ON_COMPONENT_INDEX::invalid_type),
                      m_index(-1)
@@ -36,45 +44,58 @@ ON_COMPONENT_INDEX::TYPE ON_COMPONENT_INDEX::Type(int i)
   TYPE t = invalid_type;
   switch((unsigned int)i)
   {
-  case no_type:            t = no_type;            break;
-  case brep_vertex:        t = brep_vertex;        break;
-  case brep_edge:          t = brep_edge;          break;
-  case brep_face:          t = brep_face;          break;
-  case brep_trim:          t = brep_trim;          break;
-  case brep_loop:          t = brep_loop;          break;
-  case mesh_vertex:        t = mesh_vertex;        break;
-  case meshtop_vertex:     t = meshtop_vertex;     break;
-  case meshtop_edge:       t = meshtop_edge;       break;
-  case mesh_face:          t = mesh_face;          break;
-  case idef_part:          t = idef_part;          break;
-  case polycurve_segment:  t = polycurve_segment;  break;
-  case pointcloud_point:   t = pointcloud_point;   break;
-  case group_member:       t = group_member;       break;
+  case ON_COMPONENT_INDEX::no_type:            t = ON_COMPONENT_INDEX::no_type;            break;
+  
+  case ON_COMPONENT_INDEX::brep_vertex:        t = ON_COMPONENT_INDEX::brep_vertex;        break;
+  case ON_COMPONENT_INDEX::brep_edge:          t = ON_COMPONENT_INDEX::brep_edge;          break;
+  case ON_COMPONENT_INDEX::brep_face:          t = ON_COMPONENT_INDEX::brep_face;          break;
+  case ON_COMPONENT_INDEX::brep_trim:          t = ON_COMPONENT_INDEX::brep_trim;          break;
+  case ON_COMPONENT_INDEX::brep_loop:          t = ON_COMPONENT_INDEX::brep_loop;          break;
+  
+  case ON_COMPONENT_INDEX::mesh_vertex:        t = ON_COMPONENT_INDEX::mesh_vertex;        break;
+  case ON_COMPONENT_INDEX::meshtop_vertex:     t = ON_COMPONENT_INDEX::meshtop_vertex;     break;
+  case ON_COMPONENT_INDEX::meshtop_edge:       t = ON_COMPONENT_INDEX::meshtop_edge;       break;
+  case ON_COMPONENT_INDEX::mesh_face:          t = ON_COMPONENT_INDEX::mesh_face;          break;
+  case ON_COMPONENT_INDEX::mesh_ngon:          t = ON_COMPONENT_INDEX::mesh_ngon;          break;
 
-  case extrusion_bottom_profile: t = extrusion_bottom_profile; break;
-  case extrusion_top_profile:    t = extrusion_top_profile;    break;
-  case extrusion_wall_edge:      t = extrusion_wall_edge;      break;
-  case extrusion_wall_surface:   t = extrusion_wall_surface;   break;
-  case extrusion_cap_surface:    t = extrusion_cap_surface;    break;
-  case extrusion_path:           t = extrusion_path;           break;
+  case ON_COMPONENT_INDEX::idef_part:          t = ON_COMPONENT_INDEX::idef_part;          break;
+  case ON_COMPONENT_INDEX::polycurve_segment:  t = ON_COMPONENT_INDEX::polycurve_segment;  break;
+  case ON_COMPONENT_INDEX::pointcloud_point:   t = ON_COMPONENT_INDEX::pointcloud_point;   break;
+  case ON_COMPONENT_INDEX::group_member:       t = ON_COMPONENT_INDEX::group_member;       break;
 
-  case dim_linear_point:   t = dim_linear_point;   break;
-  case dim_radial_point:   t = dim_radial_point;   break;
-  case dim_angular_point:  t = dim_angular_point;  break;
-  case dim_ordinate_point: t = dim_ordinate_point; break;
-  case dim_text_point:     t = dim_text_point;     break;
+  case ON_COMPONENT_INDEX::extrusion_bottom_profile: t = ON_COMPONENT_INDEX::extrusion_bottom_profile; break;
+  case ON_COMPONENT_INDEX::extrusion_top_profile:    t = ON_COMPONENT_INDEX::extrusion_top_profile;    break;
+  case ON_COMPONENT_INDEX::extrusion_wall_edge:      t = ON_COMPONENT_INDEX::extrusion_wall_edge;      break;
+  case ON_COMPONENT_INDEX::extrusion_wall_surface:   t = ON_COMPONENT_INDEX::extrusion_wall_surface;   break;
+  case ON_COMPONENT_INDEX::extrusion_cap_surface:    t = ON_COMPONENT_INDEX::extrusion_cap_surface;    break;
+  case ON_COMPONENT_INDEX::extrusion_path:           t = ON_COMPONENT_INDEX::extrusion_path;           break;
+
+  case ON_COMPONENT_INDEX::dim_linear_point:   t = ON_COMPONENT_INDEX::dim_linear_point;   break;
+  case ON_COMPONENT_INDEX::dim_radial_point:   t = ON_COMPONENT_INDEX::dim_radial_point;   break;
+  case ON_COMPONENT_INDEX::dim_angular_point:  t = ON_COMPONENT_INDEX::dim_angular_point;  break;
+  case ON_COMPONENT_INDEX::dim_ordinate_point: t = ON_COMPONENT_INDEX::dim_ordinate_point; break;
+  case ON_COMPONENT_INDEX::dim_text_point:     t = ON_COMPONENT_INDEX::dim_text_point;     break;
   }
   return t;
 }
 
 
 void ON_COMPONENT_INDEX::Set(
-                                       ON_COMPONENT_INDEX::TYPE type,
-                                       int index
-                                       ) 
+  ON_COMPONENT_INDEX::TYPE type,
+  int index
+  ) 
 {
   m_type = type;
   m_index = index;
+}
+
+void ON_COMPONENT_INDEX::Set(
+  ON_COMPONENT_INDEX::TYPE type,
+  unsigned int index
+  ) 
+{
+  m_type = type;
+  m_index = (int)index;
 }
 
 void ON_COMPONENT_INDEX::UnSet()
@@ -92,6 +113,7 @@ bool ON_COMPONENT_INDEX::IsMeshComponentIndex() const
   case ON_COMPONENT_INDEX::meshtop_vertex:
   case ON_COMPONENT_INDEX::meshtop_edge:
   case ON_COMPONENT_INDEX::mesh_face:
+  case ON_COMPONENT_INDEX::mesh_ngon:
     if ( m_index >= 0 )
     {
       rc = true;
@@ -103,6 +125,27 @@ bool ON_COMPONENT_INDEX::IsMeshComponentIndex() const
   }
   return rc;
 }
+
+bool ON_COMPONENT_INDEX::IsSubDComponentIndex() const
+{
+  bool rc = false;
+  switch(m_type)
+  {
+  case ON_COMPONENT_INDEX::subd_vertex:
+  case ON_COMPONENT_INDEX::subd_edge:
+  case ON_COMPONENT_INDEX::subd_face:
+    if ( -1 != m_index && 0 != m_index )
+    {
+      rc = true;
+    }
+    break;
+  default:
+    // intentionally skipping other ON_COMPONENT_INDEX::TYPE enum values
+    break;
+  }
+  return rc;
+}
+
 
 bool ON_COMPONENT_INDEX::IsAnnotationComponentIndex() const
 {
@@ -224,32 +267,197 @@ bool  ON_COMPONENT_INDEX::IsPointCloudComponentIndex() const
   return ( ON_COMPONENT_INDEX::pointcloud_point == m_type && m_index >= 0 );
 }
 
+static void ToStringHelper( ON_COMPONENT_INDEX ci, char* buffer, size_t sizeof_buffer )
+{
+  char* str = buffer;
+  size_t str_capacity = sizeof_buffer/sizeof(buffer[0]);
+  const char* s;
+  const char* str_end;
+  char ubuffer[32]; // unsigned int to string storage ubuffer
+  unsigned int i, j;
+
+  if ( nullptr == str || str_capacity <= 0 )
+    return;
+
+  str[--str_capacity] = 0;
+  if (str_capacity <= 0)
+    return;
+
+  str_end = str + str_capacity;
+
+  s = "m_type=";
+  while ( str < str_end )
+  {
+    const char c = *s++;
+    if (0 == c)
+      break;
+
+    *str++ = c;
+  }
+
+  switch(ci.m_type)
+  {
+  case ON_COMPONENT_INDEX::no_type:            s = "ON_COMPONENT_INDEX::no_type";            break;
+  
+  case ON_COMPONENT_INDEX::brep_vertex:        s = "ON_COMPONENT_INDEX::brep_vertex";        break;
+  case ON_COMPONENT_INDEX::brep_edge:          s = "ON_COMPONENT_INDEX::brep_edge";          break;
+  case ON_COMPONENT_INDEX::brep_face:          s = "ON_COMPONENT_INDEX::brep_face";          break;
+  case ON_COMPONENT_INDEX::brep_trim:          s = "ON_COMPONENT_INDEX::brep_trim";          break;
+  case ON_COMPONENT_INDEX::brep_loop:          s = "ON_COMPONENT_INDEX::brep_loop";          break;
+  
+  case ON_COMPONENT_INDEX::mesh_vertex:        s = "ON_COMPONENT_INDEX::mesh_vertex";        break;
+  case ON_COMPONENT_INDEX::meshtop_vertex:     s = "ON_COMPONENT_INDEX::meshtop_vertex";     break;
+  case ON_COMPONENT_INDEX::meshtop_edge:       s = "ON_COMPONENT_INDEX::meshtop_edge";       break;
+  case ON_COMPONENT_INDEX::mesh_face:          s = "ON_COMPONENT_INDEX::mesh_face";          break;
+  case ON_COMPONENT_INDEX::mesh_ngon:          s = "ON_COMPONENT_INDEX::mesh_ngon";          break;
+
+  case ON_COMPONENT_INDEX::idef_part:          s = "ON_COMPONENT_INDEX::idef_part";          break;
+  case ON_COMPONENT_INDEX::polycurve_segment:  s = "ON_COMPONENT_INDEX::polycurve_segment";  break;
+  case ON_COMPONENT_INDEX::pointcloud_point:   s = "ON_COMPONENT_INDEX::pointcloud_point";   break;
+  case ON_COMPONENT_INDEX::group_member:       s = "ON_COMPONENT_INDEX::group_member";       break;
+
+  case ON_COMPONENT_INDEX::extrusion_bottom_profile: s = "ON_COMPONENT_INDEX::extrusion_bottom_profile"; break;
+  case ON_COMPONENT_INDEX::extrusion_top_profile:    s = "ON_COMPONENT_INDEX::extrusion_top_profile";    break;
+  case ON_COMPONENT_INDEX::extrusion_wall_edge:      s = "ON_COMPONENT_INDEX::extrusion_wall_edge";      break;
+  case ON_COMPONENT_INDEX::extrusion_wall_surface:   s = "ON_COMPONENT_INDEX::extrusion_wall_surface";   break;
+  case ON_COMPONENT_INDEX::extrusion_cap_surface:    s = "ON_COMPONENT_INDEX::extrusion_cap_surface";    break;
+  case ON_COMPONENT_INDEX::extrusion_path:           s = "ON_COMPONENT_INDEX::extrusion_path";           break;
+
+  case ON_COMPONENT_INDEX::dim_linear_point:   s = "ON_COMPONENT_INDEX::dim_linear_point";   break;
+  case ON_COMPONENT_INDEX::dim_radial_point:   s = "ON_COMPONENT_INDEX::dim_radial_point";   break;
+  case ON_COMPONENT_INDEX::dim_angular_point:  s = "ON_COMPONENT_INDEX::dim_angular_point";  break;
+  case ON_COMPONENT_INDEX::dim_ordinate_point: s = "ON_COMPONENT_INDEX::dim_ordinate_point"; break;
+  case ON_COMPONENT_INDEX::dim_text_point:     s = "ON_COMPONENT_INDEX::dim_text_point";     break;
+
+  default: s = 0; break;
+  }
+
+  if ( 0 != s )
+  {
+    while ( str < str_end )
+    {
+      const char c = *s++;
+      if (0 == c)
+        break;
+
+      *str++ = c;
+    }
+  }
+
+  s = " m_index=";
+  while ( str < str_end )
+  {
+    const char c = *s++;
+    if (0 == c)
+      break;
+
+    *str++ = c;
+  }
+
+  if ( ci.m_index < 1 )
+  {
+    i = (unsigned int)(-ci.m_index);
+    s = "-";
+    while ( str < str_end )
+    {
+      const char c = *s++;
+      if (0 == c)
+        break;
+
+      *str++ = c;
+    }
+  }
+  else
+  {
+    i = (unsigned int)(ci.m_index);
+  }
+  
+  j = sizeof(ubuffer)/sizeof(ubuffer[0]);
+  j--;
+  ubuffer[j] = 0;
+  while(j > 0)
+  {
+    j--;
+    ubuffer[j] = (char)('0'+i%10);
+    i /= 10;
+    if ( 0 == i )
+      break;
+  }
+
+  s = &ubuffer[j];
+  while ( str < str_end )
+  {
+    if ( 0 == (*str++ = *s++))
+      break;
+  }
+}
+
+void ON_COMPONENT_INDEX::Dump( 
+  class ON_TextLog& text_log 
+  )const
+{
+  char buffer[128];
+  ToStringHelper(*this,buffer,sizeof(buffer));
+  text_log.Print(buffer);
+}
+
+void ON_COMPONENT_INDEX::AppendToString( 
+  class ON_String& s
+  )const
+{
+  char buffer[128];
+  ToStringHelper(*this,buffer,sizeof(buffer));
+  s += buffer;
+}
+
+void ON_COMPONENT_INDEX::AppendToString( 
+  class ON_wString& s
+  )const
+{
+  char buffer[128];
+  ToStringHelper(*this,buffer,sizeof(buffer));
+  s += buffer;
+}
+
+bool ON_COMPONENT_INDEX::IsNotSet() const
+{
+  return (false == IsSet());
+}
+
 bool ON_COMPONENT_INDEX::IsSet() const
 {
   bool rc = false;
   switch(m_type)
   {
-  case invalid_type:
+  case ON_COMPONENT_INDEX::invalid_type:
     rc = false;
     break;
 
-  case no_type:
+  case ON_COMPONENT_INDEX::no_type:
     rc = false;
     break;
 
-  case brep_vertex:
-  case brep_edge:
-  case brep_face:
-  case brep_trim:
-  case brep_loop:
-  case mesh_vertex:
-  case meshtop_vertex:
-  case meshtop_edge:
-  case mesh_face:
-  case idef_part:
-  case polycurve_segment:
-  case pointcloud_point:
-  case group_member:
+  case ON_COMPONENT_INDEX::brep_vertex:
+  case ON_COMPONENT_INDEX::brep_edge:
+  case ON_COMPONENT_INDEX::brep_face:
+  case ON_COMPONENT_INDEX::brep_trim:
+  case ON_COMPONENT_INDEX::brep_loop:
+
+  case ON_COMPONENT_INDEX::mesh_vertex:
+  case ON_COMPONENT_INDEX::meshtop_vertex:
+  case ON_COMPONENT_INDEX::meshtop_edge:
+  case ON_COMPONENT_INDEX::mesh_face:
+  case ON_COMPONENT_INDEX::mesh_ngon:
+
+  case ON_COMPONENT_INDEX::idef_part:
+  case ON_COMPONENT_INDEX::polycurve_segment:
+  case ON_COMPONENT_INDEX::pointcloud_point:
+  case ON_COMPONENT_INDEX::group_member:
+
+  case ON_COMPONENT_INDEX::subd_vertex:
+  case ON_COMPONENT_INDEX::subd_edge:
+  case ON_COMPONENT_INDEX::subd_face:
+
     rc = (m_index != -1);
     break;
 
@@ -404,7 +612,7 @@ ON_ObjRef::ON_ObjRef()
             m_parent_geometry(0),
             m_geometry_type(ON::unknown_object_type),
             m_runtime_sn(0),
-            m_point(ON_UNSET_POINT),
+            m_point(ON_3dPoint::UnsetPoint),
             m_osnap_mode(ON::os_none),
             m__proxy1(0),
             m__proxy2(0),
@@ -420,7 +628,7 @@ void ON_ObjRef::Destroy()
   m_parent_geometry = 0;
   m_geometry_type = ON::unknown_object_type;
   m_runtime_sn = 0;
-  m_point = ON_UNSET_POINT;
+  m_point = ON_3dPoint::UnsetPoint;
   m_osnap_mode = ON::os_none;
   m__proxy1 = 0;
   m__proxy2 = 0;
@@ -712,8 +920,8 @@ const ON_Brep* ON_BrepParent( const ON_Geometry* geo )
 {
   const ON_Brep* brep = 0;
 
-  if ( geo == NULL )
-    return NULL;
+  if ( geo == nullptr )
+    return nullptr;
 
   if  ( ON::brep_object == geo->ObjectType() )
   {
@@ -770,47 +978,18 @@ const ON_Mesh* ON_MeshParent( const ON_Geometry* geo )
 {
   const ON_Mesh* mesh = 0;
 
-  if ( geo == NULL )
-    return NULL;
+  if ( geo == nullptr )
+    return nullptr;
 
   if  ( ON::mesh_object == geo->ObjectType() )
   {
     mesh = ON_Mesh::Cast(geo);
   }
-  else
+  else if ( geo->ComponentIndex().IsMeshComponentIndex() )
   {
-    // ComponentIndex() is the fastest way
-    switch( geo->ComponentIndex().m_type )
-    {
-    case ON_COMPONENT_INDEX::mesh_vertex:
-    case ON_COMPONENT_INDEX::meshtop_vertex:
-      {
-        const ON_MeshVertexRef* vref = ON_MeshVertexRef::Cast(geo);
-        if ( vref )
-          mesh = vref->m_mesh;
-      }
-      break;
-
-    case ON_COMPONENT_INDEX::meshtop_edge:
-      {
-        const ON_MeshEdgeRef* eref = ON_MeshEdgeRef::Cast(geo);
-        if ( eref )
-          mesh = eref->m_mesh;
-      }
-      break;
-
-    case ON_COMPONENT_INDEX::mesh_face:
-      {
-        const ON_MeshFaceRef* fref = ON_MeshFaceRef::Cast(geo);
-        if ( fref )
-          mesh = fref->m_mesh;
-      }
-      break;
-
-    default:
-      // intentionally skipping other ON_COMPONENT_INDEX::TYPE enum values
-      break;
-    }
+    const ON_MeshComponentRef* cref = ON_MeshComponentRef::Cast(geo);
+    if ( cref )
+      mesh = cref->Mesh();
   }
 
   return mesh;
@@ -903,6 +1082,21 @@ bool ON_ObjRef::SetParentIRef( const ON_InstanceRef& iref,
     if ( parent_brep )
     {
       // handle breps and their parts
+
+      // 6 June 2013, Mikko, RH-9846:
+      // This is a near facsimile of the 87827 fix above.
+      // If it's a brep proxy component for an extrusion object, then keep going.
+      if (    0 != m__proxy1
+           && 0 == m__proxy2 
+           && 0 != m__proxy_ref_count 
+           && 1 == *m__proxy_ref_count 
+           && m__proxy1 != m_geometry
+           && m_geometry->ComponentIndex().IsBrepComponentIndex()
+           )
+      {
+        // brep proxy component for an extrusion object, keep going
+      }
+      else
       if ( m__proxy1 || m__proxy_ref_count )
       {
         return false;
@@ -940,36 +1134,30 @@ bool ON_ObjRef::SetParentIRef( const ON_InstanceRef& iref,
       if ( parent_mesh  )
       {
         // handle meshes and their parts
-        switch(m_component_index.m_type)
+        if ( m_component_index.IsMeshComponentIndex() )
         {
-        case ON_COMPONENT_INDEX::mesh_vertex:
-        case ON_COMPONENT_INDEX::meshtop_vertex:
-        case ON_COMPONENT_INDEX::meshtop_edge:
-        case ON_COMPONENT_INDEX::mesh_face:
+          if ( m_geometry->ComponentIndex() != m_component_index )
+            return false;
+          ON_Mesh* proxy_mesh = parent_mesh->Duplicate();
+          if ( !proxy_mesh->Transform(iref.m_xform) )
           {
-            if ( m_geometry->ComponentIndex() != m_component_index )
-              return false;
-            ON_Mesh* proxy_mesh = parent_mesh->Duplicate();
-            if ( !proxy_mesh->Transform(iref.m_xform) )
-            {
-              delete proxy_mesh;
-              return false;
-            }
-            ON_Geometry* proxy_component = proxy_mesh->MeshComponent(m_component_index);
-            if( !proxy_component )
-            {
-              delete proxy_mesh;
-              return false;
-            }
-            m_geometry = proxy_component;
-            m_parent_geometry = proxy_mesh;
-            SetProxy(proxy_component,proxy_mesh,true);
-            rc = true;
+            delete proxy_mesh;
+            return false;
           }
-          break;
-        default:
+          ON_Geometry* proxy_component = proxy_mesh->MeshComponent(m_component_index);
+          if( !proxy_component )
+          {
+            delete proxy_mesh;
+            return false;
+          }
+          m_geometry = proxy_component;
+          m_parent_geometry = proxy_mesh;
+          SetProxy(proxy_component,proxy_mesh,true);
+          rc = true;
+        }
+        else
+        {
           return false;
-          break;
         }
       }
     }
@@ -980,7 +1168,7 @@ bool ON_ObjRef::SetParentIRef( const ON_InstanceRef& iref,
     // This is a valid reference to a piece of geometry
     // in an instance definition.
 
-    ON_Xform geometry_xform(1.0);
+    ON_Xform geometry_xform(ON_Xform::IdentityTransformation);
     if ( m__iref.Count() > 0 )
       geometry_xform = m__iref.Last()->m_geometry_xform;
 
@@ -1022,10 +1210,7 @@ void ON_ObjRef::SetProxy(
   m__proxy2 = proxy2;
   if ( bCountReferences && (m__proxy1 || m__proxy2) )
   {
-    m__proxy_ref_count = (int*)onmalloc_from_pool( 
-          ON_MainMemoryPool(), 
-          sizeof(*m__proxy_ref_count) 
-          );
+    m__proxy_ref_count = (int*)onmalloc( sizeof(*m__proxy_ref_count) );
     *m__proxy_ref_count = 1;
   }
 }
@@ -1049,7 +1234,7 @@ void ON_ObjRef::DecrementProxyReferenceCount()
       // to zero (in case some rogue reference still exists),
       // delete m__proxy and m__proxy_ref_count, and
       // set m_geometry (which points to some part of m__proxy)
-      // to NULL.
+      // to nullptr.
 
       // Setting *m__proxy_ref_count to zero, prevents crashes
       // if somebody incorrectly uses memcpy() instead of the 
@@ -1084,23 +1269,8 @@ void ON_ObjRef::DecrementProxyReferenceCount()
   m_geometry = 0;
 }
 
-ON_ObjRef_IRefID::ON_ObjRef_IRefID()
-          : m_iref_uuid(ON_nil_uuid),
-            m_iref_xform(0.0),
-            m_idef_uuid(ON_nil_uuid),
-            m_idef_geometry_index(0),
-            m_geometry_xform(0.0)
-{
-}
-
 void ON_ObjRef_IRefID::Default()
 {
   ON_ObjRef_IRefID d;
   *this = d;
 }
-
-ON_ObjRef_IRefID::~ON_ObjRef_IRefID()
-{
-}
-
-

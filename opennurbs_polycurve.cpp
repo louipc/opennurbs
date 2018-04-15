@@ -16,22 +16,70 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
 ON_OBJECT_IMPLEMENT(ON_PolyCurve,ON_Curve,"4ED7D4E0-E947-11d3-BFE5-0010830122F0");
 
-ON_PolyCurve::ON_PolyCurve()
+ON_PolyCurve::ON_PolyCurve() ON_NOEXCEPT
 {
 }
+
+ON_PolyCurve::~ON_PolyCurve()
+{
+  Destroy();
+}
+
+ON_PolyCurve::ON_PolyCurve( const ON_PolyCurve& src )
+  : ON_Curve(src)
+  , m_t(src.m_t)
+{
+  // need to copy the curves (not just the pointer values)
+  src.m_segment.Duplicate(m_segment);
+}
+
+ON_PolyCurve& ON_PolyCurve::operator=( const ON_PolyCurve& src )
+{
+  if ( this != &src )
+  {
+    ON_Curve::operator=(src);
+    src.m_segment.Duplicate(m_segment);
+    m_t = src.m_t;
+  }
+  return *this;
+}
+
+#if defined(ON_HAS_RVALUEREF)
+
+ON_PolyCurve::ON_PolyCurve( ON_PolyCurve&& src) ON_NOEXCEPT
+  : ON_Curve(std::move(src)) // moves userdata
+  , m_segment(std::move(src.m_segment))
+  , m_t(std::move(src.m_t))
+{}
+
+ON_PolyCurve& ON_PolyCurve::operator=( ON_PolyCurve&& src)
+{
+  if ( this != &src )
+  {
+    this->Destroy();
+    ON_Curve::operator=(src); // moves userdata
+    m_segment = std::move(src.m_segment);
+    m_t = std::move(src.m_t);
+  }
+  return *this;
+}
+
+#endif
 
 ON_PolyCurve::ON_PolyCurve( int capacity )
               : m_segment(capacity), m_t(capacity+1)
 {
   m_segment.Zero();
-}
-
-ON_PolyCurve::ON_PolyCurve( const ON_PolyCurve& src )
-              : m_segment(src.Count()), m_t(src.Count()+1)
-{
-  *this = src;
 }
 
 void ON_PolyCurve::Destroy()
@@ -41,10 +89,7 @@ void ON_PolyCurve::Destroy()
   m_t.Destroy();
 }
 
-ON_PolyCurve::~ON_PolyCurve()
-{
-  Destroy();
-}
+
 
 void ON_PolyCurve::EmergencyDestroy()
 {
@@ -94,27 +139,7 @@ ON__UINT32 ON_PolyCurve::DataCRC(ON__UINT32 current_remainder) const
 }
 
 
-ON_PolyCurve& ON_PolyCurve::operator=( const ON_PolyCurve& src )
-{
-  if ( this != &src ) {
-    ON_Curve::operator=(src);
-    const int segment_capacity = m_segment.Capacity();
-    ON_Curve** segment = m_segment.Array();
-    int i;
-    for ( i = 0; i < segment_capacity; i++ ) {
-      if ( segment[i] ) {
-        delete segment[i];
-        segment[i] = 0;
-      }
-    }
-    src.m_segment.Duplicate(m_segment);
-    m_t.SetCount(0);
-    m_t.SetCapacity(src.m_t.Count());
-    m_t.Zero();
-    m_t = src.m_t;
-  }
-  return *this;
-}
+
 
 int ON_PolyCurve::Dimension() const
 {
@@ -122,16 +147,15 @@ int ON_PolyCurve::Dimension() const
   return (p) ? p->Dimension() : 0;
 }
 
-ON_BOOL32 
-ON_PolyCurve::GetBBox( // returns true if successful
+bool ON_PolyCurve::GetBBox( // returns true if successful
          double* boxmin,    // minimum
          double* boxmax,    // maximum
-         ON_BOOL32 bGrowBox
+         bool bGrowBox
          ) const
 {
   const int count = Count();
   int segment_index;
-  ON_BOOL32 rc = (count>0) ? true : false;
+  bool rc = (count>0) ? true : false;
   for ( segment_index = 0; segment_index < count && rc; segment_index++ ) {
     rc = m_segment[segment_index]->GetBBox( boxmin, boxmax, bGrowBox );
     bGrowBox = true;
@@ -139,14 +163,14 @@ ON_PolyCurve::GetBBox( // returns true if successful
   return rc;
 }
 
-ON_BOOL32
+bool
 ON_PolyCurve::Transform( const ON_Xform& xform )
 {
   TransformUserData(xform);
   DestroyRuntimeCache();
   const int count = Count();
   int segment_index;
-  ON_BOOL32 rc = (count>0) ? true : false;
+  bool rc = (count>0) ? true : false;
   for ( segment_index = 0; segment_index < count && rc; segment_index++ ) {
     rc = m_segment[segment_index]->Transform( xform );
   }
@@ -201,12 +225,12 @@ bool ON_PolyCurve::MakeDeformable()
 }
 
 
-ON_BOOL32
+bool
 ON_PolyCurve::SwapCoordinates( int i, int j )
 {
   const int count = Count();
   int segment_index;
-  ON_BOOL32 rc = (count>0) ? true : false;
+  bool rc = (count>0) ? true : false;
   for ( segment_index = 0; segment_index < count && rc; segment_index++ ) {
     rc = m_segment[segment_index]->SwapCoordinates( i, j );
   }
@@ -214,7 +238,7 @@ ON_PolyCurve::SwapCoordinates( int i, int j )
   return rc;
 }
 
-ON_BOOL32 ON_PolyCurve::IsValid( ON_TextLog* text_log ) const
+bool ON_PolyCurve::IsValid( ON_TextLog* text_log ) const
 {
   return IsValid(false,text_log);
 }
@@ -352,12 +376,12 @@ void ON_PolyCurve::Dump( ON_TextLog& dump ) const
   dump.PopIndent();
 }
 
-ON_BOOL32 ON_PolyCurve::Write(
+bool ON_PolyCurve::Write(
        ON_BinaryArchive& file // open binary file
      ) const
 {
   // NOTE - if changed, check legacy I/O code
-  ON_BOOL32 rc = file.Write3dmChunkVersion(1,0);
+  bool rc = file.Write3dmChunkVersion(1,0);
   if (rc) {
     int reserved1 = 0;
     int reserved2 = 0;
@@ -383,7 +407,7 @@ ON_BOOL32 ON_PolyCurve::Write(
   return rc;
 }
 
-ON_BOOL32 ON_PolyCurve::Read(
+bool ON_PolyCurve::Read(
        ON_BinaryArchive& file  // open binary file
      )
 {
@@ -392,7 +416,7 @@ ON_BOOL32 ON_PolyCurve::Read(
   int major_version = 0;
   int minor_version = 0;
   
-  ON_BOOL32 rc = file.Read3dmChunkVersion(&major_version,&minor_version);
+  bool rc = file.Read3dmChunkVersion(&major_version,&minor_version);
   
   if (rc) 
   {
@@ -503,11 +527,11 @@ ON_Interval ON_PolyCurve::Domain() const
   return d;
 }
 
-ON_BOOL32 ON_PolyCurve::SetDomain( double t0, double t1 )
+bool ON_PolyCurve::SetDomain( double t0, double t1 )
 {
   ON_Interval d0 = Domain();
   ON_Interval d1(t0,t1);
-  ON_BOOL32 rc = d1.IsIncreasing();
+  bool rc = d1.IsIncreasing();
   if ( rc && d0 != d1 )
   {
     int i, count = m_t.Count();
@@ -565,9 +589,9 @@ bool ON_PolyCurve::SetParameterization( const double* t )
   return rc;
 }
 
-ON_BOOL32 ON_PolyCurve::ChangeClosedCurveSeam( double t )
+bool ON_PolyCurve::ChangeClosedCurveSeam( double t )
 {
-  ON_BOOL32 rc = IsClosed();
+  bool rc = IsClosed();
   if ( rc )
   {
   	DestroyRuntimeCache();
@@ -627,7 +651,7 @@ ON_BOOL32 ON_PolyCurve::ChangeClosedCurveSeam( double t )
 							if(segment_index<old_count)
 								scrv = m_segment[segment_index];		
 							else
-								scrv = NULL;
+								scrv = nullptr;
 						}
 						new_count--;
 					}
@@ -704,7 +728,7 @@ int ON_PolyCurve::SpanCount() const
   return span_count;
 }
 
-ON_BOOL32 ON_PolyCurve::GetSpanVector( // span "knots" 
+bool ON_PolyCurve::GetSpanVector( // span "knots" 
        double* s // array of length SpanCount() + 1 
        ) const
 {
@@ -752,12 +776,12 @@ int ON_PolyCurve::Degree() const
 }
 
 
-ON_BOOL32
+bool
 ON_PolyCurve::IsLinear( // true if curve locus is a line segment
       double tolerance // tolerance to use when checking linearity
       ) const
 {
-  ON_BOOL32 rc = false;
+  bool rc = false;
   int i, count = Count();
 	if ( count==1)
 		return m_segment[0]->IsLinear(tolerance);
@@ -856,10 +880,10 @@ int ON_PolyCurve::IsPolyline(
 }
 
 
-ON_BOOL32
+bool
 ON_PolyCurve::IsArc( // true if curve locus in an arc or circle
-      const ON_Plane* plane, // if not NULL, test is performed in this plane
-      ON_Arc* arc,         // if not NULL and true is returned, then arc
+      const ON_Plane* plane, // if not nullptr, test is performed in this plane
+      ON_Arc* arc,         // if not nullptr and true is returned, then arc
                               // arc parameters are filled in
       double tolerance // tolerance to use when checking linearity
       ) const
@@ -902,9 +926,9 @@ static bool GetTestPlane( const ON_Curve& curve, ON_Plane& plane )
 }
 
 
-ON_BOOL32
+bool
 ON_PolyCurve::IsPlanar(
-      ON_Plane* plane, // if not NULL and true is returned, then plane parameters
+      ON_Plane* plane, // if not nullptr and true is returned, then plane parameters
                          // are filled in
       double tolerance // tolerance to use when checking linearity
       ) const
@@ -914,7 +938,7 @@ ON_PolyCurve::IsPlanar(
     return ON_Curve::IsPlanar(plane,tolerance);
   }
 
-  ON_BOOL32 rc = false;
+  bool rc = false;
   ON_Plane test_plane;
   const int count = Count();
   const ON_Curve* crv = FirstSegmentCurve();
@@ -969,13 +993,13 @@ ON_PolyCurve::IsPlanar(
   return rc;
 }
 
-ON_BOOL32
+bool
 ON_PolyCurve::IsInPlane(
       const ON_Plane& plane, // plane to test
       double tolerance // tolerance to use when checking linearity
       ) const
 {
-  ON_BOOL32 rc = false;
+  bool rc = false;
   int i, count = Count();
   for ( i = 0; i < count; i++ )
   {
@@ -988,10 +1012,10 @@ ON_PolyCurve::IsInPlane(
   return rc;
 }
 
-ON_BOOL32 
+bool 
 ON_PolyCurve::IsClosed() const
 {
-  ON_BOOL32 bIsClosed = false;
+  bool bIsClosed = false;
   const int count = Count();
   if ( count == 1 ) {
     // evaluation test required
@@ -1304,10 +1328,10 @@ int ON_PolyCurve::FindNextGap(int segment_index0) const
 }
 
 
-ON_BOOL32 
+bool 
 ON_PolyCurve::IsPeriodic() const
 {
-  ON_BOOL32 bIsPeriodic = false;
+  bool bIsPeriodic = false;
   if ( Count() == 1 ) {
     const ON_Curve* c = FirstSegmentCurve();
     if ( c )
@@ -1484,7 +1508,7 @@ bool ON_NurbsCurve::GetNextDiscontinuity(
   int tmp_hint = 0, tmp_dtype=0;
   double d, tmp_t;
   ON_3dPoint Pm, Pp;
-  ON_3dVector D1m, D1p, D2m, D2p, Tm, Tp, Km, Kp;
+  ON_3dVector D1m, D1p, D2m, D2p, Tm, Tp, Km(ON_3dVector::NanVector), Kp(ON_3dVector::NanVector);
   int ki;
   if ( !hint )
     hint = &tmp_hint;
@@ -1493,9 +1517,9 @@ bool ON_NurbsCurve::GetNextDiscontinuity(
   if ( !t )
     t = &tmp_t;
   
-  if ( c == ON::C0_continuous )
+  if ( c == ON::continuity::C0_continuous )
     return false;
-  if ( c == ON::C0_locus_continuous )
+  if ( c == ON::continuity::C0_locus_continuous )
   {
     return ON_Curve::GetNextDiscontinuity( c, t0, t1, t, hint, dtype, 
                                     cos_angle_tolerance, curvature_tolerance );
@@ -1506,22 +1530,22 @@ bool ON_NurbsCurve::GetNextDiscontinuity(
   // First test for parametric discontinuities.  If none are found
   // then we will look for locus discontinuities at ends
   if ( m_order <= 2 )
-    c = ON::PolylineContinuity(c); // no need to check 2nd derivatives that are zero
+    c = ON::PolylineContinuity((int)c); // no need to check 2nd derivatives that are zero
   const ON::continuity input_c = c;
-  c = ON::ParametricContinuity(c);
-  bool bEv2ndDer    = (c == ON::C2_continuous || c == ON::G2_continuous || c == ON::Gsmooth_continuous) && (m_order>2);
-  bool bTestKappa   = ( bEv2ndDer && c != ON::C2_continuous );
-  bool bTestTangent = ( bTestKappa || c == ON::G1_continuous );
+  c = ON::ParametricContinuity((int)c);
+  bool bEv2ndDer    = (c == ON::continuity::C2_continuous || c == ON::continuity::G2_continuous || c == ON::continuity::Gsmooth_continuous) && (m_order>2);
+  bool bTestKappa   = ( bEv2ndDer && c != ON::continuity::C2_continuous );
+  bool bTestTangent = ( bTestKappa || c == ON::continuity::G1_continuous );
 
   int delta_ki = 1;
   int delta = ((bEv2ndDer) ? 3 : 2) - m_order; // delta <= 0
-  if ( ON::Cinfinity_continuous == c )
+  if ( ON::continuity::Cinfinity_continuous == c )
     delta = 0;
 
   ki = ON_NurbsSpanIndex(m_order,m_cv_count,m_knot,t0,(t0>t1)?-1:1,*hint);
   double segtol = (fabs(m_knot[ki]) + fabs(m_knot[ki+1]) + fabs(m_knot[ki+1]-m_knot[ki]))*ON_SQRT_EPSILON;
 
-  const bool bLineWiggleTest = (c == ON::Gsmooth_continuous && m_order >= 4);
+  const bool bLineWiggleTest = (c == ON::continuity::Gsmooth_continuous && m_order >= 4);
   bool bSpanIsLinear = false;
 
   if ( t0 < t1 )
@@ -1613,7 +1637,7 @@ bool ON_NurbsCurve::GetNextDiscontinuity(
 
     if (m_knot[ki] == m_knot[ki+delta]) 
     {  
-      if ( ON::Cinfinity_continuous == c )
+      if ( ON::continuity::Cinfinity_continuous == c )
       {
         // Cinfinity_continuous is treated as asking for the next knot
         *dtype = 3;
@@ -1655,10 +1679,10 @@ bool ON_NurbsCurve::GetNextDiscontinuity(
         
         if ( bTestKappa )
         {
-          bool bIsCurvatureContinuous = ( ON::Gsmooth_continuous == c )
+          bool bIsCurvatureContinuous = ( ON::continuity::Gsmooth_continuous == c )
                   ? ON_IsGsmoothCurvatureContinuous( Km, Kp, cos_angle_tolerance, curvature_tolerance )
                   : ON_IsG2CurvatureContinuous( Km, Kp, cos_angle_tolerance, curvature_tolerance );
-          if ( bIsCurvatureContinuous && ON::Gsmooth_continuous == c )
+          if ( bIsCurvatureContinuous && ON::continuity::Gsmooth_continuous == c )
           {
             if ( ON_NurbsArcToArcTransitionIsNotGsmooth(*this,ki,cos_angle_tolerance,curvature_tolerance) )
               bIsCurvatureContinuous = false;
@@ -1753,7 +1777,7 @@ bool ON_PolyCurve::GetNextDiscontinuity(
     //     If we don't find any, then well check for locus 
     //     discontinuities at the appropriate end
     ON::continuity input_c = c;
-    c = ON::ParametricContinuity(c);
+    c = ON::ParametricContinuity((int)c);
 
     segment_hint = (hint) ? (*hint & 0x3FFF) : 0;
     int segment_index = ON_NurbsSpanIndex(2,count+1,m_t,t0,(t0>t1)?-1:1,segment_hint);
@@ -1939,11 +1963,11 @@ bool ON_PolyCurve::GetNextDiscontinuity(
 
       switch( c )
       {
-      case ON::C1_continuous:
-      case ON::G1_continuous:
+      case ON::continuity::C1_continuous:
+      case ON::continuity::G1_continuous:
         crv->Ev1Der( crv0_t, Pm, D1m, crv0_side );   // point on this curve
         crv1->Ev1Der( crv1_t, Pp, D1p, -crv0_side ); // corresponding point on next curve
-        if ( c == ON::C1_continuous )
+        if ( c == ON::continuity::C1_continuous )
         {
           if ( !(D1m-D1p).IsTiny(D1m.MaximumCoordinate()*ON_SQRT_EPSILON) )
             rc = true;
@@ -1961,12 +1985,12 @@ bool ON_PolyCurve::GetNextDiscontinuity(
           *dtype = 1;
         break;
 
-      case ON::C2_continuous:
-      case ON::G2_continuous:
-      case ON::Gsmooth_continuous:
+      case ON::continuity::C2_continuous:
+      case ON::continuity::G2_continuous:
+      case ON::continuity::Gsmooth_continuous:
         crv->Ev2Der( crv0_t, Pm, D1m, D2m, crv0_side );   // point on this curve
         crv1->Ev2Der( crv1_t, Pp, D1p, D2p, -crv0_side ); // corresponding point on next curve
-        if ( c == ON::C2_continuous )
+        if ( c == ON::continuity::C2_continuous )
         {
           if ( !(D1m-D1p).IsTiny(D1m.MaximumCoordinate()*ON_SQRT_EPSILON) ) 
           {
@@ -1993,10 +2017,10 @@ bool ON_PolyCurve::GetNextDiscontinuity(
           }
           else 
           {
-            bool bIsCurvatureContinuous = ( ON::Gsmooth_continuous == c )
+            bool bIsCurvatureContinuous = ( ON::continuity::Gsmooth_continuous == c )
               ? ON_IsGsmoothCurvatureContinuous(Km, Kp, cos_angle_tolerance, curvature_tolerance)
               : ON_IsG2CurvatureContinuous(Km, Kp, cos_angle_tolerance, curvature_tolerance);
-            if ( bIsCurvatureContinuous &&  ON::Gsmooth_continuous == c )
+            if ( bIsCurvatureContinuous &&  ON::continuity::Gsmooth_continuous == c )
             {
               // This fixex http://dev.mcneel.com/bugtrack/?q=116273
               const ON_ArcCurve* arc0 = ON_ArcCurve::Cast(crv);
@@ -2023,7 +2047,7 @@ bool ON_PolyCurve::GetNextDiscontinuity(
               if ( dtype )
                 *dtype = 2;
             }
-            else if ( ON::Gsmooth_continuous == c )
+            else if ( ON::continuity::Gsmooth_continuous == c )
             {
               const double is_linear_tolerance = 1.0e-8;  
               const double is_linear_min_length = 1.0e-8;
@@ -2073,7 +2097,7 @@ bool ON_PolyCurve::GetNextDiscontinuity(
       // 20 March 2003 Dale Lear
       //   See if we need to do a locus check at an end
       rc = ON_Curve::GetNextDiscontinuity( input_c, 
-                        t0, t1, t, NULL, 
+                        t0, t1, t, nullptr, 
                         dtype, 
                         cos_angle_tolerance, curvature_tolerance );
     }
@@ -2084,7 +2108,7 @@ bool ON_PolyCurve::GetNextDiscontinuity(
 bool ON_PolyCurve::IsContinuous(
     ON::continuity desired_continuity,
     double t, 
-    int* hint, // default = NULL,
+    int* hint, // default = nullptr,
     double point_tolerance, // default=ON_ZERO_TOLERANCE
     double d1_tolerance, // default==ON_ZERO_TOLERANCE
     double d2_tolerance, // default==ON_ZERO_TOLERANCE
@@ -2110,7 +2134,7 @@ bool ON_PolyCurve::IsContinuous(
     }
 
     // "locus" and "parametric" are the same at this point.
-    desired_continuity = ON::ParametricContinuity(desired_continuity);
+    desired_continuity = ON::ParametricContinuity((int)desired_continuity);
 
 
     int segment_hint = 0, curve_hint = 0;
@@ -2182,7 +2206,7 @@ bool ON_PolyCurve::IsContinuous(
                            point_tolerance, d1_tolerance, d2_tolerance, 
                            cos_angle_tolerance, curvature_tolerance );
         if ( 0 != rc 
-             && ON::Gsmooth_continuous == desired_continuity 
+             && ON::continuity::Gsmooth_continuous == desired_continuity 
              && segment_index >= 0
              && segment_index < count
            )
@@ -2223,7 +2247,7 @@ bool ON_PolyCurve::IsContinuous(
 bool ON_NurbsCurve::IsContinuous(
     ON::continuity desired_continuity,
     double t, 
-    int* hint, // default = NULL,
+    int* hint, // default = nullptr,
     double point_tolerance, // default=ON_ZERO_TOLERANCE
     double d1_tolerance, // default==ON_ZERO_TOLERANCE
     double d2_tolerance, // default==ON_ZERO_TOLERANCE
@@ -2234,7 +2258,7 @@ bool ON_NurbsCurve::IsContinuous(
   bool rc = true;
 
   if ( m_order <= 2 )
-    desired_continuity = ON::PolylineContinuity(desired_continuity);
+    desired_continuity = ON::PolylineContinuity((int)desired_continuity);
 
   if ( t <= m_knot[m_order-2] || t >= m_knot[m_cv_count-1] )
   {
@@ -2250,9 +2274,9 @@ bool ON_NurbsCurve::IsContinuous(
   }
 
   // "locus" and "parametric" are the same at this point.
-  desired_continuity = ON::ParametricContinuity(desired_continuity);
+  desired_continuity = ON::ParametricContinuity((int)desired_continuity);
 
-  if ( m_order < m_cv_count && desired_continuity != ON::C0_continuous )
+  if ( m_order < m_cv_count && desired_continuity != ON::continuity::C0_continuous )
   {
     int tmp_hint;
     if ( !hint )
@@ -2291,7 +2315,7 @@ bool ON_NurbsCurve::IsContinuous(
     ki += m_order-2;
     if ( ki > m_order-2 && ki < m_cv_count-1 && m_knot[ki] == t  )
     {
-      if ( ON::Cinfinity_continuous == desired_continuity )
+      if ( ON::continuity::Cinfinity_continuous == desired_continuity )
       {
         // Cinfinity_continuous is a euphanisim for "at a knot"
         return false;
@@ -2302,20 +2326,20 @@ bool ON_NurbsCurve::IsContinuous(
 
       switch(desired_continuity)
       {
-      case ON::C2_continuous: 
+      case ON::continuity::C2_continuous: 
         if ( m_order - knot_mult >= 3 )
           return true;
         break;
-      case ON::C1_continuous: 
+      case ON::continuity::C1_continuous: 
         if ( m_order - knot_mult >= 2 )
           return true;
         break;
-      case ON::G2_continuous: 
-      case ON::Gsmooth_continuous: 
+      case ON::continuity::G2_continuous: 
+      case ON::continuity::Gsmooth_continuous: 
         if ( m_order - knot_mult >= 3 )
           return true;
         break;
-      case ON::G1_continuous: 
+      case ON::continuity::G1_continuous: 
         if ( m_order - knot_mult >= 2 )
           return true;
         break;
@@ -2330,7 +2354,7 @@ bool ON_NurbsCurve::IsContinuous(
                            cos_angle_tolerance, curvature_tolerance );
 
       if ( rc 
-           && ON::Gsmooth_continuous == desired_continuity 
+           && ON::continuity::Gsmooth_continuous == desired_continuity 
            && knot_mult == m_order-1 
            && ki > m_order-2
            && ki < m_cv_count-1
@@ -2356,12 +2380,12 @@ bool ON_NurbsCurve::IsContinuous(
   return rc;
 }
 
-ON_BOOL32
+bool
 ON_PolyCurve::Reverse()
 {
   const int count = Count();
   int i;
-  ON_BOOL32 rc = (count>0) ? true : false;
+  bool rc = (count>0) ? true : false;
   if ( rc ) {
     m_segment.Reverse();
     m_t.Reverse();
@@ -2418,7 +2442,7 @@ bool ON_TuneupEvaluationParameter(
 }
 
 
-ON_BOOL32 ON_PolyCurve::Evaluate( // returns false if unable to evaluate
+bool ON_PolyCurve::Evaluate( // returns false if unable to evaluate
        double t,       // evaluation parameter
        int der_count,  // number of derivatives (>=0)
        int v_stride,   // v[] array stride (>=Dimension())
@@ -2431,7 +2455,7 @@ ON_BOOL32 ON_PolyCurve::Evaluate( // returns false if unable to evaluate
                        //            repeated evaluations
        ) const
 {
-  ON_BOOL32 rc = false;
+  bool rc = false;
   const int count = Count();
   const int dim = Dimension();
   int segment_hint, curve_hint;
@@ -2560,7 +2584,7 @@ ON_PolyCurve::SegmentCurve(int segment_index) const
 {
   return ( segment_index >= 0 && segment_index < Count() ) 
          ? m_segment[segment_index] 
-         : NULL;
+         : nullptr;
 }
 
 
@@ -2629,19 +2653,19 @@ ON_PolyCurve::Reserve( int capacity )
   m_t.Reserve(capacity+1);
 }
 
-ON_BOOL32 ON_PolyCurve::Prepend( ON_Curve* c )
+bool ON_PolyCurve::Prepend( ON_Curve* c )
 {
 	DestroyCurveTree();
   return Insert( 0, c );
 }
 
-ON_BOOL32 ON_PolyCurve::Append( ON_Curve* c )
+bool ON_PolyCurve::Append( ON_Curve* c )
 {
 	DestroyCurveTree();
   return Insert( Count(), c );
 }
 
-ON_BOOL32 ON_PolyCurve::PrependAndMatch(ON_Curve* c)
+bool ON_PolyCurve::PrependAndMatch(ON_Curve* c)
 
 {
   if (Count() == 0) return Prepend(c);
@@ -2653,7 +2677,7 @@ ON_BOOL32 ON_PolyCurve::PrependAndMatch(ON_Curve* c)
   return Prepend(c);
 }
 
-ON_BOOL32 ON_PolyCurve::AppendAndMatch(ON_Curve* c)
+bool ON_PolyCurve::AppendAndMatch(ON_Curve* c)
 
 {
   if (Count() == 0) return Append(c);
@@ -2666,14 +2690,14 @@ ON_BOOL32 ON_PolyCurve::AppendAndMatch(ON_Curve* c)
 }
 
 
-ON_BOOL32 ON_PolyCurve::Remove( )
+bool ON_PolyCurve::Remove( )
 {
   return Remove(Count()-1);
 }
 
-ON_BOOL32 ON_PolyCurve::Remove( int segment_index )
+bool ON_PolyCurve::Remove( int segment_index )
 {
-  ON_BOOL32 rc = false;
+  bool rc = false;
   const int segment_count = Count();
   if ( segment_index >= 0 && segment_index < segment_count ) {
     delete m_segment[segment_index];
@@ -2699,54 +2723,64 @@ ON_BOOL32 ON_PolyCurve::Remove( int segment_index )
   return rc;
 }
 
-ON_BOOL32 ON_PolyCurve::Insert( int segment_index, ON_Curve* c )
+bool ON_PolyCurve::Insert( int segment_index, ON_Curve* c )
 {
   double s0, s1;
-  ON_BOOL32 rc = false;
+  bool rc = false;
   const int count = Count();
-  if ( segment_index >= 0 && segment_index <= count && c && c != this && c->GetDomain(&s0,&s1) ) 
+  if ( segment_index >= 0 && segment_index <= count && c && c != this && 
+		c->GetDomain(&s0,&s1) ) 
   {
-    rc = true;
-    m_segment.Insert( segment_index, c );
+		rc = true;
+		if (count > 0 && c->Dimension() != Dimension())			// 1-Sept-2017 (GBA)  Dimensions must agree
+		{
+			rc = c->ChangeDimension(Dimension());									// If not change the dimension of *c to match
+		}
 
-    // determine polycurve parameters for this segment
-    double t0, t1;
-    if ( segment_index == count ) {
-      // append segment
-      if ( count == 0 ) {
-        m_t.Append(s0);
-        m_t.Append(s1);
-      }
-      else {
-        t0 = m_t[count];
-        t1 = ( s0 == t0 ) ? s1 : (s1-s0+t0);
-        m_t.Append(t1);
-      }
-    }
-    else if ( segment_index == 0 ) {
-      // prepend segment
-      t1 = m_t[0];
-      t0 = ( s1 == t1 ) ? s0 : (s0-s1+t1);
-      m_t.Insert(0,t0);
-    }
-    else {
-      // insert segment
-      t0 = m_t[segment_index];
-      t1 = ( s0 == t0 ) ? s1 : (s1-s0+t0);
-      const double dt = t1-t0;
-      m_t.Insert(segment_index+1,t1);
-      double* t = m_t.Array();
-      for ( int i = segment_index+2; i <= count+1; i++ ) {
-        t[i] += dt;
-      }      
-    }
+		if (rc)
+		{
+			m_segment.Insert(segment_index, c);
+
+			// determine polycurve parameters for this segment
+			double t0, t1;
+			if (segment_index == count) {
+				// append segment
+				if (count == 0) {
+					m_t.Append(s0);
+					m_t.Append(s1);
+				}
+				else {
+					t0 = m_t[count];
+					t1 = (s0 == t0) ? s1 : (s1 - s0 + t0);
+					m_t.Append(t1);
+				}
+			}
+			else if (segment_index == 0) {
+				// prepend segment
+				t1 = m_t[0];
+				t0 = (s1 == t1) ? s0 : (s0 - s1 + t1);
+				m_t.Insert(0, t0);
+			}
+			else {
+				// insert segment
+				t0 = m_t[segment_index];
+				t1 = (s0 == t0) ? s1 : (s1 - s0 + t0);
+				const double dt = t1 - t0;
+				m_t.Insert(segment_index + 1, t1);
+				double* t = m_t.Array();
+				for (int i = segment_index + 2; i <= count + 1; i++) {
+					t[i] += dt;
+				}
+			}
+		}
   }
   return rc;
 }
 
-ON_BOOL32 ON_PolyCurve::SetStartPoint(ON_3dPoint start_point)
+
+bool ON_PolyCurve::SetStartPoint(ON_3dPoint start_point)
 {
-  ON_BOOL32 rc = false;
+  bool rc = false;
   // just do it // if ( !IsClosed() )
   {
     ON_Curve* c = FirstSegmentCurve();
@@ -2757,9 +2791,9 @@ ON_BOOL32 ON_PolyCurve::SetStartPoint(ON_3dPoint start_point)
   return rc;
 }
 
-ON_BOOL32 ON_PolyCurve::SetEndPoint(ON_3dPoint end_point)
+bool ON_PolyCurve::SetEndPoint(ON_3dPoint end_point)
 {
-  ON_BOOL32 rc = false;
+  bool rc = false;
   // just do it // if ( !IsClosed() )
   {
     ON_Curve* c = LastSegmentCurve();
@@ -2805,18 +2839,23 @@ int ON_PolyCurve::GetNurbForm(
       if ( !m_segment[i] )
         return 0;
       if ( i == si0 ) {
-        rc = m_segment[i]->GetNurbForm( nurb, tol, NULL );
+        rc = m_segment[i]->GetNurbForm( nurb, tol, nullptr );
         if ( rc < 1 )
           return rc;
         nurb.SetDomain( m_t[i], m_t[i+1] );
       }
       else {
-        rci = m_segment[i]->GetNurbForm( c, tol, NULL );
+        rci = m_segment[i]->GetNurbForm( c, tol, nullptr );
         if ( rci < 1 )
           return rci;
         else if ( rc < rci )
           rc = rci;
         c.SetDomain( m_t[i], m_t[i+1] );
+        ON_3dPoint PEnd = nurb.PointAtEnd();
+        ON_3dPoint PStart = c.PointAtStart();
+        ON_3dPoint P = 0.5*(PEnd+PStart);
+        nurb.SetEndPoint(P);
+        c.SetStartPoint(P);
         if ( !nurb.Append( c ) )
           return 0;
         c.Destroy();
@@ -2891,12 +2930,12 @@ int ON_PolyCurve::SegmentIndex(
 }
 
 
-ON_BOOL32 ON_PolyCurve::GetCurveParameterFromNurbFormParameter(
+bool ON_PolyCurve::GetCurveParameterFromNurbFormParameter(
       double nurbs_t,
       double* curve_t
       ) const
 {
-  ON_BOOL32 rc = false;
+  bool rc = false;
   int i = SegmentIndex( nurbs_t );
   const ON_Curve* curve = SegmentCurve(i);
   if ( curve ) {
@@ -2915,12 +2954,12 @@ ON_BOOL32 ON_PolyCurve::GetCurveParameterFromNurbFormParameter(
   return rc;
 }
 
-ON_BOOL32 ON_PolyCurve::GetNurbFormParameterFromCurveParameter(
+bool ON_PolyCurve::GetNurbFormParameterFromCurveParameter(
       double curve_t,
       double* nurbs_t
       ) const
 {
-  ON_BOOL32 rc = false;
+  bool rc = false;
   int i = SegmentIndex( curve_t );
   const ON_Curve* curve = SegmentCurve(i);
   if ( curve ) {
@@ -2950,7 +2989,7 @@ ON_Curve* ON_PolyCurve::HarvestSegment( int i )
   return segment_curve;
 }
 
-ON_BOOL32 ON_PolyCurve::Trim(
+bool ON_PolyCurve::Trim(
   const ON_Interval& domain
   )
 {
@@ -3093,7 +3132,7 @@ ON_BOOL32 ON_PolyCurve::Trim(
   {
     ON_Curve* curve = SegmentCurve(0);
     if ( 0 == curve )
-      return false; // bogus polycurve (m_segment[0] is a NULL pointer)
+      return false; // bogus polycurve (m_segment[0] is a nullptr pointer)
 
     c_dom = curve->Domain();
     if ( !c_dom.IsIncreasing() )
@@ -3363,7 +3402,7 @@ bool ON_PolyCurve::Extend(
 
 
 
-ON_BOOL32 ON_PolyCurve::Split(
+bool ON_PolyCurve::Split(
     double split_parameter,
     ON_Curve*& left_side, // left portion returned here
     ON_Curve*& right_side // right portion returned here
@@ -3393,7 +3432,7 @@ ON_BOOL32 ON_PolyCurve::Split(
     return false; // split_parameter is not an interior parameter
 
 
-  const ON_BOOL32 bDupSegs = ( this != pLeftSide && this != pRightSide );
+  const bool bDupSegs = ( this != pLeftSide && this != pRightSide );
 
 		/* 4 April 2003 Greg Arden		Made the following changes:
 																		1.	Use ParameterSearch() to decide if we should snap domain
@@ -3427,7 +3466,7 @@ ON_BOOL32 ON_PolyCurve::Split(
   {
     if ( !seg_curve->Split( c, seg_left, seg_right ) )
     {
-      double fuzz = 0.001; // anything small and > 1.0e-6 will work about the same
+      double fuzz = 0.001; // anything small and > 1.0e-6 will work about the same.
       if ( c_dom.NormalizedParameterAt(c) <= fuzz )
         c = c_dom[0];
       else if ( c_dom.NormalizedParameterAt(c) >= 1.0 - fuzz )
@@ -3656,13 +3695,8 @@ bool ON_PolyCurve::SynchronizeSegmentDomains()
 
 
 
-bool ON_PolyCurve::RemoveNestingEx( )
+bool ON_PolyCurve::RemoveNesting( )
 {
-  // 19 March 2003 Dale Lear
-  //     Added the true/false return code to RemoveNesting()
-  //     so that CRhinoDoc::AddObjects() can easily detect when
-  //     nested polycurves were added.  I had to add use
-  //     a new function name to avoid breaking the SDK.
   bool rc = false;
 	int n = Count();
 
@@ -3686,9 +3720,10 @@ bool ON_PolyCurve::RemoveNestingEx( )
   return rc;
 }
 
-void  ON_PolyCurve::RemoveNesting( )
+bool ON_PolyCurve::RemoveNestingEx( )
 {
-  RemoveNestingEx();
+  // RemoveNestingEx() is OBSOLETE
+  return RemoveNesting();
 }
 
 bool ON_PolyCurve::IsNested() const

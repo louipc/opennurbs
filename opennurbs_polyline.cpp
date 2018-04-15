@@ -16,6 +16,14 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
 ON_Polyline::ON_Polyline()
 {
 }
@@ -166,11 +174,13 @@ double ON_Polyline::Length() const
 ON_3dVector ON_Polyline::SegmentDirection( int segment_index ) const
 {
   ON_3dVector v;
-  if ( segment_index >= 0 && segment_index < m_count-1 ) {
+  if ( segment_index >= 0 && segment_index < m_count-1 ) 
+  {
     v = m_a[segment_index+1] - m_a[segment_index];
   }
-  else {
-    v.Zero();
+  else 
+  {
+    v = ON_3dVector::ZeroVector;
   }
   return v;
 }
@@ -187,7 +197,7 @@ ON_3dPoint ON_Polyline::PointAt( double t ) const
   const int count = m_count;
   int segment_index = 0;
   if ( count < 0 ) {
-    return ON_origin;
+    return ON_3dPoint::Origin;
   }
   else if (count == 1 ) {
     return m_a[0];
@@ -196,11 +206,11 @@ ON_3dPoint ON_Polyline::PointAt( double t ) const
     segment_index = (int)floor(t);
     if ( segment_index < 0 ) {
       segment_index = 0;
-      t = 0.0;
+      //t = 0.0;
     }
     else if ( segment_index >= count-1 ) {
-      segment_index = count-1;
-      t = 1.0;
+      segment_index = count-2;
+      t = 1.0;//Note: This is not correct if the input t is greater than count-1.  It needs to be adjusted.
     }
     else {
       t -= ((double)segment_index);
@@ -215,13 +225,13 @@ ON_3dVector ON_Polyline::DerivativeAt( double t ) const
   const int count = m_count;
   int segment_index = 0;
   if ( count < 2 )
-    return ON_origin;
+    return ON_3dPoint::Origin;
   else {
     segment_index = (int)floor(t);
     if ( segment_index < 0 )
       segment_index = 0;
     else if ( segment_index >= count-1 )
-      segment_index = count-1;
+      segment_index = count-2;
   }
   return m_a[segment_index+1]-m_a[segment_index];
 }
@@ -283,7 +293,7 @@ bool ON_Polyline::ClosestPointTo( const ON_3dPoint& point, double *t ) const
 ON_3dPoint ON_Polyline::ClosestPointTo( const ON_3dPoint& point ) const
 {
   double t;
-  ON_BOOL32 rc = ClosestPointTo( point, &t );
+  bool rc = ClosestPointTo( point, &t );
   if ( !rc )
     t = 0.0;
   return PointAt(t);

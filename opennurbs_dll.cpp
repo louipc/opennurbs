@@ -16,12 +16,20 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
 // opennurbs_dll.cpp : Defines the entry point for the Windows DLL application.
 //
 
-#if defined(ON_OS_WINDOWS) && defined(ON_DLL_EXPORTS)
+#if defined(ON_RUNTIME_WIN) && defined(OPENNURBS_EXPORTS)
 
-BOOL APIENTRY DllMain( HANDLE hModule, 
+int APIENTRY DllMain( HANDLE hModule, 
                        DWORD  ul_reason_for_call, 
                        LPVOID lpReserved
 					 )
@@ -61,5 +69,12 @@ BOOL APIENTRY DllMain( HANDLE hModule,
 
   return true;
 }
+
+
+///////////////////////////////////////////////////////////////////////////////
+//
+// For testing crash handling in opennurbs.dll
+//
+
 
 #endif

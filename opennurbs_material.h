@@ -22,163 +22,348 @@
 //
 // Class ON_Material
 // 
-class ON_CLASS ON_Material : public ON_Object
+class ON_CLASS ON_Material : public ON_ModelComponent
 {
   ON_OBJECT_DECLARE(ON_Material);
 
 public:
-  static double MaxShine();			// maximum value of shine exponent
+  static const double MaxShine; // maximum value of shine exponent = 255.0
 
-  ON_Material();					// Default grey color
-  ~ON_Material();					// destructor
-  // C++ default copy construction and operator= work fine.
-
-  bool operator==(const ON_Material&) const; // ignores m_material_index
-  bool operator!=(const ON_Material&) const; // ignores m_material_index
-
-  void Default();
-
-  /////////////////////////////////////////////////////////////////
-  // ON_Object overrides
+  static const ON_Material Unset;   // nil id
+  static const ON_Material Default; // persistent id
 
   /*
-  Description:
-    Tests an object to see if its data members are correctly
-    initialized.
   Parameters:
-    text_log - [in] if the object is not valid and text_log
-        is not NULL, then a brief englis description of the
-        reason the object is not valid is appened to the log.
-        The information appended to text_log is suitable for 
-        low-level debugging purposes by programmers and is 
-        not intended to be useful as a high level user 
-        interface tool.
+    model_component_reference - [in]
+    none_return_value - [in]
+      value to return if ON_Material::Cast(model_component_ref.ModelComponent())
+      is nullptr
   Returns:
-    @untitled table
-    true     object is valid
-    false    object is invalid, uninitialized, etc.
-  Remarks:
-    Overrides virtual ON_Object::IsValid
+    If ON_Material::Cast(model_component_ref.ModelComponent()) is not nullptr,
+    that pointer is returned.  Otherwise, none_return_value is returned. 
   */
-  ON_BOOL32 IsValid( ON_TextLog* text_log = NULL ) const;
+  static const ON_Material* FromModelComponentRef(
+    const class ON_ModelComponentReference& model_component_reference,
+    const ON_Material* none_return_value
+    );
 
-  void Dump( ON_TextLog& ) const; // for debugging
+  // compare everything except Index() value.
+  static int Compare( 
+    const ON_Material& a,
+    const ON_Material& b
+    );
 
-  ON_BOOL32 Write(
-         ON_BinaryArchive&  // open binary file
-       ) const;
+  // compare Id(), Name(), m_rdk_material_instance_id
+  static int CompareNameAndIds( 
+    const ON_Material& a,
+    const ON_Material& b
+    );
 
-  ON_BOOL32 Read(
-         ON_BinaryArchive&  // open binary file
-       );
+  // Compare all settings (color, reflection, texture, plug-in id) 
+  // that effect the appearance.
+  // Ignore Index(), Id(), Name(), m_rdk_material_instance_id.
+  static int CompareAppearance( 
+    const ON_Material& a,
+    const ON_Material& b
+    );
 
-  ON::object_type ObjectType() const;
+  static int CompareColorAttributes( 
+    const ON_Material& a,
+    const ON_Material& b
+    );
 
-  // virtual
-  ON_UUID ModelObjectId() const;
+  static int CompareReflectionAttributes( 
+    const ON_Material& a,
+    const ON_Material& b
+    );
+
+  static int CompareTextureAttributes( 
+    const ON_Material& a,
+    const ON_Material& b
+    );
+  
 
 
+  /*
+  Parameters:
+    fresnel_index_of_refraction - [in]
+      ON_Material::Material::Default.m_fresnel_index_of_refraction 
+      is a good default
+    N - [in]
+      3d surface normal
+    R - [in]
+      3d reflection direction
+  Returns:
+    1.0: 
+      The input values were not valid or the calculation failed due to 
+      a divide by zero or some other numerical arithmetic failure.
+    fresnel reflection coefficient
+      1/2 * ((g-c)/(g+c))^2 * (1 + ( (c*(g+c) -1)/(c*(g+c) + 1) )^2)
+      where
+        c = N o (N-R); // c = 3d vector dot product of N and (N-R)
+      and
+        g = sqrt(fresnel_index_of_refraction*fresnel_index_of_refraction + c*c - 1.0).
+  */
+  static double FresnelReflectionCoefficient(
+    double fresnel_index_of_refraction,
+    const double N[3],
+    const double R[3]
+    );
+
+public:
+  ON_Material() ON_NOEXCEPT;
+  ON_Material(const ON_Material& src);
+  ~ON_Material() = default;
+  ON_Material& operator=(const ON_Material& src) = default;
+
+private:
+  void Internal_CopyFrom(
+    const ON_Material& src
+    );
+
+public:
   /////////////////////////////////////////////////////////////////
-  // Interface
+  // ON_Object overrides
+  bool IsValid( class ON_TextLog* text_log = nullptr ) const override;
 
-  // ignores m_material_index
-  int Compare( const ON_Material& other ) const; 
+  void Dump(
+    ON_TextLog& text_log
+    ) const override;
 
-  // OBSOLETE - use m_ambient
+  bool Write(
+    ON_BinaryArchive& archive
+    ) const override;
+
+  bool Read(
+    ON_BinaryArchive& archive
+    ) override;
+
+  ON::object_type ObjectType() const override;
+  
+  /////////////////////////////////////////////////////////////////
+  // Interface 
+
   ON_Color Ambient() const;
-  // OBSOLETE - use m_diffuse
   ON_Color Diffuse() const;
-  // OBSOLETE - use m_emission
   ON_Color Emission() const;
-  // OBSOLETE - use m_specular
   ON_Color Specular() const;
 
-  // OBSOLETE - use m_ambient
   void SetAmbient(  ON_Color );
-  // OBSOLETE - use m_diffuse
   void SetDiffuse(  ON_Color );
-  // OBSOLETE - use m_emission
   void SetEmission( ON_Color );
-  // OBSOLETE - use m_specular
   void SetSpecular( ON_Color );
 
-  // Shine values are in range 0.0 to ON_Material::MaxShine()
+  // Shine values are in range 0.0 to ON_Material::MaxShine
   double Shine() const;
-  void SetShine( double );         // 0 to ON_Material::MaxShine()
+  void SetShine( double );         // 0 to ON_Material::MaxShine
 
   // Transparency values are in range 0.0 = opaque to 1.0 = transparent
   double Transparency() const;
   void SetTransparency( double );  // 0.0 = opaque, 1.0 = transparent
 
-  // OBSOLETE - use m_material_index
-  int MaterialIndex() const;
-  // OBSOLETE - use m_material_index
-  void SetMaterialIndex( int );
+  // Transparency values are in range 0.0 = opaque to 1.0 = transparent
+  double Reflectivity() const;
+  void SetReflectivity( double );  // 0.0 = opaque, 1.0 = transparent
 
-  // OBSOLETE - just use m_plugin_id
-  ON_UUID MaterialPlugInUuid() const;
+  // ID of the last plug-in to modify this material
+  ON_UUID MaterialPlugInId() const;
+  void SetMaterialPlugInId( 
+    ON_UUID plugin_id
+    );
 
-  // OBSOLETE - just use m_plugin_id
-  void SetMaterialPlugInUuid( ON_UUID );
+public:
+  /*
+  Description:
+    Get the RDK material id.
+  Returns:
+    The RDK material id for this material.
+  Remarks:
+    The RDK material id identifies a material definition managed by
+    the RDK (rendering development kit).  Multiple materials in
+    a Rhino or opennurbs model can reference the same RDK material.
+  */
+  ON_UUID RdkMaterialInstanceId() const;
 
-  // OBSOLETE - just use m_material_name
-  const wchar_t* MaterialName() const;
+  /*
+  Description:
+    Set this material's RDK material id.
+  Parameters:
+    rdk_material_id - [in]
+      RDK material id value.
+  Remarks:
+    The RDK material id identifies a material definition managed by
+    the RDK (rendering development kit).  Multiple materials in
+    a Rhino or opennurbs model can reference the same RDK material.
+  */
+  void SetRdkMaterialInstanceId(
+    ON_UUID rdk_material_instance_id
+    );
 
-  // OBSOLETE - just use m_material_name
-  void SetMaterialName( const wchar_t* );
+  bool RdkMaterialInstanceIdIsNotNil() const;
+  bool RdkMaterialInstanceIdIsNil() const;
 
-  // The only reliable and persistent way to reference 
-  // materials is by the material_id.
-  ON_UUID m_material_id;
+  /*
+  Returns:
+    True if the material can be shared.
+  Remarks:
+    If true, when an object using this material is copied,
+    the copy references the same material.
+  */
+  bool Shareable() const;
+  void SetShareable(
+    bool bShareable
+    );
 
-  // Runtime material table index. This value is constant
-  // for each runtim instance of Rhino, but can change
-  // each time a model is loaded or saved.  Once a material
-  // is in the CRhinoDoc material table, its id and index
-  // never change in that instance of Rhino.
-  int m_material_index;
+  /*
+  Returns:
+    True if lighting is disabled.
+  Remarks:
+    True means render this object without
+    applying any modulation based on lights.
+    Basically, the diffuse, ambient, specular and
+    emissive channels get combined additively, clamped,
+    and then get treated as an emissive channel.
+    Another way to think about it is when
+    m_bDisableLighting is true, render the same way
+    OpenGL does when ::glDisable( GL_LIGHTING ) is called.
+  */
+  bool DisableLighting() const;
 
-  // 
-  ON_wString m_material_name;  // For user comfort - duplicates permitted
+  void SetDisableLighting(
+    bool bDisableLighting
+    );
   
-  ON_wString m_flamingo_library; // Legacy information from V3.
-                                 // Will vanish in V5.
+  //If m_bUseDiffuseTextureAlphaForObjectTransparencyTexture is true, the alpha channel
+  //of the texture in m_textures with m_type=bitmap_texture is used in addition to any
+  //textures with m_type=transparency_texture.
+  bool UseDiffuseTextureAlphaForObjectTransparencyTexture() const;
+  void SetUseDiffuseTextureAlphaForObjectTransparencyTexture(
+    bool bUseDiffuseTextureAlphaForObjectTransparencyTexture
+    );
+  
+  //////////////////////////////////////////////////////////////
+  //
+  // Reflection and Refraction settings
+  //
 
-  ON_Color   m_ambient;
-  ON_Color   m_diffuse;
-  ON_Color   m_emission;
-  ON_Color   m_specular;
-  ON_Color   m_reflection;
-  ON_Color   m_transparent;
-  double     m_index_of_refraction; // generally >= 1.0 (speed of light in vacum)/(speed of light in material)
-  double     m_reflectivity; // 0.0 = none, 1.0 = 100%
-  double     m_shine;        // 0.0 = none to GetMaxShine()=maximum
-  double     m_transparency; // 0.0 = opaque to 1.0 = transparent (1.0-alpha)
+  // The bool m_bFresnelReflections enables fresnel scaling
+  // of reflection contributions to the diffuse color.
+  // True:
+  //   The fresnel term is used to scale the reflection contribution
+  //   before addition to the diffuse component.
+  // False:
+  //   The reflection contribution is simply added to the diffuse component.
+  bool FresnelReflections() const;
+  void SetFresnelReflections(
+    bool bFresnelReflections
+    );
 
-  bool m_bShared; // default = false.
-  // True means this material can be shared.  When an
-  // object that uses this material is copied,
-  // the new object will share the material.
-  // False means this material is not shared.
-  // When an object that uses this material is
-  // duplicated.
-
-  bool m_bDisableLighting; // default = false.
-  // True means render this object without
-  // applying any modulation based on lights.
-  // Basically, the diffuse, ambient, specular and
-  // emissive channels get combined additively, clamped,
-  // and then get treated as an emissive channel.
-  // Another way to think about it is when
-  // m_bDisableLighting is true, render the same way
-  // OpenGL does when ::glDisable( GL_LIGHTING ) is called.
 
 private:
-  unsigned char m_reserved1[2];
-#if defined(ON_64BIT_POINTER)
-  unsigned char m_reserved2[4];
-#endif
+  // The value of m_rdk_material_id idetifies an RDK (rendering development kit)
+  // material. Multiple materials in a Rhino model can refer to the same 
+  // RDK material id.  In V5 this value is stored in user data.  In V6 it is
+  // saved in the m_rdk_material_id field.
+  ON_UUID m_rdk_material_instance_id = ON_nil_uuid;
+
 public:
+  ON_Color m_ambient = ON_Color::Black;
+  ON_Color m_diffuse = ON_Color::Gray126;
+  ON_Color m_emission = ON_Color::Black;
+  ON_Color m_specular = ON_Color::White;
+  ON_Color m_reflection = ON_Color::White;
+  ON_Color m_transparent = ON_Color::White;
+
+private:
+  bool m_bShareable = false;
+
+private:
+  bool m_bDisableLighting = false;
+
+private:
+  bool m_bUseDiffuseTextureAlphaForObjectTransparencyTexture = false;
+
+private:
+  bool m_bFresnelReflections = false;
+
+private:
+  unsigned int m_reserved1 = 0;
+
+public:
+  double m_reflectivity = 0.0; // 0.0 = none, 1.0 = 100%
+  double m_shine = 0.0;        // 0.0 = none to GetMaxShine()=maximum
+  double m_transparency = 0.0; // 0.0 = opaque to 1.0 = transparent (1.0-alpha)
+
+  /*
+  m_reflection_glossiness:
+    Default is 0.0. 
+    Values from 0.0 to 1.0 make sense.
+    - 0.0 reflections are perfectly specular.
+    - t > 0.0 permits reflection ray direction to vary
+      from the specular direction by up to t*pi/2.
+  */
+  double m_reflection_glossiness = 0.0;
+
+  /*
+  m_refraction_glossiness:
+    Default is 0.0. 
+    Values from 0.0 to 1.0 make sense.
+    - 0.0 refractions are perfectly specular.
+    - t > 0.0 permits refraction ray direction to vary
+      from the specular direction by up to t*pi/2.
+  */
+  double m_refraction_glossiness = 0.0;
+
+  /*
+  m_index_of_refraction:
+    Default is 1.0.
+    Physically, the index of refraction is >= 1.0 and is 
+    the value (speed of light in vacum)/(speed of light in material).
+    Some rendering algorithms set m_index_of_refraction to zero or
+    values < 1.0 to generate desirable effects.
+  */
+  double m_index_of_refraction = 1.0;
+
+  /*
+  m_fresnel_index_of_refraction:
+    Default is 1.56.
+    This is the value ON:Material::FresnelReflectionCoefficient() passes 
+    as the first parameter to ON_FresnelReflectionCoefficient().
+    - Glass material types can be simulated with 
+      m_index_of_refraction ~ 1.56
+      m_fresnel_index_of_refraction ~ 1.56
+    - Thin glass can be simulated with 
+      m_fresnel_index_of_refraction = 1.56
+      m_index_of_refraction = 0.0
+    - Porcelain type materials can be simulated with 
+      m_fresnel_index_of_refraction = 1.56
+      m_index_of_refraction = 1.0
+      m_transparency = 0.0
+  */
+  double m_fresnel_index_of_refraction = 1.56;
+
+  /*
+  Parameters:
+    N - [in]
+      3d surface normal
+    R - [in]
+      3d reflection direction
+  Returns:
+    If m_bFresnelReflections is false, then 1.0 is returned.
+    If m_bFresnelReflections is true, then the value of the fresnel 
+    reflection coefficient is returned. In typical rendering applications,
+    the reflection term is multiplied by the fresnel reflection coefficient
+    before it is added to the diffuse color.
+    If any input is not valid or the calculation fails, then 1.0 is returned.
+  Remarks:
+    When m_bFresnelReflections is true, the calculation is performed by 
+    calling ON_FresnelReflectionCoefficient() with m_fresnel_index_of_refraction
+    as the fresnel index of refraction.
+  */
+  double FresnelReflectionCoefficient(
+    ON_3dVector N, 
+    ON_3dVector R
+    ) const;
 
   /*
   Description:
@@ -201,7 +386,7 @@ public:
     If more than one texture matches, the first match
     is returned.
   Parameters:
-    filename - [in]  If NULL, then any filename matches.
+    filename - [in]  If nullptr, then any filename matches.
     type - [in] If ON_Texture::no_texture_type, then
                 any texture type matches.
     i0 - [in] If i0 is < 0, the search begins at 
@@ -218,8 +403,8 @@ public:
           for(;;)
           {
             ti = mat.FindTexture( 
-                        NULL, 
-                        ON_Texture::bitmap_texture, 
+                        nullptr, 
+                        ON_Texture::TYPE::bitmap_texture, 
                         ti );
 
             if ( ti < 0 )
@@ -286,7 +471,7 @@ public:
   Description:
     Deletes all texures with matching filenames and types.
   Parameters:
-    filename - [in]  If NULL, then any filename matches.
+    filename - [in]  If nullptr, then any filename matches.
     type - [in] If ON_Texture::no_texture_type, then
                 any texture type matches.
   Returns:
@@ -318,24 +503,31 @@ public:
     then m_id is assumed to be correct.
   */
   ON_SimpleArray<ON_UuidIndex> m_material_channel;
-
-  ON_UUID m_plugin_id; // ID of the last plug-in to modify this material
+  
+private:
+  ON_UUID m_plugin_id = ON_nil_uuid; 
 
 private:
-  static double m_max_shine;
-  bool ReadV3Helper( ON_BinaryArchive& file, int minor_version );
-  bool WriteV3Helper( ON_BinaryArchive& file ) const;
+  bool Internal_ReadV3( ON_BinaryArchive& archive, int minor_version );
+  bool Internal_WriteV3( ON_BinaryArchive& archive ) const;
+  bool Internal_ReadV5( ON_BinaryArchive& archive );
+  bool Internal_WriteV5( ON_BinaryArchive& archive ) const;
 };
 
+ON_DECL
+bool operator==(const ON_Material&, const ON_Material&);
+
+ON_DECL
+bool operator!=(const ON_Material&, const ON_Material&);
+
 #if defined(ON_DLL_TEMPLATE)
-// This stuff is here because of a limitation in the way Microsoft
-// handles templates and DLLs.  See Microsoft's knowledge base 
-// article ID Q168958 for details.
-#pragma warning( push )
-#pragma warning( disable : 4231 )
-ON_DLL_TEMPLATE template class ON_CLASS ON_ClassArray<ON_Material>;
+ON_DLL_TEMPLATE template class ON_CLASS ON_SimpleArray<ON_Material*>;
+ON_DLL_TEMPLATE template class ON_CLASS ON_SimpleArray<const ON_Material*>;
 ON_DLL_TEMPLATE template class ON_CLASS ON_ObjectArray<ON_Material>;
-#pragma warning( pop )
+
+// NO! // ON_DLL_TEMPLATE template class ON_CLASS ON_ClassArray<ON_Material>;
+//  It is a serious error to have an ON_ClassArray<ON_Material> and crashes 
+//  will occur when user data back pointers are not updated.
 #endif
 
 #endif

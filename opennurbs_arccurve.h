@@ -23,29 +23,39 @@ Description:
   ON_ArcCurve is used to represent arcs and circles.
   ON_ArcCurve.IsCircle() returns true if the curve
   is a complete circle.
-Details:
-	an ON_ArcCurve is a subcurve of a circle, with a 
-	constant speed parameterization. The parameterization is
-	an affine linear reparameterzation of the underlying arc
-	m_arc onto the domain m_t.
-	
-	A valid ON_ArcCurve has Radius()>0 and  0<AngleRadians()<=2*PI
-	and a strictly increasing Domain(). 
+Remarks:
+	- An ON_ArcCurve is a subcurve of a circle, with a 
+	  constant speed parameterization. The parameterization is
+	  an affine linear reparameterzation of the underlying arc
+	  m_arc onto the domain m_t.
+	- A valid ON_ArcCurve has Radius()>0 and  0<AngleRadians()<=2*PI
+	  and a strictly increasing Domain(). 
 */
 class ON_CLASS ON_ArcCurve : public ON_Curve
 {
   ON_OBJECT_DECLARE(ON_ArcCurve);
 
 public:
-  ON_ArcCurve();
-  ON_ArcCurve(const ON_ArcCurve&);
+  ON_ArcCurve() ON_NOEXCEPT;
   virtual ~ON_ArcCurve();
+  ON_ArcCurve(const ON_ArcCurve&);
+	ON_ArcCurve& operator=(const ON_ArcCurve&);
+
+#if defined(ON_HAS_RVALUEREF)
+  // rvalue copy constructor
+  ON_ArcCurve( ON_ArcCurve&& ) ON_NOEXCEPT;
+
+  // The rvalue assignment operator calls ON_Object::operator=(ON_Object&&)
+  // which could throw exceptions.  See the implementation of
+  // ON_Object::operator=(ON_Object&&) for details.
+  ON_ArcCurve& operator=( ON_ArcCurve&& );
+#endif
 
   // virtual ON_Object::SizeOf override
-  unsigned int SizeOf() const;
+  unsigned int SizeOf() const override;
 
   // virtual ON_Object::DataCRC override
-  ON__UINT32 DataCRC(ON__UINT32 current_remainder) const;
+  ON__UINT32 DataCRC(ON__UINT32 current_remainder) const override;
 
   /*
   Description:
@@ -84,9 +94,6 @@ public:
       double t1
       );
 
-
-	ON_ArcCurve& operator=(const ON_ArcCurve&);
-
   /*
   Description:
     Create an arc curve with domain (0,arc.Length()).
@@ -103,74 +110,32 @@ public:
   /////////////////////////////////////////////////////////////////
   // ON_Object overrides
 
-  /*
-  Description:
-		A valid ON_ArcCurve has Radius()>0 and  0<AngleRadians()<=2*PI
-		and a strictly increasing Domain(). 
-  Parameters:
-    text_log - [in] if the object is not valid and text_log
-        is not NULL, then a brief englis description of the
-        reason the object is not valid is appened to the log.
-        The information appended to text_log is suitable for 
-        low-level debugging purposes by programmers and is 
-        not intended to be useful as a high level user 
-        interface tool.
-  Returns:
-    @untitled table
-    true     object is valid
-    false    object is invalid, uninitialized, etc.
-  Remarks:
-    Overrides virtual ON_Object::IsValid
-  */
-  ON_BOOL32 IsValid( ON_TextLog* text_log = NULL ) const;
+  bool IsValid( class ON_TextLog* text_log = nullptr ) const override;
 
-  void Dump( ON_TextLog& ) const;
+  void Dump( ON_TextLog& ) const override;
 
-  ON_BOOL32 Write(
+  bool Write(
          ON_BinaryArchive&  // open binary file
-       ) const;
+       ) const override;
 
-  ON_BOOL32 Read(
+  bool Read(
          ON_BinaryArchive&  // open binary file
-       );
+       ) override;
 
   /////////////////////////////////////////////////////////////////
   // ON_Geometry overrides
 
-  int Dimension() const;
+  int Dimension() const override;
 
-  ON_BOOL32 GetBBox( // returns true if successful
-         double*,    // minimum
-         double*,    // maximum
-         ON_BOOL32 = false  // true means grow box
-         ) const;
+  // virtual ON_Geometry GetBBox override		
+  bool GetBBox( double* boxmin, double* boxmax, bool bGrowBox = false ) const override;
 
-  /*
-	Description:
-    Get tight bounding box of the arc.
-	Parameters:
-		tight_bbox - [in/out] tight bounding box
-		bGrowBox -[in]	(default=false)			
-      If true and the input tight_bbox is valid, then returned
-      tight_bbox is the union of the input tight_bbox and the 
-      arc's tight bounding box.
-		xform -[in] (default=NULL)
-      If not NULL, the tight bounding box of the transformed
-      arc is calculated.  The arc is not modified.
-	Returns:
-    True if the returned tight_bbox is set to a valid 
-    bounding box.
-  */
-	bool GetTightBoundingBox( 
-			ON_BoundingBox& tight_bbox, 
-      int bGrowBox = false,
-			const ON_Xform* xform = 0
-      ) const;
+  // virtual ON_Geometry GetTightBoundingBox override		
+  bool GetTightBoundingBox( class ON_BoundingBox& tight_bbox, bool bGrowBox = false, const class ON_Xform* xform = nullptr ) const override;
 
-
-  ON_BOOL32 Transform( 
+  bool Transform( 
          const ON_Xform&
-         );
+         ) override;
 
   /////////////////////////////////////////////////////////////////
   // ON_Curve overrides
@@ -183,76 +148,76 @@ public:
   //   t1 - [in] new domain will be [t0,t1]
   // Returns:
   //   true if successful.
-  ON_BOOL32 SetDomain(
+  bool SetDomain(
         double t0, 
         double t1 
-        );
+        ) override;
 
-  ON_Interval Domain() const;
+  ON_Interval Domain() const override;
 
   bool ChangeDimension(
           int desired_dimension
-          );
+          ) override;
 
-  ON_BOOL32 ChangeClosedCurveSeam( 
+  bool ChangeClosedCurveSeam( 
             double t 
-            );
+            ) override;
 
-  int SpanCount() const; // number of smooth spans in curve
+  int SpanCount() const override; // number of smooth spans in curve
 
-  ON_BOOL32 GetSpanVector( // span "knots" 
+  bool GetSpanVector( // span "knots" 
          double* // array of length SpanCount() + 1 
-         ) const; // 
+         ) const override; //
 
   int Degree( // returns maximum algebraic degree of any span 
                   // ( or a good estimate if curve spans are not algebraic )
-    ) const; 
+    ) const override;
 
-  ON_BOOL32 IsLinear( // true if curve locus is a line segment between
+  bool IsLinear( // true if curve locus is a line segment between
                  // between specified points
         double = ON_ZERO_TOLERANCE // tolerance to use when checking linearity
-        ) const;
+        ) const override;
 
-  ON_BOOL32 IsArc( // ON_Arc.m_angle > 0 if curve locus is an arc between
+  bool IsArc( // ON_Arc.m_angle > 0 if curve locus is an arc between
               // specified points
-        const ON_Plane* = NULL, // if not NULL, test is performed in this plane
-        ON_Arc* = NULL, // if not NULL and true is returned, then arc parameters
+        const ON_Plane* = nullptr, // if not nullptr, test is performed in this plane
+        ON_Arc* = nullptr, // if not nullptr and true is returned, then arc parameters
                          // are filled in
         double = 0.0    // tolerance to use when checking
-        ) const;
+        ) const override;
 
-  ON_BOOL32 IsPlanar(
-        ON_Plane* = NULL, // if not NULL and true is returned, then plane parameters
+  bool IsPlanar(
+        ON_Plane* = nullptr, // if not nullptr and true is returned, then plane parameters
                            // are filled in
         double = 0.0    // tolerance to use when checking
-        ) const;
+        ) const override;
 
-  ON_BOOL32 IsInPlane(
+  bool IsInPlane(
         const ON_Plane&, // plane to test
         double = 0.0    // tolerance to use when checking
-        ) const;
+        ) const override;
 
-  ON_BOOL32 IsClosed(  // true if curve is closed (either curve has
+  bool IsClosed(  // true if curve is closed (either curve has
         void      // clamped end knots and euclidean location of start
-        ) const;  // CV = euclidean location of end CV, or curve is
+        ) const override;  // CV = euclidean location of end CV, or curve is
                   // periodic.)
 
-  ON_BOOL32 IsPeriodic(  // true if curve is a single periodic segment
+  bool IsPeriodic(  // true if curve is a single periodic segment
         void 
-        ) const;
+        ) const override;
   
   bool IsContinuous(
     ON::continuity c,
     double t, 
-    int* hint = NULL,
+    int* hint = nullptr,
     double point_tolerance=ON_ZERO_TOLERANCE,
     double d1_tolerance=ON_ZERO_TOLERANCE,
     double d2_tolerance=ON_ZERO_TOLERANCE,
     double cos_angle_tolerance=ON_DEFAULT_ANGLE_TOLERANCE_COSINE,
     double curvature_tolerance=ON_SQRT_EPSILON
-    ) const;
+    ) const override;
 
-  ON_BOOL32 Reverse();       // reverse parameterizatrion
+  bool Reverse() override;       // reverse parameterizatrion
                         // Domain changes from [a,b] to [-b,-a]
 
   /*
@@ -270,9 +235,9 @@ public:
     ON_Curve::PointAtStart
     ON_Curve::PointAtEnd
   */
-  ON_BOOL32 SetStartPoint(
+  bool SetStartPoint(
           ON_3dPoint start_point
-          );
+          ) override;
 
   /*
   Description:
@@ -289,11 +254,11 @@ public:
     ON_Curve::PointAtStart
     ON_Curve::PointAtEnd
   */
-  ON_BOOL32 SetEndPoint(
+  bool SetEndPoint(
           ON_3dPoint end_point
-          );
+          ) override;
 
-  ON_BOOL32 Evaluate( // returns false if unable to evaluate
+  bool Evaluate( // returns false if unable to evaluate
          double,         // evaluation parameter
          int,            // number of derivatives (>=0)
          int,            // array stride (>=Dimension())
@@ -304,9 +269,9 @@ public:
                          //      >  0 to evaluate from above
          int* = 0        // optional - evaluation hint (int) used to speed
                          //            repeated evaluations
-         ) const;
+         ) const override;
 
-  ON_BOOL32 Trim( const ON_Interval& );
+  bool Trim( const ON_Interval& ) override;
 
   // Description:
   //   Where possible, analytically extends curve to include domain.
@@ -319,32 +284,32 @@ public:
   //   true if successful.
   bool Extend(
     const ON_Interval& domain
-    );
+    ) override;
 
   /*
   Description:
     Splits (divides) the arc at the specified parameter.  
     The parameter must be in the interior of the arc's domain.
     The ON_Curve pointers passed to ON_ArcCurve::Split must 
-    either be NULL or point to ON_ArcCurve objects.
-    If a pointer is NULL, then an ON_ArcCurve will be created 
+    either be nullptr or point to ON_ArcCurve objects.
+    If a pointer is nullptr, then an ON_ArcCurve will be created 
     in Split().  You may pass "this" as left_side or right_side.
   Parameters:
     t - [in] parameter to split the curve at in the
              interval returned by Domain().
     left_side - [out] left portion of curve returned here.
-       If not NULL, left_side must point to an ON_ArcCuve.
+       If not nullptr, left_side must point to an ON_ArcCuve.
     right_side - [out] right portion of curve returned here
-       If not NULL, right_side must point to an ON_ArcCuve.
+       If not nullptr, right_side must point to an ON_ArcCuve.
   Remarks:
     Overrides virtual ON_Curve::Split.
   */
-  virtual
-  ON_BOOL32 Split(
+  bool Split(
       double t,
       ON_Curve*& left_side,
       ON_Curve*& right_side
-    ) const;
+    ) const override;
+
 
   // virtual ON_Curve::GetNurbForm override
   int GetNurbForm( // returns 0: unable to create NURBS representation
@@ -359,8 +324,8 @@ public:
                    //            desired accuracy.
         ON_NurbsCurve&,
         double = 0.0,
-        const ON_Interval* = NULL     // OPTIONAL subdomain of arc curve
-        ) const;
+        const ON_Interval* = nullptr     // OPTIONAL subdomain of arc curve
+        ) const override;
 
   // virtual ON_Curve::HasNurbForm override
   int HasNurbForm( // returns 0: unable to create NURBS representation
@@ -373,19 +338,19 @@ public:
                    //            curve's parameterization and the NURBS
                    //            parameterization may not match to the 
                    //            desired accuracy.
-        ) const;
+        ) const override;
 
   // virtual ON_Curve::GetCurveParameterFromNurbFormParameter override
-  ON_BOOL32 GetCurveParameterFromNurbFormParameter(
+  bool GetCurveParameterFromNurbFormParameter(
         double, // nurbs_t
         double* // curve_t
-        ) const;
+        ) const override;
 
   // virtual ON_Curve::GetNurbFormParameterFromCurveParameter override
-  ON_BOOL32 GetNurbFormParameterFromCurveParameter(
+  bool GetNurbFormParameterFromCurveParameter(
         double, // curve_t
         double* // nurbs_t
-        ) const;
+        ) const override;
   
   
   /*
@@ -409,16 +374,13 @@ public:
 
   /////////////////////////////////////////////////////////////////
 
-  ON_Arc   m_arc;
+  ON_Arc m_arc = ON_Arc::UnitCircle; // defualt = radius 1 circle in x-y plane
   
-  // evaluation domain (always increasing)
-  // ( m_t[i] corresponds to m_arc.m_angle[i] )
-  ON_Interval m_t;  
+  ON_Interval m_t = ON_Interval::ZeroToTwoPi;
 
   // The dimension of a arc curve can be 2 or 3.
   // (2 so ON_ArcCurve can be used as a trimming curve)
-  int m_dim;
-
+  int m_dim = 3;
 };
 
 

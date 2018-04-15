@@ -16,6 +16,14 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
 ON_OBJECT_IMPLEMENT(ON_DetailView,ON_Geometry,"C8C66EFA-B3CB-4e00-9440-2AD66203379E");
 
 ON_DetailView::ON_DetailView()
@@ -32,7 +40,7 @@ void ON_DetailView::MemoryRelocate()
   m_boundary.MemoryRelocate();
 }
 
-ON_BOOL32 ON_DetailView::IsValid( ON_TextLog* text_log ) const
+bool ON_DetailView::IsValid( ON_TextLog* text_log ) const
 {
   // Don't bother checking m_view - during runtime it's
   // not filled in. It is only used for IO.  See
@@ -54,7 +62,7 @@ unsigned int ON_DetailView::SizeOf() const
   return sz;
 }
 
-ON_BOOL32 ON_DetailView::Write( ON_BinaryArchive& archive ) const
+bool ON_DetailView::Write( ON_BinaryArchive& archive ) const
 {
   bool rc = archive.BeginWrite3dmChunk( TCODE_ANONYMOUS_CHUNK, 1, 1 );
   if (!rc)
@@ -100,7 +108,7 @@ ON_BOOL32 ON_DetailView::Write( ON_BinaryArchive& archive ) const
   return rc;
 }
 
-ON_BOOL32 ON_DetailView::Read(ON_BinaryArchive& archive)
+bool ON_DetailView::Read(ON_BinaryArchive& archive)
 {
   m_page_per_model_ratio = 0.0;
   m_view.Default();
@@ -167,23 +175,23 @@ int ON_DetailView::Dimension() const
   return m_boundary.Dimension();
 }
 
-ON_BOOL32 ON_DetailView::GetBBox(
+bool ON_DetailView::GetBBox(
     double* boxmin,
     double* boxmax,
-    int bGrowBox
+    bool bGrowBox
     ) const
 {
   return m_boundary.GetBBox(boxmin,boxmax,bGrowBox);
 }
 
 bool ON_DetailView::GetTightBoundingBox( 
-      ON_BoundingBox& tight_bbox, int bGrowBox, const ON_Xform* xform
+      ON_BoundingBox& tight_bbox, bool bGrowBox, const ON_Xform* xform
       ) const
 {
   return m_boundary.GetTightBoundingBox(tight_bbox,bGrowBox,xform);
 }
 
-ON_BOOL32 ON_DetailView::Transform( const ON_Xform& xform )
+bool ON_DetailView::Transform( const ON_Xform& xform )
 {
   return m_boundary.Transform(xform);
 }

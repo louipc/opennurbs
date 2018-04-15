@@ -16,19 +16,96 @@
 
 #include "opennurbs.h"
 
+#if !defined(ON_COMPILING_OPENNURBS)
+// This check is included in all opennurbs source .c and .cpp files to insure
+// ON_COMPILING_OPENNURBS is defined when opennurbs source is compiled.
+// When opennurbs source is being compiled, ON_COMPILING_OPENNURBS is defined 
+// and the opennurbs .h files alter what is declared and how it is declared.
+#error ON_COMPILING_OPENNURBS must be defined when compiling opennurbs
+#endif
+
 int ON_IsValidUnicodeCodePoint(ON__UINT32 u)
 {
-  return ( u < 0xD800 || (u >= 0xE000 && u <= 0x10FFFF) );
+  return (u < 0xD800 || (u >= 0xE000 && u <= 0x10FFFF));
+}
+
+int ON_IsValidUTF32Value(
+  ON__UINT32 c
+  )
+{
+  return (c < 0xD800 || (c >= 0xE000 && c <= 0x10FFFF));
+}
+
+int ON_IsValidSingleElementUTF16Value(ON__UINT32 c)
+{
+  return ((c <= 0xD7FF) || (c >= 0xE000 && c <= 0xFFFF));
+}
+
+int ON_IsValidUTF16Singleton(ON__UINT32 c)
+{
+  return ((c <= 0xD7FF) || (c >= 0xE000 && c <= 0xFFFF));
 }
 
 enum ON_UnicodeEncoding ON_UnicodeNativeCPU_UTF16()
 {
-  return (ON::little_endian== ON::Endian()) ? ON_UTF_16LE : ON_UTF_16BE;
+  return (ON::endian::little_endian== ON::Endian()) ? ON_UTF_16LE : ON_UTF_16BE;
 }
 
 enum ON_UnicodeEncoding ON_UnicodeNativeCPU_UTF32()
 {
-  return (ON::little_endian== ON::Endian()) ? ON_UTF_32LE : ON_UTF_32BE;
+  return (ON::endian::little_endian== ON::Endian()) ? ON_UTF_32LE : ON_UTF_32BE;
+}
+
+int ON_IsValidSingleByteUTF8CharValue(
+  char c
+  )
+{
+  return (c >= 0 && c <= 0x7F);
+}
+
+int ON_IsValidUTF8SingletonChar(
+  char c
+  )
+{
+  return (c >= 0 && c <= 0x7F);
+}
+
+int ON_IsValidSingleElementUTF8Value(
+  ON__UINT32 c
+  )
+{
+  return (c <= 0x7F);
+}
+
+int ON_IsValidUTF8Singleton(
+  ON__UINT32 c
+  )
+{
+  return (c <= 0x7FU);
+}
+
+int ON_IsValidUTF16SurrogatePair(
+  unsigned int w1,
+  unsigned int w2
+  )
+{
+  return ( w1 >= 0xD800U && w1 < 0xDC00 && w2 >= 0xDC00 && w2 < 0xE000 );
+}
+
+
+int ON_IsValidSingleElementWideCharValue(
+  wchar_t w
+  )
+{
+#pragma ON_PRAGMA_WARNING_PUSH
+// warning C4127: conditional expression is constant
+#pragma ON_PRAGMA_WARNING_DISABLE_MSC( 4127 )
+  if (1 == sizeof(w))
+    return ON_IsValidSingleElementUTF8Value((ON__UINT32)w);
+  if (2 == sizeof(w))
+    return ON_IsValidSingleElementUTF16Value((ON__UINT32)w);
+  return ON_IsValidUTF32Value((ON__UINT32)w);
+#pragma ON_PRAGMA_WARNING_POP
 }
 
 enum ON_UnicodeEncoding ON_IsUTFByteOrderMark(
@@ -67,8 +144,39 @@ enum ON_UnicodeEncoding ON_IsUTFByteOrderMark(
   return ON_UTF_unset;
 }
 
-int ON_IsUTF8ByteOrderMark(
-  const ON__UINT8* sUTF8,
+unsigned int ON_UTFSizeofByteOrderMark(
+  ON_UnicodeEncoding e
+  )
+{
+  unsigned int sizeof_bom;
+  switch (e)
+  {
+  case ON_UTF_8:
+    sizeof_bom = 3;
+    break;
+
+  case ON_UTF_16:
+  case ON_UTF_16BE:
+  case ON_UTF_16LE:
+    sizeof_bom = 2;
+    break;
+
+  case ON_UTF_32:
+  case ON_UTF_32BE:
+  case ON_UTF_32LE:
+    sizeof_bom = 4;
+    break;
+
+  default:
+    sizeof_bom = 0;
+    break;
+  }
+
+  return sizeof_bom;
+}
+
+static int ON_IsUTF8ByteOrderMark(
+  const char* sUTF8,
   int sUTF8_count
   )
 {
@@ -76,107 +184,112 @@ int ON_IsUTF8ByteOrderMark(
     return 0;
   if ( -1 != sUTF8_count || sUTF8_count < 3 )
     return 0;
-  return (0xEF == sUTF8[0] && 0xBB == sUTF8[1] && 0xBF == sUTF8[2]);
+  return (0xEF == (unsigned char)(sUTF8[0]) && 0xBB == (unsigned char)(sUTF8[1]) && 0xBF == (unsigned char)(sUTF8[2]));
 }
 
-int ON_EncodeUTF8( ON__UINT32 u, ON__UINT8 sUTF8[6] )
+int ON_EncodeUTF8( ON__UINT32 u, char sUTF8[6] )
 {
   ON__UINT32 c;
 
   if ( u <= 0x7F )
   {
-    // 1 byte UTF8 encoding: 0xxxxxxx
-    sUTF8[0] = (ON__UINT8)u;
+    // 1 byte UTF8 encoding: 0xxxxxxx (7 bits of u)
+    sUTF8[0] = (char)u;
     return 1;
   }
 
   if ( u <= 0x7FF )
   {
-    // 2 byte UTF8 encoding: 110xxxxx, 10xxxxxx
+    // 2 byte UTF8 encoding: 110xxxxx, 10xxxxxx (11 bits of u)
     c = (u / 0x40);  // c  = 000xxxxx
     c |= 0xC0;                      //   |= 11000000
-    sUTF8[0] = (ON__UINT8)c;
+    sUTF8[0] = (char)c;
     c = (u & 0x3F);
     c |= 0x80;
-    sUTF8[1] = (ON__UINT8)c;
+    sUTF8[1] = (char)c;
     return 2;
   }
 
   if ( u <= 0xFFFF )
   {
-    // 3 byte UTF8 encoding: 1110xxxx, 10xxxxxx, 10xxxxxx
+    // 3 byte UTF8 encoding: 1110xxxx, 10xxxxxx, 10xxxxxx (16 bits of u)
     c = (u / 0x1000); // c  = 0000xxxx
     c |= 0xE0;                       //   |= 11100000
-    sUTF8[0] = (ON__UINT8)c;
+    sUTF8[0] = (char)c;
     c = ((u & 0xFFF) / 0x40);
     c |= 0x80;
-    sUTF8[1] = (ON__UINT8)c;
+    sUTF8[1] = (char)c;
     c = u & 0x3F;
     c |= 0x80;
-    sUTF8[2] = (ON__UINT8)c;
+    sUTF8[2] = (char)c;
     return 3;
   }
 
   if ( u <= 0x1FFFFF )
   {
-    // 4 byte UTF8 encoding: 11110xxx, 10xxxxxx, 10xxxxxx, 10xxxxxx
+    // (maximum valid unicode codepoint is 0x10FFFF)
+    // 4 byte UTF8 encoding: 11110xxx, 10xxxxxx, 10xxxxxx, 10xxxxxx (21 bits of u)
+    // Note: 0x10FFFF is the maximum valid unicode code point.
+    // For u > 0x10FFFF and u <= 0x1FFFFF, this calculation encodes the low 21 bits of u.
     c = (u / 0x40000);  // c  = 00000xxx
     c |= 0xF0;                         //   |= 11110000
-    sUTF8[0] = (ON__UINT8)c;
+    sUTF8[0] = (char)c;
     c = ((u & 0x3FFFF)/0x1000);
     c |= 0x80;
-    sUTF8[1] = (ON__UINT8)c;
+    sUTF8[1] = (char)c;
     c = ((u & 0xFFF) / 0x40);
     c |= 0x80;
-    sUTF8[2] = (ON__UINT8)c;
+    sUTF8[2] = (char)c;
     c = u & 0x3F;
     c |= 0x80;
-    sUTF8[3] = (ON__UINT8)c;
+    sUTF8[3] = (char)c;
     return 4;
   }
 
   if ( u <= 0x3FFFFFF )
   {
-    // 5 byte UTF8 encoding: 111110xx, 10xxxxxx, 10xxxxxx, 10xxxxxx, 10xxxxxx
-    c = (u / 0xFFFFFF); // c  = 000000xx
+    // 5 byte encoding: 111110xx, 10xxxxxx, 10xxxxxx, 10xxxxxx, 10xxxxxx (26 bits of u)
+    // Note: 0x10FFFF is the maximum valid unicode code point.
+    c = (u / 0x1000000); // c  = 000000xx
     c |= 0xF8;                         //   |= 11111000
-    sUTF8[0] = (ON__UINT8)c;
+    sUTF8[0] = (char)c;
     c = ((u & 0xFFFFFF)/0x40000);
     c |= 0x80;
-    sUTF8[1] = (ON__UINT8)c;
+    sUTF8[1] = (char)c;
     c = ((u & 0x3FFFF)/0x1000);
     c |= 0x80;
-    sUTF8[2] = (ON__UINT8)c;
+    sUTF8[2] = (char)c;
     c = ((u & 0xFFF) / 0x40);
     c |= 0x80;
-    sUTF8[3] = (ON__UINT8)c;
+    sUTF8[3] = (char)c;
     c = u & 0x3F;
     c |= 0x80;
-    sUTF8[4] = (ON__UINT8)c;
+    sUTF8[4] = (char)c;
     return 5;
   }
 
   if ( u <= 0x7FFFFFFF )
   {
-    // 6 byte UTF8 encoding: 111110xx, 10xxxxxx, 10xxxxxx, 10xxxxxx, 10xxxxxx, 10xxxxxx
-    c = (u / 0x40000000); // c  = 0000000x
+    // 6 byte encoding: 1111110x, 10xxxxxx, 10xxxxxx, 10xxxxxx, 10xxxxxx, 10xxxxxx (31 bits of u)
+    // Note: 0x10FFFF is the maximum valid unicode code point.
+    c = (u / 0x40000000); // c  = 00000000x
     c |= 0xFC;                           //   |= 11111100
-    sUTF8[0] = (ON__UINT8)c;
+    sUTF8[0] = (char)c;
     c = ((u & 0x3FFFFFFF)/0x1000000);
     c |= 0x80;
-    sUTF8[1] = (ON__UINT8)c;
+    sUTF8[1] = (char)c;
     c = ((u & 0xFFFFFF)/0x40000);
     c |= 0x80;
-    sUTF8[2] = (ON__UINT8)c;
+    sUTF8[2] = (char)c;
     c = ((u & 0x3FFFF)/0x1000);
     c |= 0x80;
-    sUTF8[3] = (ON__UINT8)c;
+    sUTF8[3] = (char)c;
     c = ((u & 0xFFF) / 0x40);
     c |= 0x80;
-    sUTF8[4] = (ON__UINT8)c;
+    sUTF8[4] = (char)c;
     c = u & 0x3F;
     c |= 0x80;
-    sUTF8[5] = (ON__UINT8)c;
+    sUTF8[5] = (char)c;
     return 6;
   }
 
@@ -184,7 +297,7 @@ int ON_EncodeUTF8( ON__UINT32 u, ON__UINT8 sUTF8[6] )
 }
 
 static int ON_DecodeUTF8Helper(
-    const ON__UINT8* sUTF8,
+    const char* sUTF8,
     int sUTF8_count,
     ON__UINT32* value,
     unsigned int* error_status
@@ -195,7 +308,7 @@ static int ON_DecodeUTF8Helper(
 #define OVERLONG_ENCODING 8
 
   ON__UINT32 u;
-  ON__UINT8 c;
+  char c;
 
   c = sUTF8[0];
    
@@ -423,7 +536,7 @@ static int ON_DecodeUTF8Helper(
 }
 
 int ON_DecodeUTF8(
-    const ON__UINT8* sUTF8,
+    const char* sUTF8,
     int sUTF8_count,
     struct ON_UnicodeErrorParameters* e,
     ON__UINT32* unicode_code_point
@@ -433,10 +546,18 @@ int ON_DecodeUTF8(
   int i0, i1;
   unsigned int error_status;
   ON__UINT16 sUTF16[2];
-  ON__UINT8 c;
+  char c;
+
+  ON_UnicodeErrorParameters local_e = ON_UnicodeErrorParameters::MaskErrors;
+  if (nullptr == e)
+    e = &local_e;
 
   if (  0 == sUTF8 || sUTF8_count <= 0 || 0 == unicode_code_point )
+  {
+    if ( e )
+      e->m_error_status |= 1;
     return 0;
+  }
 
   // special cases for most common unicode values
   // If any error conditions exist, then ON_DecodeUTF8Helper()
@@ -662,6 +783,10 @@ int ON_DecodeUTF16(
 {
   ON__UINT32 uhi, ulo;
 
+  ON_UnicodeErrorParameters local_e = ON_UnicodeErrorParameters::MaskErrors;
+  if (nullptr == e)
+    e = &local_e;
+
   if ( 0 == sUTF16 || sUTF16_count <= 0 || 0 == unicode_code_point )
   {
     if ( e )
@@ -726,6 +851,188 @@ int ON_DecodeUTF16(
   return i;
 }
 
+int ON_DecodeUTF16LE(
+  const ON__UINT16* sUTF16,
+  int sUTF16_count,
+  struct ON_UnicodeErrorParameters* e,
+  ON__UINT32* unicode_code_point
+  )
+{
+#if defined(ON_LITTLE_ENDIAN)
+  return ON_DecodeUTF16(sUTF16,sUTF16_count,e,unicode_code_point);
+#else
+  return ON_DecodeSwapByteUTF16(sUTF16,sUTF16_count,e,unicode_code_point);
+#endif
+}
+
+int ON_DecodeUTF16BE(
+  const ON__UINT16* sUTF16,
+  int sUTF16_count,
+  struct ON_UnicodeErrorParameters* e,
+  ON__UINT32* unicode_code_point
+  )
+{
+#if defined(ON_BIG_ENDIAN)
+  return ON_DecodeUTF16(sUTF16,sUTF16_count,e,unicode_code_point);
+#else
+  return ON_DecodeSwapByteUTF16(sUTF16,sUTF16_count,e,unicode_code_point);
+#endif
+}
+
+int ON_DecodeUTF32LE(
+  const ON__UINT32* sUTF32,
+  int sUTF32_count,
+  struct ON_UnicodeErrorParameters* e,
+  ON__UINT32* unicode_code_point
+  )
+{
+#if defined(ON_LITTLE_ENDIAN)
+  return ON_DecodeUTF32(sUTF32,sUTF32_count,e,unicode_code_point);
+#else
+  return ON_DecodeSwapByteUTF32(sUTF32,sUTF32_count,e,unicode_code_point);
+#endif
+}
+
+int ON_DecodeUTF32BE(
+  const ON__UINT32* sUTF32,
+  int sUTF32_count,
+  struct ON_UnicodeErrorParameters* e,
+  ON__UINT32* unicode_code_point
+  )
+{
+#if defined(ON_BIG_ENDIAN)
+  return ON_DecodeUTF32(sUTF32,sUTF32_count,e,unicode_code_point);
+#else
+  return ON_DecodeSwapByteUTF32(sUTF32,sUTF32_count,e,unicode_code_point);
+#endif
+}
+
+
+int ON_EncodeWideChar(
+  ON__UINT32 code_point,
+  size_t w_capacity,
+  wchar_t* w
+  )
+{
+  int rc = 0;
+  if (nullptr != w && w_capacity > 0)
+  {
+    if (ON_IsValidUnicodeCodePoint(code_point))
+    {
+#if 1 == ON_SIZEOF_WCHAR_T
+      char sUTF8[6];
+      rc = ON_EncodeUTF8(code_point, sUTF8);
+      if (rc > (int)w_capacity)
+        rc = 0;
+      switch (rc)
+      {
+      case 1:
+        w[0] = (wchar_t)sUTF8[0];
+        break;
+      case 2:
+        w[0] = (wchar_t)sUTF8[0];
+        w[1] = (wchar_t)sUTF8[1];
+        break;
+      case 3:
+        w[0] = (wchar_t)sUTF8[0];
+        w[1] = (wchar_t)sUTF8[1];
+        w[2] = (wchar_t)sUTF8[2];
+        break;
+      case 4:
+        w[0] = (wchar_t)sUTF8[0];
+        w[1] = (wchar_t)sUTF8[1];
+        w[2] = (wchar_t)sUTF8[2];
+        w[3] = (wchar_t)sUTF8[3];
+        break;
+      default:
+        rc = 0; break;
+      }
+#elif 2 == ON_SIZEOF_WCHAR_T
+      ON__UINT16 sUTF16[2];
+      rc = ON_EncodeUTF16(code_point, sUTF16);
+      if (rc > (int)w_capacity)
+        rc = 0;
+      switch (rc)
+      {
+      case 1:
+        w[0] = (wchar_t)sUTF16[0];
+        break;
+      case 2:
+        w[0] = (wchar_t)sUTF16[0];
+        w[1] = (wchar_t)sUTF16[1];
+        break;
+      default:
+        rc = 0; break;
+      }
+#elif 4 == ON_SIZEOF_WCHAR_T
+      if (w_capacity > 0)
+      {
+        w[0] = (wchar_t)code_point;
+        rc = 1;
+      }
+#endif
+    }
+    if (rc >= 0 && rc < (int)w_capacity)
+      w[rc] = 0;
+  }
+  return rc;
+}
+
+int ON_DecodeWideChar(
+  const wchar_t* sWideChar,
+  int sWideChar_count,
+  struct ON_UnicodeErrorParameters* e,
+  ON__UINT32* unicode_code_point
+  )
+{
+  const ON_UnicodeEncoding widechar_encoding = ON_WCHAR_T_ENCODING;
+  int rc;
+
+  switch (widechar_encoding)
+  {
+#if 1 == ON_SIZEOF_WCHAR_T
+  case ON_UTF_8:
+    rc = ON_DecodeUTF8((const char*)sWideChar,sWideChar_count,e,unicode_code_point);
+    break;
+
+#elif 2 == ON_SIZEOF_WCHAR_T
+  case ON_UTF_16:
+    return ON_DecodeUTF16((const ON__UINT16*)sWideChar,sWideChar_count,e,unicode_code_point);
+    break;
+
+  case ON_UTF_16BE:
+    rc = ON_DecodeUTF16BE((const ON__UINT16*)sWideChar,sWideChar_count,e,unicode_code_point);
+    break;
+
+  case ON_UTF_16LE:
+    rc = ON_DecodeUTF16LE((const ON__UINT16*)sWideChar,sWideChar_count,e,unicode_code_point);
+    break;
+
+#elif 4 == ON_SIZEOF_WCHAR_T
+  case ON_UTF_32:
+    rc = ON_DecodeUTF32((const ON__UINT32*)sWideChar,sWideChar_count,e,unicode_code_point);
+    break;
+
+  case ON_UTF_32BE:
+    rc = ON_DecodeUTF32BE((const ON__UINT32*)sWideChar,sWideChar_count,e,unicode_code_point);
+    break;
+
+  case ON_UTF_32LE:
+    rc = ON_DecodeUTF32LE((const ON__UINT32*)sWideChar,sWideChar_count,e,unicode_code_point);
+    break;
+#endif
+
+  default:
+    rc = 0;
+    if ( e )
+      e->m_error_status |= 1;
+    break;
+  }
+
+  return rc;
+}
+
+
 int ON_DecodeSwapByteUTF16(
     const ON__UINT16* sUTF16,
     int sUTF16_count,
@@ -740,6 +1047,9 @@ int ON_DecodeSwapByteUTF16(
   ON__UINT8* p0;
   ON__UINT8* p1;
 
+  ON_UnicodeErrorParameters local_e = ON_UnicodeErrorParameters::MaskErrors;
+  if (nullptr == e)
+    e = &local_e;
 
   if ( 0 == sUTF16 || sUTF16_count <= 0 || 0 == unicode_code_point )
   {
@@ -824,16 +1134,109 @@ int ON_DecodeSwapByteUTF16(
   return i;
 }
 
+int ON_ConvertUTF8ToUTF8(
+    int bTestByteOrder,
+    const char* sInputUTF8,
+    int sInputUTF8_count,
+    char* sOutputUTF8,
+    int sOutputUTF8_count,
+    unsigned int* error_status,
+    unsigned int error_mask,
+    ON__UINT32 error_code_point,
+    const char** sNextInputUTF8
+    )
+{
+  int i, j, k, output_count;
+  ON__UINT32 u;
+  char s[6];
+  struct ON_UnicodeErrorParameters e;
+
+  if ( 0 != error_status )
+    *error_status = 0;
+
+  if ( -1 == sInputUTF8_count && 0 != sInputUTF8 )
+  {
+    for ( sInputUTF8_count = 0; 0 != sInputUTF8[sInputUTF8_count]; sInputUTF8_count++)
+    {
+      // empty for body
+    }
+  }
+
+  if ( 0 == sInputUTF8 || sInputUTF8_count < 0 )
+  {
+    if ( 0 != error_status )
+      *error_status |= 1;
+    if ( sNextInputUTF8 )
+      *sNextInputUTF8 = sInputUTF8;
+    return 0;
+  }
+
+  if ( 0 == sOutputUTF8_count )
+  {
+    sOutputUTF8 = 0;
+    sOutputUTF8_count = 2147483647; // maximum value of a 32-bit signed int
+  }
+  else if ( 0 == sOutputUTF8 )
+  {
+    if ( 0 != error_status )
+      *error_status |= 1;
+    if ( sNextInputUTF8 )
+      *sNextInputUTF8 = sInputUTF8;
+    return 0;
+  }
+
+  if ( bTestByteOrder && ON_IsUTF8ByteOrderMark(sInputUTF8,sInputUTF8_count) )
+  {
+    // skip UTF-8 byte order element
+    sInputUTF8_count -= 3;
+    sInputUTF8 += 3;
+  }
+
+  e.m_error_status = 0;
+  e.m_error_mask = error_mask;
+  e.m_error_code_point = error_code_point;
+
+  output_count = 0;
+
+  for ( i = 0; i < sInputUTF8_count; i += j )
+  {
+    j = ON_DecodeUTF8(sInputUTF8+i,sInputUTF8_count-i,&e,&u);
+    if ( j <= 0 )
+      break;
+    k = ON_EncodeUTF8(u,s);
+    if ( 0 != sOutputUTF8 )
+    {
+      if ( output_count + k > sOutputUTF8_count )
+      {
+        e.m_error_status |= 2;
+        break;
+      }
+      memcpy(sOutputUTF8+output_count,s,k*sizeof(sOutputUTF8[0]));
+    }
+    output_count += k;
+  }
+
+  if ( 0 != sOutputUTF8 && output_count < sOutputUTF8_count)
+    sOutputUTF8[output_count] = 0;
+  if ( sNextInputUTF8 )
+    *sNextInputUTF8 = sInputUTF8+i;
+  if ( error_status )
+    *error_status = e.m_error_status;
+  
+  return output_count;
+}
+
+
 int ON_ConvertUTF8ToUTF16(
     int bTestByteOrder,
-     const ON__UINT8* sUTF8,
+     const char* sUTF8,
     int sUTF8_count,
     ON__UINT16* sUTF16,
     int sUTF16_count,
     unsigned int* error_status,
     unsigned int error_mask,
     ON__UINT32 error_code_point,
-    const ON__UINT8** sNextUTF8
+    const char** sNextUTF8
     )
 {
   int i, j, k, output_count;
@@ -920,14 +1323,14 @@ int ON_ConvertUTF8ToUTF16(
 
 int ON_ConvertUTF8ToUTF32(
     int bTestByteOrder,
-    const ON__UINT8* sUTF8,
+    const char* sUTF8,
     int sUTF8_count,
     ON__UINT32* sUTF32,
     int sUTF32_count,
     unsigned int* error_status,
     unsigned int error_mask,
     ON__UINT32 error_code_point,
-    const ON__UINT8** sNextUTF8
+    const char** sNextUTF8
     )
 {
   int i, j, output_count;
@@ -1012,7 +1415,7 @@ int ON_ConvertUTF16ToUTF8(
     int bTestByteOrder,
     const ON__UINT16* sUTF16,
     int sUTF16_count,
-    ON__UINT8* sUTF8,
+    char* sUTF8,
     int sUTF8_count,
     unsigned int* error_status,
     unsigned int error_mask,
@@ -1022,7 +1425,7 @@ int ON_ConvertUTF16ToUTF8(
 {
   int i, j, k, output_count, bSwapBytes;
   ON__UINT32 u;
-  ON__UINT8 s[6];
+  char s[6];
   struct ON_UnicodeErrorParameters e;
 
   if ( 0 != error_status )
@@ -1127,6 +1530,131 @@ int ON_ConvertUTF16ToUTF8(
     sUTF8[output_count] = 0;
   if ( sNextUTF16 )
     *sNextUTF16 = sUTF16+i;
+  if ( error_status )
+    *error_status = e.m_error_status;
+  
+  return output_count;
+}
+
+int ON_ConvertUTF16ToUTF16(
+    int bTestByteOrder,
+    const ON__UINT16* sInputUTF16,
+    int sInputUTF16_count,
+    ON__UINT16* sOutputUTF16,
+    int sOutputUTF16_count,
+    unsigned int* error_status,
+    unsigned int error_mask,
+    ON__UINT32 error_code_point,
+    const ON__UINT16** sNextInputUTF16
+    )
+{
+  int i, j, k, output_count, bSwapBytes;
+  ON__UINT32 u;
+  ON__UINT16 s[2];
+  struct ON_UnicodeErrorParameters e;
+
+  if ( 0 != error_status )
+    *error_status = 0;
+
+  if ( -1 == sInputUTF16_count && 0 != sInputUTF16 )
+  {
+    for ( sInputUTF16_count = 0; 0 != sInputUTF16[sInputUTF16_count]; sInputUTF16_count++)
+    {
+      // empty for body
+    }
+  }
+
+  if ( 0 == sInputUTF16 || sInputUTF16_count < 0 )
+  {
+    if ( 0 != error_status )
+      *error_status |= 1;
+    if ( sNextInputUTF16 )
+      *sNextInputUTF16 = sInputUTF16;
+    return 0;
+  }
+
+  if ( 0 == sOutputUTF16_count )
+  {
+    sOutputUTF16 = 0;
+    sOutputUTF16_count = 2147483647; // maximum value of a 32-bit signed int
+  }
+  else if ( 0 == sOutputUTF16 )
+  {
+    if ( 0 != error_status )
+      *error_status |= 1;
+    if ( sNextInputUTF16 )
+      *sNextInputUTF16 = sInputUTF16;
+    return 0;
+  }
+
+  bSwapBytes = false;
+  if ( bTestByteOrder && sInputUTF16_count > 0 )
+  {
+    if ( 0xFEFF == sInputUTF16[0] )
+    {
+      // skip BOM
+      sInputUTF16_count--;
+      sInputUTF16++;
+    }
+    else if ( 0xFFFE == sInputUTF16[0] )
+    {
+      // skip BOM and swap bytes in rest of sInputUTF16
+      bSwapBytes = true;
+      sInputUTF16_count--;
+      sInputUTF16++;
+    }
+  }
+
+  e.m_error_status = 0;
+  e.m_error_mask = error_mask;
+  e.m_error_code_point = error_code_point;
+
+  output_count = 0;
+
+  if ( bSwapBytes )
+  {
+    for ( i = 0; i < sInputUTF16_count; i += j )
+    {
+      j = ON_DecodeSwapByteUTF16(sInputUTF16+i,sInputUTF16_count-i,&e,&u);
+      if ( j <= 0 )
+        break;
+      k = ON_EncodeUTF16(u,s);
+      if ( 0 != sOutputUTF16 )
+      {
+        if ( output_count + k > sOutputUTF16_count )
+        {
+          e.m_error_status |= 2;
+          break;
+        }
+        memcpy(sOutputUTF16+output_count,s,k*sizeof(sOutputUTF16[0]));
+      }
+      output_count += k;
+    }
+  }
+  else
+  {
+    for ( i = 0; i < sInputUTF16_count; i += j )
+    {
+      j = ON_DecodeUTF16(sInputUTF16+i,sInputUTF16_count-i,&e,&u);
+      if ( j <= 0 )
+        break;
+      k = ON_EncodeUTF16(u,s);
+      if ( 0 != sOutputUTF16 )
+      {
+        if ( output_count + k > sOutputUTF16_count )
+        {
+          e.m_error_status |= 2;
+          break;
+        }
+        memcpy(sOutputUTF16+output_count,s,k*sizeof(sOutputUTF16[0]));
+      }
+      output_count += k;
+    }
+  }
+  if ( 0 != sOutputUTF16 && output_count < sOutputUTF16_count)
+    sOutputUTF16[output_count] = 0;
+  if ( sNextInputUTF16 )
+    *sNextInputUTF16 = sInputUTF16+i;
   if ( error_status )
     *error_status = e.m_error_status;
   
@@ -1274,10 +1802,13 @@ int ON_DecodeUTF32(
 {
   ON__UINT32 uhi, ulo;
 
+  ON_UnicodeErrorParameters local_e = ON_UnicodeErrorParameters::MaskErrors;
+  if (nullptr == e)
+    e = &local_e;
+
   if ( 0 == sUTF32 || sUTF32_count <= 0 || 0 == unicode_code_point )
   {
-    if ( e )
-      e->m_error_status |= 1;
+    e->m_error_status |= 1;
     return 0;
   }
 
@@ -1328,10 +1859,14 @@ int ON_DecodeSwapByteUTF32(
 {
   ON__UINT32 sUTF32swap[2];
 
+  ON_UnicodeErrorParameters local_e = ON_UnicodeErrorParameters::MaskErrors;
+  if (nullptr == e)
+    e = &local_e;
+
   if ( 0 != sUTF32 && sUTF32_count > 0 )
   {
     sUTF32swap[0] = SwapBytes32(sUTF32[0]);
-    if ( e && sUTF32_count > 1 )
+    if ( sUTF32_count > 1 )
     {
       // Get up to 2 elements to pass to the unswapped
       // decoder so that masked errors are uniformly
@@ -1349,7 +1884,7 @@ int ON_ConvertUTF32ToUTF8(
     int bTestByteOrder,
     const ON__UINT32* sUTF32,
     int sUTF32_count,
-    ON__UINT8* sUTF8,
+    char* sUTF8,
     int sUTF8_count,
     unsigned int* error_status,
     unsigned int error_mask,
@@ -1359,7 +1894,7 @@ int ON_ConvertUTF32ToUTF8(
 {
   int i, k, output_count, bSwapBytes;
   ON__UINT32 u;
-  ON__UINT8 s[6];
+  char s[6];
   struct ON_UnicodeErrorParameters e;
 
   if ( 0 != error_status )
@@ -1691,7 +2226,6 @@ int ON_ConvertUTF32ToUTF32(
   return output_count;
 }
 
-ON_DECL
 int ON_ConvertWideCharToUTF8(
     int bTestByteOrder,
     const wchar_t* sWideChar,
@@ -1708,12 +2242,23 @@ int ON_ConvertWideCharToUTF8(
 
   switch(sizeof(sWideChar[0]))
   {
+  case sizeof(char):
+    // assume wchar_t strings are UTF-8 encoded
+    rc = ON_ConvertUTF8ToUTF8(
+            bTestByteOrder,
+            (const char*)sWideChar,sWideChar_count,
+            sUTF8,sUTF8_count,
+            error_status,error_mask,error_code_point,
+            (const char**)sNextWideChar
+            );
+    break;
+
   case sizeof(ON__UINT16):
     // assume wchar_t strings are UTF-16 encoded
     rc = ON_ConvertUTF16ToUTF8(
             bTestByteOrder,
             (const ON__UINT16*)sWideChar,sWideChar_count,
-            (ON__UINT8*)sUTF8,sUTF8_count,
+            sUTF8,sUTF8_count,
             error_status,error_mask,error_code_point,
             (const ON__UINT16**)sNextWideChar
             );
@@ -1724,7 +2269,7 @@ int ON_ConvertWideCharToUTF8(
     rc = ON_ConvertUTF32ToUTF8(
             bTestByteOrder,
             (const ON__UINT32*)sWideChar,sWideChar_count,
-            (ON__UINT8*)sUTF8,sUTF8_count,
+            sUTF8,sUTF8_count,
             error_status,error_mask,error_code_point,
             (const ON__UINT32**)sNextWideChar
             );
@@ -1738,7 +2283,63 @@ int ON_ConvertWideCharToUTF8(
 }
 
 
-ON_DECL
+int ON_ConvertWideCharToUTF16(
+    int bTestByteOrder,
+    const wchar_t* sWideChar,
+    int sWideChar_count,
+    char* sUTF16,
+    int sUTF16_count,
+    unsigned int* error_status,
+    unsigned int error_mask,
+    ON__UINT32 error_code_point,
+    const wchar_t** sNextWideChar
+    )
+{
+  int rc;
+
+  switch(sizeof(sWideChar[0]))
+  {
+  case sizeof(char):
+    // assume wchar_t strings are UTF-8 encoded
+    rc = ON_ConvertUTF8ToUTF16(
+            bTestByteOrder,
+            (const char*)sWideChar,sWideChar_count,
+            (ON__UINT16*)sUTF16,sUTF16_count,
+            error_status,error_mask,error_code_point,
+            (const char**)sNextWideChar
+            );
+    break;
+
+  case sizeof(ON__UINT16):
+    // assume wchar_t strings are UTF-16 encoded
+    rc = ON_ConvertUTF16ToUTF16(
+            bTestByteOrder,
+            (const ON__UINT16*)sWideChar,sWideChar_count,
+            (ON__UINT16*)sUTF16,sUTF16_count,
+            error_status,error_mask,error_code_point,
+            (const ON__UINT16**)sNextWideChar
+            );
+    break;
+
+  case sizeof(ON__UINT32):
+    // assume wchar_t strings are UTF-32 encoded
+    rc = ON_ConvertUTF32ToUTF16(
+            bTestByteOrder,
+            (const ON__UINT32*)sWideChar,sWideChar_count,
+            (ON__UINT16*)sUTF16,sUTF16_count,
+            error_status,error_mask,error_code_point,
+            (const ON__UINT32**)sNextWideChar
+            );
+    break;
+
+  default:
+    rc = 0;
+  }
+
+  return rc;
+}
+
+
 int ON_ConvertWideCharToUTF32(
     int bTestByteOrder,
     const wchar_t* sWideChar,
@@ -1755,14 +2356,14 @@ int ON_ConvertWideCharToUTF32(
 
   switch(sizeof(sWideChar[0]))
   {
-  case sizeof(ON__UINT8):
+  case sizeof(char):
     // assume wchar_t strings are UTF-8 encoded
     rc = ON_ConvertUTF8ToUTF32(
             bTestByteOrder,
-            (const ON__UINT8*)sWideChar,sWideChar_count,
+            (const char*)sWideChar,sWideChar_count,
             sUTF32,sUTF32_count,
             error_status,error_mask,error_code_point,
-            (const ON__UINT8**)sNextWideChar
+            (const char**)sNextWideChar
             );
     break;
 
@@ -1796,7 +2397,6 @@ int ON_ConvertWideCharToUTF32(
 }
 
 
-ON_DECL
 int ON_ConvertUTF8ToWideChar(
     int bTestByteOrder,
     const char* sUTF8,
@@ -1813,14 +2413,25 @@ int ON_ConvertUTF8ToWideChar(
 
   switch(sizeof(sWideChar[0]))
   {
+  case sizeof(char):
+    // assume wchar_t strings are UTF-8 encoded
+    rc = ON_ConvertUTF8ToUTF8(
+            bTestByteOrder,
+            sUTF8,sUTF8_count,
+            (char*)sWideChar,sWideChar_count,
+            error_status,error_mask,error_code_point,
+            sNextUTF8
+            );
+    break;
+
   case sizeof(ON__UINT16):
     // assume wchar_t strings are UTF-16 encoded
     rc = ON_ConvertUTF8ToUTF16(
             bTestByteOrder,
-            (const ON__UINT8*)sUTF8,sUTF8_count,
+            sUTF8,sUTF8_count,
             (ON__UINT16*)sWideChar,sWideChar_count,
             error_status,error_mask,error_code_point,
-            (const ON__UINT8**)sNextUTF8
+            sNextUTF8
             );
     break;
 
@@ -1828,10 +2439,10 @@ int ON_ConvertUTF8ToWideChar(
     // assume wchar_t strings are UTF-32 encoded
     rc = ON_ConvertUTF8ToUTF32(
             bTestByteOrder,
-            (const ON__UINT8*)sUTF8,sUTF8_count,
+            sUTF8,sUTF8_count,
             (ON__UINT32*)sWideChar,sWideChar_count,
             error_status,error_mask,error_code_point,
-            (const ON__UINT8**)sNextUTF8
+            sNextUTF8
             );
     break;
 
@@ -1844,4 +2455,482 @@ int ON_ConvertUTF8ToWideChar(
   }
 
   return rc;
+}
+
+
+int ON_ConvertUTF16ToWideChar(
+    int bTestByteOrder,
+    const ON__UINT16* sUTF16,
+    int sUTF16_count,
+    wchar_t* sWideChar,
+    int sWideChar_count,
+    unsigned int* error_status,
+    unsigned int error_mask,
+    ON__UINT32 error_code_point,
+    const ON__UINT16** sNextUTF16
+    )
+{
+  int rc;
+
+  switch(sizeof(sWideChar[0]))
+  {
+  case sizeof(char):
+    // assume wchar_t strings are UTF-8 encoded
+    rc = ON_ConvertUTF16ToUTF8(
+            bTestByteOrder,
+            (const ON__UINT16*)sUTF16,sUTF16_count,
+            (char*)sWideChar,sWideChar_count,
+            error_status,error_mask,error_code_point,
+            (const ON__UINT16**)sNextUTF16
+            );
+    break;
+
+  case sizeof(ON__UINT16):
+    // assume wchar_t strings are UTF-16 encoded
+    rc = ON_ConvertUTF16ToUTF16(
+            bTestByteOrder,
+            (const ON__UINT16*)sUTF16,sUTF16_count,
+            (ON__UINT16*)sWideChar,sWideChar_count,
+            error_status,error_mask,error_code_point,
+            (const ON__UINT16**)sNextUTF16
+            );
+    break;
+
+  case sizeof(ON__UINT32):
+    // assume wchar_t strings are UTF-32 encoded
+    rc = ON_ConvertUTF16ToUTF32(
+            bTestByteOrder,
+            (const ON__UINT16*)sUTF16,sUTF16_count,
+            (ON__UINT32*)sWideChar,sWideChar_count,
+            error_status,error_mask,error_code_point,
+            (const ON__UINT16**)sNextUTF16
+            );
+    break;
+
+  default:
+    if (error_status)
+      *error_status = 1;
+    if (sNextUTF16)
+      *sNextUTF16 = sUTF16;
+    rc = 0;
+  }
+
+  return rc;
+}
+
+int ON_ConvertUTF32ToWideChar(
+    int bTestByteOrder,
+    const ON__UINT32* sUTF32,
+    int sUTF32_count,
+    wchar_t* sWideChar,
+    int sWideChar_count,
+    unsigned int* error_status,
+    unsigned int error_mask,
+    ON__UINT32 error_code_point,
+    const ON__UINT32** sNextUTF32
+    )
+{
+  int rc;
+
+  switch(sizeof(sWideChar[0]))
+  {
+  case sizeof(char):
+    // assume wchar_t strings are UTF-8 encoded
+    rc = ON_ConvertUTF32ToUTF8(
+            bTestByteOrder,
+            (const ON__UINT32*)sUTF32,sUTF32_count,
+            (char*)sWideChar,sWideChar_count,
+            error_status,error_mask,error_code_point,
+            (const ON__UINT32**)sNextUTF32
+            );
+    break;
+
+  case sizeof(ON__UINT16):
+    // assume wchar_t strings are UTF-16 encoded
+    rc = ON_ConvertUTF32ToUTF16(
+            bTestByteOrder,
+            (const ON__UINT32*)sUTF32,sUTF32_count,
+            (ON__UINT16*)sWideChar,sWideChar_count,
+            error_status,error_mask,error_code_point,
+            (const ON__UINT32**)sNextUTF32
+            );
+    break;
+
+  case sizeof(ON__UINT32):
+    // assume wchar_t strings are UTF-32 encoded
+    rc = ON_ConvertUTF32ToUTF32(
+            bTestByteOrder,
+            (const ON__UINT32*)sUTF32,sUTF32_count,
+            (ON__UINT32*)sWideChar,sWideChar_count,
+            error_status,error_mask,error_code_point,
+            (const ON__UINT32**)sNextUTF32
+            );
+    break;
+
+  default:
+    if (error_status)
+      *error_status = 1;
+    if (sNextUTF32)
+      *sNextUTF32 = sUTF32;
+    rc = 0;
+  }
+
+  return rc;
+}
+
+const ON_wString ON_wString::FromUnicodeCodePoints(
+  const ON__UINT32* code_points,
+  int code_point_count,
+  ON__UINT32 error_code_point
+)
+{
+  const bool bErrorCodePointIsValid = ON_IsValidUnicodeCodePoint(error_code_point);
+  
+  if (nullptr == code_points)
+    return ON_wString::EmptyString;
+
+  if (-1 == code_point_count)
+  {
+    code_point_count = 0;
+    while (0 != code_points[code_point_count])
+    {
+      if (
+        false == bErrorCodePointIsValid
+        && false == ON_IsValidUnicodeCodePoint(code_points[code_point_count])
+        )
+      {
+        break;
+      }
+      code_point_count++;
+    }
+  }
+
+  if ( code_point_count <= 0 )
+    return ON_wString::EmptyString;
+
+  const int bTestByteOrder = false;
+  unsigned int error_status = 0;
+  const unsigned int error_mask = bErrorCodePointIsValid ? 0xFFFFFFFF : 0;
+  int wchar_count = ON_ConvertUTF32ToWideChar(
+    bTestByteOrder,
+    code_points,
+    code_point_count,
+    nullptr,
+    0,
+    &error_status,
+    error_mask,
+    error_code_point,
+    nullptr
+  );
+
+  if (wchar_count <= 0)
+    return ON_wString::EmptyString;
+
+  ON_wString s;
+  const int s_capacity = (wchar_count + 1);
+  wchar_t* a = s.ReserveArray((size_t)s_capacity);
+  error_status = 0;
+  wchar_count = ON_ConvertUTF32ToWideChar(
+    bTestByteOrder,
+    code_points,
+    code_point_count,
+    a,
+    s_capacity,
+    &error_status,
+    error_mask,
+    error_code_point,
+    nullptr
+  );
+  
+  if (wchar_count <= 0)
+    return ON_wString::EmptyString;
+
+  s.SetLength(wchar_count);
+  return s;
+}
+
+
+////int ON_ConvertWindowsCodePageValueToWideChar(
+////  int windows_code_page,
+////  ON__UINT32 code_page_character_value,
+////  size_t w_capacity,
+////  wchar_t* w
+////)
+////{
+////  ON__UINT32 unicode_code_point = ON_UnicodeCodePoint::ON_ReplacementCharacter;
+////  ON_UnicodeErrorParameters e;
+////  memset(&e, 0, sizeof(e));
+////  e.m_error_mask = 0xFF;
+////  e.m_error_code_point = ON_UnicodeCodePoint::ON_ReplacementCharacter;
+////  ON_DecodeWindowsCodePageValue( windows_code_page, code_page_character_value,  &e,  &unicode_code_point);
+////  return ON_EncodeWideChar(unicode_code_point, w_capacity, w);
+////}
+
+ON__UINT32 ON_MapRTFcharsetToWindowsCodePage(
+  ON__UINT32 rtf_charset,
+  ON__UINT32 default_code_page
+)
+{
+  //  From the Microsoft version of the RTF ver 1.9 spec available on MSDN
+  //
+  //  \fcharsetN:  	Specifies the character set of a font in the font table.If this appears, it implies that bytes in runs 
+  //    tagged with the associated \fN are character codes in the codepage corresponding to the charset N.
+  //    Use this codepage to convert the codes to Unicode using a function like the Windows MultiByteToWideChar().
+  //    See also the \cpgN control word, which, if it appears, supersedes the codepage given by \fcharsetN.Values for N are defined, 
+  //    for example, in the Windows header file wingdi.h(e.g., see ANSI_CHARSET) and are repeated here together with the corresponding 
+  //    Windows or Mac codepages for convenience:charset	codepage	Windows / Mac name
+
+  //  A font may have a different character set from the character set of the document. For example, the Symbol font has the 
+  //    same characters in the same code positions both on the Macintosh and in Windows. Typically, RTF fonts use the code page 
+  //    corresponding to the \fcharsetN control word in their \fonttbl description. If the charset doesn’t exist, the codepage 
+  //    may be given by the \cpgN control word, for which the code page is N. If the \cpgN does appear, it supersedes the code 
+  //    page corresponding to the \fcharsetN. 
+  //    For such cases, codepage conversions can be avoided altogether by using the Unicode \uN notation for characters. 
+  //    In addition, file names (used in field instructions and in embedded fonts) may not necessarily be the same as the character 
+  //    set of the document; the \cpgN control word can change the character set for these file names as well. 
+  //  
+
+  ON__UINT32 cp;
+  switch (rtf_charset)
+  {
+  case 0:   cp = 1252; break;         // ANSI
+  case 1:   cp = 0; break;            // Default
+  case 2:   cp = 42; break;           // Symbol
+  case 77:  cp = 10000; break;        // Mac Roman
+  case 78:  cp = 10001; break;        // Mac Shift Jis
+  case 79:  cp = 10003; break;        // Mac Hangul
+  case 80:  cp = 10008; break;        // Mac GB2312
+  case 81:  cp = 10002; break;        // Mac Big5
+  case 82:  cp = default_code_page; break; // Mac Johab (old)
+  case 83:  cp = 10005; break;        // Mac Hebrew
+  case 84:  cp = 10004; break;        // Mac Arabic
+  case 85:  cp = 10006; break;        // Mac Greek
+  case 86:  cp = 10081; break;        // Mac Turkish
+  case 87:  cp = 10021; break;        // Mac Thai
+  case 88:  cp = 10029; break;        // Mac East Europe
+  case 89:  cp = 10007; break;        // Mac Russian
+  case 128: cp = 932; break;          // Shift JIS
+  case 129: cp = 949; break;          // Hangul (Korean)
+  case 130: cp = 1361; break;         // Johab
+  case 134: cp = 936; break;          // GB2312
+  case 136: cp = 950; break;          // Big5
+  case 161: cp = 1253; break;         // Greek
+  case 162: cp = 1254; break;         // Turkish
+  case 163: cp = 1258; break;         // Vietnamese
+  case 177: cp = 1255; break;         // Hebrew
+  case 178: cp = 1256; break;         // Arabic 
+  case 179: cp = default_code_page; break; // Arabic Traditional (old)
+  case 180: cp = default_code_page; break; // Arabic user (old)
+  case 181: cp = default_code_page; break; // Hebrew user (old)
+  case 186: cp = 1257; break;         // Baltic
+  case 204: cp = 1251; break;         // Russian
+  case 222: cp = 874; break;          // Thai
+  case 238: cp = 1250; break;         // Eastern European
+  case 254: cp = 437; break;          // PC 437
+  case 255: cp = 850; break;          // OEM
+  default: cp = default_code_page; break;
+  }
+  return cp;
+}
+
+static int ON_Internal_ConvertMSSBCPToWideChar(
+  const ON__UINT32* sb_code_page_0x80_to_0xFF_to_unicode,
+  const char* sMBCS,
+  int sMBCS_count,
+  wchar_t* sWideChar,
+  int sWideChar_capacity,
+  unsigned int* error_status
+)
+{
+  wchar_t* sWideCharMax
+    = (sWideChar_capacity > 0 && nullptr != sWideChar)
+    ? sWideChar + sWideChar_capacity
+    : nullptr;
+  if (nullptr == sWideCharMax)
+  {
+    sWideChar = nullptr;
+    sWideChar_capacity = 0;
+  }
+  else
+  {
+    sWideChar[0] = 0;
+  }
+  if (nullptr != error_status)
+    *error_status = 0;
+
+  unsigned int e = 0;
+  if (nullptr == sMBCS || sMBCS_count < 0)
+    sMBCS_count = 0;
+  wchar_t* s = sWideChar;
+  wchar_t w_buffer[8];
+  int rc = 0;
+
+  for (int i = 0; i < sMBCS_count; i++)
+  {
+    const ON__UINT32 c = (unsigned char)sMBCS[i];
+    ON__UINT32 unicode_code_point;
+    if (c < 0x80)
+      unicode_code_point = c;
+    else 
+    {
+      if (c <= 0xFF && nullptr != sb_code_page_0x80_to_0xFF_to_unicode )
+      {
+        unicode_code_point = sb_code_page_0x80_to_0xFF_to_unicode[c - 0x80];
+        if (0 == ON_IsValidUnicodeCodePoint(unicode_code_point))
+          unicode_code_point = ON_UnicodeCodePoint::ON_ReplacementCharacter;
+      }
+      else
+        unicode_code_point = ON_UnicodeCodePoint::ON_ReplacementCharacter;
+      if ( ON_UnicodeCodePoint::ON_ReplacementCharacter == unicode_code_point )
+        e |= 16;
+    }
+    const int w_count = ON_EncodeWideChar(unicode_code_point, sizeof(w_buffer)/sizeof(w_buffer[0]), w_buffer);
+    if (w_count <= 0)
+    {
+      e |= 16;
+      continue;
+    }
+    rc += w_count;
+    if (s == nullptr)
+      continue;
+    wchar_t* s1 = s + w_count;
+    if (s1 > sWideCharMax)
+    {
+      e |= 2;
+      continue;
+    }
+    const wchar_t* w = w_buffer;
+    while (s < s1)
+      *s++ = *w++;
+  }
+  
+  while (s < sWideCharMax)
+  {
+    *s++ = 0;
+  }
+
+  if (nullptr != error_status)
+    *error_status = e;
+
+  return rc;
+}
+
+int ON_ConvertMSMBCPToWideChar(
+    ON__UINT32 windows_code_page,
+    const char* sMBCS,
+    int sMBCS_count,
+    wchar_t* sWideChar,
+    int sWideChar_capacity,
+    unsigned int* error_status
+    )
+{
+  if ( 0 != error_status )
+    *error_status = 0;
+
+  if ( -1 == sMBCS_count && nullptr != sMBCS )
+  {
+    for ( sMBCS_count = 0; 0 != sMBCS[sMBCS_count]; sMBCS_count++)
+    {
+      // empty for body
+    }
+  }
+
+  if ( nullptr == sMBCS || sMBCS_count < 0 )
+  {
+    if ( 0 != error_status )
+      *error_status |= 1;
+    return 0;
+  }
+
+  if ( 0 == sMBCS_count )
+  {
+    return 0;
+  }
+
+  if (sWideChar_capacity <= 0)
+  {
+    sWideChar_capacity = 0;
+    sWideChar = nullptr;
+  }
+  else if (nullptr == sWideChar)
+  {
+    sWideChar_capacity = 0;
+  }
+  else
+  {
+    sWideChar[0] = 0;
+  }
+
+  const char* c = sMBCS;
+  const char* c1 = c + sMBCS_count;
+  wchar_t* w = sWideChar;
+  wchar_t* w1 = w + sWideChar_capacity;
+  while (c < c1 && *c >= 0 && *c <= 127)
+  {
+    if (nullptr != w)
+    {
+      if (w >= w1)
+        break;
+      *w++ = (wchar_t)*c;
+    }
+    c++;
+  }
+  if (c == c1)
+  {
+    if (w < w1)
+      *w = 0;
+    return sMBCS_count;
+  }
+
+  const ON__UINT32* sb_code_page_0x80_to_0xFF_to_unicode = ON_MSSBCP_0x80_0xFF_Unicode(windows_code_page);
+  if (nullptr != sb_code_page_0x80_to_0xFF_to_unicode)
+  {
+    // fast platform independent single byte code page conversion built into opennurbs
+    return ON_Internal_ConvertMSSBCPToWideChar(
+      sb_code_page_0x80_to_0xFF_to_unicode,
+      sMBCS,
+      sMBCS_count,
+      sWideChar,
+      sWideChar_capacity,
+      error_status
+    );
+  }
+
+#if defined(ON_RUNTIME_WIN)
+  // Starting with Windows Vista, the function does not drop illegal code points when dwFlags=0.
+  // It replaces illegal sequences with U+FFFD (encoded as appropriate for the specified codepage).
+  DWORD dwFlags = 0; 
+  int sWideChar_count = ::MultiByteToWideChar(windows_code_page, dwFlags, sMBCS, sMBCS_count, sWideChar, sWideChar_capacity);
+  if (sWideChar_count < 0)
+    sWideChar_count = 0;
+  if (nullptr == sWideChar)
+    return sWideChar_count;
+
+  for (int i = 0; i < sWideChar_count; i++)
+  {
+    if (0 == sWideChar[i])
+    {
+      sWideChar_count = i;
+      break;
+    }
+    if ( ON_wString::ReplacementCharacter == sWideChar[i] )
+    {
+      if ( nullptr != error_status)
+        *error_status |= 16;
+    }
+  }
+  if (sWideChar_count < sWideChar_capacity)
+    sWideChar[sWideChar_count] = 0;
+  return sWideChar_count;
+#else
+  // Add support for Mac if needed.
+  // Shift JIS, Hangol, and Big 5 are likely candidates. 
+  // These are encodings with either 1 or 2 bytes per glyph.
+  if (949 == windows_code_page)
+  {
+
+  }
+  return 0;
+#endif
+
 }
