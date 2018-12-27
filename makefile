@@ -78,6 +78,7 @@ ON_INC = opennurbs.h \
 	opennurbs_archive.h \
 	opennurbs_array.h \
 	opennurbs_array_defs.h \
+	opennurbs_atomic_op.h \
 	opennurbs_base32.h \
 	opennurbs_base64.h \
 	opennurbs_beam.h \
@@ -269,6 +270,7 @@ ON_SRC = opennurbs_3dm_attributes.cpp \
 	opennurbs_fsp.cpp \
 	opennurbs_function_list.cpp \
 	opennurbs_geometry.cpp \
+	opennurbs_glyph_outline.cpp \
 	opennurbs_group.cpp \
 	opennurbs_hash_table.cpp \
 	opennurbs_hatch.cpp \
@@ -768,17 +770,17 @@ EXAMPLE_INC = examples.h \
 
 EXAMPLE_OBJ = example_read/example_read.o \
       example_write/example_write.o \
+      example_test/example_test.o \
       example_convert/example_convert.o \
       example_brep/example_brep.o \
       example_userdata/example_ud.o \
-      example_userdata/example_userdata.o \
-      example_roundtrip/example_roundtrip.o
+      example_userdata/example_userdata.o
 
 EXAMPLES = example_read/example_read \
       example_write/example_write \
+      example_test/example_test \
       example_convert/example_convert \
       example_brep/example_brep \
-      example_roundtrip/example_roundtrip \
       example_userdata/example_userdata
 
 all : $(OPENNURBS_LIB_FILE) $(EXAMPLES)
@@ -787,30 +789,51 @@ example_userdata/example_ud.o : example_userdata/example_ud.h $(ON_INC)
 
 $(EXAMPLE_OBJ) : $(EXAMPLE_INC) $(ON_INC)
 
-# opennurbs_freetype.h requires -I./freetype263/include
-ON_OBJ_EXTRA_FLAGS = -DON_COMPILING_OPENNURBS -I./freetype263/include
-$(ON_OBJ) : CFLAGS+=$(ON_OBJ_EXTRA_FLAGS)
-$(ON_OBJ) : CCFLAGS+=$(ON_OBJ_EXTRA_FLAGS)
-$(ON_OBJ) : $(ON_INC)
-
 ZLIB_OBJ_EXTRA_FLAGS = -DMY_ZCALLOC -DZ_PREFIX
 $(ZLIB_OBJ) : CFLAGS+=$(ZLIB_OBJ_EXTRA_FLAGS)
 $(ZLIB_OBJ) : $(ZLIB_INC)
 
-FREETYPE_OBJ_EXTRA_FLAGS = -DFT2_BUILD_LIBRARY -I./freetype263/include
-$(FREETYPE_OBJ) : CFLAGS+=$(FREETYPE_OBJ_EXTRA_FLAGS)
-$(FREETYPE_OBJ) : $(FREETYPE_INC)
+########################################################
+##
+## opennurbs without freetype
+##
+ON_OBJ_EXTRA_FLAGS = -DON_COMPILING_OPENNURBS
+$(ON_OBJ) : CFLAGS+=$(ON_OBJ_EXTRA_FLAGS)
+$(ON_OBJ) : CCFLAGS+=$(ON_OBJ_EXTRA_FLAGS)
+$(ON_OBJ) : $(ON_INC)
 
-$(OPENNURBS_LIB_FILE) : $(ON_OBJ) $(ZLIB_OBJ) $(FREETYPE_OBJ)
+$(OPENNURBS_LIB_FILE) : $(ON_OBJ) $(ZLIB_OBJ)
 	-$(RM) $@
-	$(AR) $@ $(ON_OBJ) $(ZLIB_OBJ)  $(FREETYPE_OBJ) 
+	$(AR) $@ $(ON_OBJ) $(ZLIB_OBJ)
 	$(RANLIB) $@
+
+########################################################
+##
+## opennurbs with freetype
+##
+### opennurbs_freetype.h requires -I./freetype263/include
+##ON_OBJ_EXTRA_FLAGS = -DON_COMPILING_OPENNURBS -I./freetype263/include
+##$(ON_OBJ) : CFLAGS+=$(ON_OBJ_EXTRA_FLAGS)
+##$(ON_OBJ) : CCFLAGS+=$(ON_OBJ_EXTRA_FLAGS)
+##$(ON_OBJ) : $(ON_INC)
+##
+##FREETYPE_OBJ_EXTRA_FLAGS = -DFT2_BUILD_LIBRARY -I./freetype263/include
+##$(FREETYPE_OBJ) : CFLAGS+=$(FREETYPE_OBJ_EXTRA_FLAGS)
+##$(FREETYPE_OBJ) : $(FREETYPE_INC)
+##
+##$(OPENNURBS_LIB_FILE) : $(ON_OBJ) $(ZLIB_OBJ) $(FREETYPE_OBJ)
+##	-$(RM) $@
+##	$(AR) $@ $(ON_OBJ) $(ZLIB_OBJ)  $(FREETYPE_OBJ) 
+##	$(RANLIB) $@
 
 example_read/example_read : example_read/example_read.o example_userdata/example_ud.o $(OPENNURBS_LIB_FILE)
 	$(LINK) $(LINKFLAGS) example_read/example_read.o example_userdata/example_ud.o -L. -l$(OPENNURBS_LIB_NAME) -lm -o $@
 
 example_write/example_write : example_write/example_write.o example_userdata/example_ud.o $(OPENNURBS_LIB_FILE)
 	$(LINK) $(LINKFLAGS) example_write/example_write.o example_userdata/example_ud.o -L. -l$(OPENNURBS_LIB_NAME) -lm -o $@
+
+example_test/example_test : example_test/example_test.o $(OPENNURBS_LIB_FILE)
+	$(LINK) $(LINKFLAGS) example_test/example_test.o -L. -l$(OPENNURBS_LIB_NAME) -lm -o $@
 
 example_convert/example_convert : example_convert/example_convert.o example_userdata/example_ud.o $(OPENNURBS_LIB_FILE)
 	$(LINK) $(LINKFLAGS) example_convert/example_convert.o example_userdata/example_ud.o -L. -l$(OPENNURBS_LIB_NAME) -lm -o $@
@@ -821,12 +844,10 @@ example_brep/example_brep : example_brep/example_brep.o $(OPENNURBS_LIB_FILE)
 example_userdata/example_userdata : example_userdata/example_userdata.o $(OPENNURBS_LIB_FILE)
 	$(LINK) $(LINKFLAGS) example_userdata/example_userdata.o -L. -l$(OPENNURBS_LIB_NAME) -lm -o $@
 
-example_roundtrip/example_roundtrip : example_roundtrip/example_roundtrip.o $(OPENNURBS_LIB_FILE)
-	$(LINK) $(LINKFLAGS) example_roundtrip/example_roundtrip.o -L. -l$(OPENNURBS_LIB_NAME) -lm -o $@
-
 clean :
 	-$(RM) $(OPENNURBS_LIB_FILE)
 	-$(RM) $(ON_OBJ)
 	-$(RM) $(ZLIB_OBJ)
+	-$(RM) $(FREETYPE_OBJ)
 	-$(RM) $(EXAMPLE_OBJ)
 	-$(RM) $(EXAMPLES)

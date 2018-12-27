@@ -658,6 +658,10 @@ ON_ModelComponent& ON_ModelComponent::operator=(const ON_ModelComponent& src)
 {
   if (this != &src)
   {
+    // copy user data
+    ON_Object::operator=(src); 
+
+    // copy ON_ModelComponent fields
     CopyFrom(src,ON_ModelComponent::Attributes::AllAttributes);
   }
   return *this;
@@ -3493,8 +3497,10 @@ bool ON_BinaryArchive::UpdateManifestMapItemDestination(
     ON_ERROR("map_item source information is not set.");
     return false;
   }
-  return m_manifest_map.UpdatetMapItemDestination(map_item);
 
+  const bool bIgnoreSourceIndex = (ON_ModelComponent::Type::Group == map_item.ComponentType());
+
+  return m_manifest_map.UpdatetMapItemDestination(map_item, bIgnoreSourceIndex);
 }
 
 
@@ -3615,6 +3621,9 @@ bool ON_BinaryArchive::Internal_Read3dmUpdateManifest(
       model_component.SetName(m_manifest.UnusedName(model_component));
     }
 
+    const bool bIndexRequired = ON_ModelComponent::IndexRequired(model_component.ComponentType());
+    const int archive_index = model_component.Index();
+
     ON_wString assigned_name;
     const ON_ComponentManifestItem& manifest_item = m_manifest.AddComponentToManifest(model_component, bResolveIdAndNameCollisions, &assigned_name);
     if (manifest_item.IsUnset())
@@ -3634,8 +3643,6 @@ bool ON_BinaryArchive::Internal_Read3dmUpdateManifest(
 
       // In damaged files, the index values are a mess.
       // Fix them here.
-      const bool bIndexRequired = ON_ModelComponent::IndexRequired(model_component.ComponentType());
-      const int archive_index = model_component.Index();
       const int manifest_index = manifest_item.Index();
       const int assigned_index
         = bIndexRequired
@@ -3644,16 +3651,28 @@ bool ON_BinaryArchive::Internal_Read3dmUpdateManifest(
 
       if (assigned_index != archive_index)
       {
-        if (bIndexRequired) // <- Good location for a debugger breakpoint when debugging file reading index issues.
+        if (bIndexRequired) // This is a good location for a debugger breakpoint when debugging file reading index issues.
           model_component.SetIndex(manifest_item.Index());
         else
           model_component.ClearIndex();
       }
     }
 
+    ON_ComponentManifestItem source_item(manifest_item);
+    if (ON_ModelComponent::Type::Group == model_component.ComponentType()
+      && archive_index >= 0
+      && manifest_item.Index() >= 0
+      && archive_index != manifest_item.Index()
+      )
+    {
+      // group index values are not always the zero based index of the
+      // group element's location in the archive.
+      source_item.SetIndex(archive_index);
+    }
+
     ON_ManifestMapItem map_item;
     // Rhino will update destination identification if it changes when added to the model.
-    if (!map_item.SetSourceIdentification(&manifest_item))
+    if (!map_item.SetSourceIdentification(&source_item))
       break;
     if (!map_item.SetDestinationIdentification(&model_component))
       break;
@@ -3800,13 +3819,64 @@ bool ON_BinaryArchive::AddManifestMapItem(
   return true;
 }
 
-
 //////////////////////////////////////////////////////////////////////////////////////////////
 //
 //
 //
 
-const ON_ModelComponentReference ON_ModelComponentReference::Empty;
+// Explicit implementation to insure m_sp is completely managed in the openurbs DLL.
+ON_ModelComponentWeakReference::ON_ModelComponentWeakReference() ON_NOEXCEPT
+{}
+
+// Explicit implementation to insure m_sp is completely managed in the openurbs DLL.
+ON_ModelComponentWeakReference::~ON_ModelComponentWeakReference()
+{}
+
+// Explicit implementation to insure m_sp is completely managed in the openurbs DLL.
+ON_ModelComponentWeakReference::ON_ModelComponentWeakReference(const ON_ModelComponentWeakReference& src) ON_NOEXCEPT
+  : m_wp(src.m_wp)
+{}
+
+// Explicit implementation to insure m_sp is completely managed in the openurbs DLL.
+ON_ModelComponentWeakReference& ON_ModelComponentWeakReference::operator=(const ON_ModelComponentWeakReference& src)
+{
+  if ( this != &src)
+    m_wp = src.m_wp;
+  return *this;
+}
+  
+#if defined(ON_HAS_RVALUEREF)
+ON_ModelComponentWeakReference::ON_ModelComponentWeakReference( ON_ModelComponentWeakReference&& src ) ON_NOEXCEPT
+  : m_wp(std::move(src.m_wp))
+{}
+
+ON_ModelComponentWeakReference& ON_ModelComponentWeakReference::operator=(ON_ModelComponentWeakReference&& src)
+{
+  if ( this != &src )
+  {
+    m_wp.reset();
+    m_wp = std::move(src.m_wp);
+  }
+  return *this;
+}
+
+#endif
+
+ON_ModelComponentWeakReference::ON_ModelComponentWeakReference(const ON_ModelComponentReference& src)  ON_NOEXCEPT
+  : m_wp(src.m_sp)
+{}
+
+ON_ModelComponentWeakReference& ON_ModelComponentWeakReference::operator=(const ON_ModelComponentReference& src)
+{
+  m_wp = src.m_sp;
+  return *this;
+}
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+//
+//
+//
 
 // Explicit implementation to insure m_sp is completely managed in the openurbs DLL.
 ON_ModelComponentReference::ON_ModelComponentReference() ON_NOEXCEPT
@@ -3845,6 +3915,22 @@ ON_ModelComponentReference& ON_ModelComponentReference::operator=(ON_ModelCompon
 }
 
 #endif
+
+ON_ModelComponentReference::ON_ModelComponentReference(const ON_ModelComponentWeakReference& src) ON_NOEXCEPT
+  : m_sp(src.m_wp.lock())
+{
+  // NOTE WELL: 
+  //   std::shared_ptr<T>(std::weak_ptr<T>) throws an exception when weak_ptr is empty.
+  //   std::shared_ptr<T>(std::weak_ptr<T>.lock()) constructs and empty shared_ptr when weak_ptr is empty.
+}
+
+
+ON_ModelComponentReference& ON_ModelComponentReference::operator=(const ON_ModelComponentWeakReference& src)
+{
+  m_sp = src.m_wp.lock();
+  return *this;
+}
+
 
 ON_ModelComponentReference::ON_ModelComponentReference(
   std::shared_ptr<ON_ModelComponent>& sp
@@ -3898,6 +3984,14 @@ ON_ModelComponentReference ON_ModelComponentReference::CreateForExperts(
 const class ON_ModelComponent* ON_ModelComponentReference::ModelComponent() const ON_NOEXCEPT
 {
   return m_sp.get();
+}
+
+class ON_ModelComponent* ON_ModelComponentReference::ExclusiveModelComponent() const ON_NOEXCEPT
+{
+  return 
+    (1 == m_sp.use_count())
+    ? m_sp.get()
+    : nullptr;
 }
 
 ON__UINT64 ON_ModelComponentReference::ModelComponentRuntimeSerialNumber() const ON_NOEXCEPT

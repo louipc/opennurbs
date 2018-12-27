@@ -1268,6 +1268,16 @@ public:
     const ON_ManifestMapItem& b
   );
 
+  static int CompareTypeAndSourceId(
+    const ON_ManifestMapItem& a,
+    const ON_ManifestMapItem& b
+  );
+
+  static int CompareTypeAndDestinationId(
+    const ON_ManifestMapItem& a,
+    const ON_ManifestMapItem& b
+  );
+
   static int CompareTypeAndSourceIdAndIndex(
     const ON_ManifestMapItem& a,
     const ON_ManifestMapItem& b
@@ -1550,6 +1560,22 @@ public:
   */
   bool UpdatetMapItemDestination(
     const class ON_ManifestMapItem& map_item
+    );
+
+  /*
+  Parameters:
+    map_item - [in]
+      The source settings must exacty match source settings of an existing map.
+      The destination settings are the new values to assign.
+    bIgnoreSourceIndex - [in]
+      If true, the value of map_item.SourceIndex() is ignored.
+      Otherwise, it must exactly match the source index setting of an existing map.
+  Return:
+    True if a mapping was successfully updated (even when the destation settings did not change).
+  */
+  bool UpdatetMapItemDestination(
+    const class ON_ManifestMapItem& map_item,
+    bool bIgnoreSourceIndex
     );
 
   const class ON_ManifestMapItem& MapItemFromSourceId(
@@ -3728,8 +3754,8 @@ public:
       plug-in wrote the user table.
     goo - [in]
   Returns:
-    True if the goo was written or skipped because it could not be robustly
-    saved.  False if a catastrophic IO error occured.
+    True if the goo was written.
+    False if skipped because it could not be robustly saved.
   */
   bool Write3dmAnonymousUserTableRecord( 
     ON_UUID plugin_id,
@@ -4286,7 +4312,14 @@ private:
     actual number of bytes read (like fread())
   */
   size_t Read(size_t, void*);
+
 protected:
+  /*
+  Remarks:
+    In some unusual situations when reading old or damaged files, a read may fail.
+    Call MaskReadError( ON__UINT64 sizeof_request, ON__UINT64 sizeof_read )
+    before calling ON_ERROR().
+  */
   virtual size_t Internal_ReadOverride( size_t, void* ) = 0; 
 
 private:

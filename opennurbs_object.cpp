@@ -929,8 +929,10 @@ const ON_ClassId* ON_ClassId::ClassId( ON_UUID uuid )
       p = &ON_CLASS_RTTI(ON_SumSurface);
     else
     {
-      // The p = nullptr line does nothing (p is already nullptr) but it's a ...
-      p = nullptr; // <- Good location for a debugger breakpoint.
+      // The p = nullptr line does nothing (p is already nullptr) but, if you're working on
+      // file reading bugs or other cases that involving rtti bugs, then it's a good 
+      // location for a debugger breakpoint.
+      p = nullptr;
     }
   }
   return p;
@@ -1771,6 +1773,50 @@ ON__UINT32 ON_Object::DataCRC(ON__UINT32 current_remainder) const
 bool ON_Object::IsValid(ON_TextLog* text_log) const
 {
   return true;
+}
+
+bool ON_Object::IsCorrupt(
+  bool bRepair,
+  bool bSilentError,
+  class ON_TextLog* text_log
+) const
+{
+  bool rc = true;
+  if (this == nullptr)
+  {
+    if (false == bSilentError)
+      ON_ERROR("this is nullptr.");
+  }
+  else
+  {
+    switch (ObjectType())
+    {
+    case ON::object_type::brep_object:
+      {
+        const ON_Brep* brep = ON_Brep::Cast(this);
+        if (brep)
+          rc = brep->ON_Brep::IsCorrupt(bRepair, bSilentError, text_log);
+        else if ( false == bSilentError )
+          ON_ERROR("ON_Brep::Cast(this) failed.");
+      }
+      break;
+
+    case ON::object_type::mesh_object:
+      {
+        const ON_Mesh* mesh = ON_Mesh::Cast(this);
+        if (mesh)
+          rc = mesh->ON_Mesh::IsCorrupt(bRepair, bSilentError, text_log);
+        else if ( false == bSilentError )
+          ON_ERROR("ON_Mesh::Cast(this) failed.");
+      }
+      break;
+
+    default:
+      rc = false;
+      break;
+    }
+  }
+  return rc;
 }
 
 void ON_Object::Dump( ON_TextLog& dump ) const

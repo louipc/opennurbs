@@ -1735,6 +1735,28 @@ public:
           ON_SumSurface*& pSumSurface
           );
 
+  /*
+  Description:
+    Check for corrupt data values that are likely to cause crashes.
+  Parameters:
+    bRepair - [in]
+      If true, const_cast<> will be used to change the corrupt data
+      so that crashes are less likely.
+    bSilentError - [in]
+      If true, ON_ERROR will not be called when corruption is detected.
+    text_log - [out]
+      If text_log is not null, then a description of corruption 
+      is printed using text_log.
+  Remarks:
+    Ideally, IsCorrupt() would be a virtual function on ON_Object,
+    but doing that at this point would break the public SDK.
+  */
+  bool IsCorrupt(
+    bool bRepair,
+    bool bSilentError,
+    class ON_TextLog* text_log
+  ) const;
+
   bool IsValid( class ON_TextLog* text_log = nullptr ) const override;
 
   /*
@@ -3037,7 +3059,7 @@ public:
     then duplicates of the connected components are appended
     to the components[] array.
   Parameters:
-    components - [in] connected components are appended to this array.
+    components - [out] connected components are appended to this array.
     bDuplicateMeshes - [in] if true, any meshes on this brep are copied
          to the output breps.
   Returns:
@@ -3050,6 +3072,7 @@ public:
           ON_SimpleArray< ON_Brep* >& components,
           bool bDuplicateMeshes
           ) const;
+
 
   /*
   Description:

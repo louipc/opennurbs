@@ -559,7 +559,6 @@ ON_BinaryArchive::eStorageDeviceError ON_BinaryArchive::StorageDeviceErrorFromUn
   return ON_BinaryArchive::eStorageDeviceError::UnknownDeviceError;
 }
 
-
 unsigned int ON_BinaryArchive::StorageDeviceError() const
 {
   return m_storage_device_error;
@@ -3351,6 +3350,10 @@ ON_BinaryArchive::WriteUTF16String(
 bool
 ON_BinaryArchive::WriteString( const ON_String& sUTF8 )
 {
+  // The ON_String::IsValid call prevents corrupt strings from breaking file IO
+  // The parameter MUST be false here.
+  sUTF8.IsValid(false);
+
   size_t string_utf8_element_count = sUTF8.Length();
   if ( string_utf8_element_count )
     string_utf8_element_count++;
@@ -3638,6 +3641,12 @@ ON_BinaryArchive::WriteString( const ON_wString& s )
 #pragma ON_PRAGMA_WARNING_DISABLE_MSC( 4127 )
 #endif
 
+  // The ON_wString::IsValid call prevents corrupt strings from breaking file IO
+  // The parameter MUST be false here.
+  s.IsValid(false);
+
+  // NOTE WELL:
+  //   In some cases there are embedded nulls in strings.
   size_t string_element_count = s.Length();
   if ( string_element_count > 0)
     string_element_count++;
@@ -15657,6 +15666,9 @@ bool ON_BinaryArchive::BeginWrite3dmUserTable(
     ON_ERROR("ON_BinaryArchive::BeginWrite3dmUserTable() - nil usertable_uuid not permitted.");
     return false;
   }
+
+  if (false == ArchiveContains3dmTable(ON_3dmArchiveTableType::user_table))
+    return false;
   
   if (false == ShouldSerializeUserDataItem(plugin_id, plugin_id))
     return false;
@@ -16218,14 +16230,47 @@ unsigned int ON_BinaryArchive::ErrorMessageMask() const
 
 bool ON_BinaryArchive::MaskReadError( ON__UINT64 sizeof_request, ON__UINT64 sizeof_read ) const
 {
+  if ( 0 == (static_cast<unsigned int>(m_mode) % 2 ) )
+    return false; // something is seriously wrong
+
   if ( sizeof_request == sizeof_read )
     return true; // no error
-  if ( sizeof_request > sizeof_read )
+
+  if ( sizeof_read > sizeof_request )
     return false; // something is seriously wrong
+
   if ( 0 != (0x04 & m_error_message_mask) )
     return true;
-  if ( 0 != (0x01 & m_error_message_mask) && 4 == sizeof_request && 0 == sizeof_read )
+
+  if (0 != (0x01 & m_error_message_mask) && 4 == sizeof_request && 0 == sizeof_read)
+  {
+    // when reading v1 files, there are some situations where
+    // it is reasonable to attempt to read 4 bytes at the end
+    // of a file.
     return true;
+  }
+
+  if (0 == m_3dm_version
+    && 0 == m_3dm_opennurbs_version
+    && 0 == m_3dm_start_section_offset
+    && ON_3dmArchiveTableType::Unset == m_3dm_previous_table
+    && ON_3dmArchiveTableType::Unset == m_3dm_active_table
+    && ON_3dmArchiveTableType::Unset == m_3dm_first_failed_table
+    && 0 == m_chunk
+    && ON::archive_mode::read3dm == m_mode
+    )
+  {
+    // In Read3dmStartSection(), we search for the string 
+    // "3D Geometry File Format ...".  When a non-.3dm file
+    // is searched, we eventually reach the end of the file.
+    // This error condition is reported by the returning
+    // false from ON_BinaryArchive::Read3dmStartSection().
+    // ON_ERROR is not called to prevent annoying everyone
+    // when the open file dialog is digging around looking
+    // for files.
+    return true;
+  }
+
   return false; // parial read not permitted at this time.
 }
 
@@ -16380,47 +16425,11 @@ size_t ON_BinaryArchive::Read( size_t count, void* p )
         {
           UpdateCRC(count, p);
         }
-        else
+        else if ( false == MaskReadError(count,readcount) )
         {
-          // see if this is an error condition
-          for (;;)
-          {
-            if (0 != (m_error_message_mask & 0x01)
-              && 0 == readcount && 4 == count
-              )
-            {
-              // when reading v1 files, there are some situations where
-              // it is reasonable to attempt to read 4 bytes at the end
-              // of a file.
-              break;
-            }
-
-            if (0 == m_3dm_version
-              && 0 == m_3dm_opennurbs_version
-              && 0 == m_3dm_start_section_offset
-              && ON_3dmArchiveTableType::Unset == m_3dm_previous_table
-              && ON_3dmArchiveTableType::Unset == m_3dm_active_table
-              && ON_3dmArchiveTableType::Unset == m_3dm_first_failed_table
-              && 0 == m_chunk
-              && ON::archive_mode::read3dm == m_mode
-              )
-            {
-              // In Read3dmStartSection(), we search for the string 
-              // "3D Geometry File Format ...".  When a non-.3dm file
-              // is searched, we eventually reach the end of the file.
-              // This error condition is reported by the returning
-              // false from ON_BinaryArchive::Read3dmStartSection().
-              // ON_ERROR is not called to prevent annoying everyone
-              // when the open file dialog is digging around looking
-              // for files.
-              break;
-            }
-
-            // error occured
-            SetStorageDeviceError(ON_BinaryArchive::eStorageDeviceError::ReadFailed);
-            ON_ERROR("Internal_ReadOverride(count, p) failed.");
-            break;
-          }
+          // error occured
+          SetStorageDeviceError(ON_BinaryArchive::eStorageDeviceError::ReadFailed);
+          ON_ERROR("Internal_ReadOverride(count, p) failed.");
         }
 
         if (readcount > 0)
@@ -16572,7 +16581,15 @@ ON_BinaryFile::EnableMemoryBuffer(
 
 size_t ON_BinaryFile::Internal_ReadOverride( size_t count, void* p )
 {
-  return (m_fp) ? fread( p, 1, count, m_fp ) : 0;
+  const size_t rc  = (m_fp) ? fread( p, 1, count, m_fp ) : 0;
+  if (rc != count && nullptr != m_fp)
+  {
+    if (false == MaskReadError(count, rc))
+    {
+      ON_ERROR("fread() failed.");
+    }
+  }
+  return rc;
 }
 
 size_t ON_BinaryFile::Internal_WriteOverride( size_t count, const void* p )
@@ -16586,6 +16603,10 @@ size_t ON_BinaryFile::Internal_WriteOverride( size_t count, const void* p )
         if ( !Flush() ) // flush existing memory buffer to disk
           return 0;
         rc = fwrite( p, 1, count, m_fp ); // write directly to disk
+        if (rc != count)
+        {
+          ON_ERROR("fwrite() failed - situation A.");
+        }
       }
       else 
       {
@@ -16600,6 +16621,10 @@ size_t ON_BinaryFile::Internal_WriteOverride( size_t count, const void* p )
     else
     {
       rc = fwrite( p, 1, count, m_fp );
+      if (rc != count)
+      {
+        ON_ERROR("fwrite() failed - situation B.");
+      }
     }
   }
   return rc;

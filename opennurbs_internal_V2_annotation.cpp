@@ -1213,11 +1213,22 @@ bool ON_OBSOLETE_V5_Annotation::Read( ON_BinaryArchive& file )
       rc = false;
   }
 
+  //if (!bInChunk)
+  {
+    // If justification is 0, change it to top-left
+    // and move the text point up by text height
+    if (bIsText && 0 == m_justification)
+    {
+      m_justification = eTextJustification::tjTopLeft;
+      m_plane.origin = m_plane.PointAt(0.0, m_textheight);
+    }
+  }
+
   if (ON_UNSET_INT_INDEX == dim_style_index)
   {
     if (bIsText)
     {
-      if (dim_style_index0 >= 0 && dim_style_index0 == dim_style_index1)
+      if (dim_style_index0 > ON_UNSET_INT_INDEX && dim_style_index0 == dim_style_index1)
         dim_style_index = dim_style_index1;
       else
       {
@@ -1233,7 +1244,7 @@ bool ON_OBSOLETE_V5_Annotation::Read( ON_BinaryArchive& file )
     else
     {
       // not text 
-      if (dim_style_index0 >= 0 && dim_style_index0 == dim_style_index2)
+      if (dim_style_index0 > ON_UNSET_INT_INDEX && dim_style_index0 == dim_style_index2)
         dim_style_index = dim_style_index2;
       else
       {
@@ -2368,7 +2379,7 @@ ON_OBSOLETE_V2_TextObject* ON_OBSOLETE_V2_TextObject::CreateFromV5TextObject(
     : new ON_OBSOLETE_V2_TextObject();
   V2_text_object->Internal_InitializeFromV5Annotation(V5_text_object,annotation_context);
 
-  V2_text_object->m_facename = dim_style.Font().FontFaceName();
+  V2_text_object->m_facename = dim_style.Font().WindowsLogfontName();
 
   const double V5_text_height = V5_text_object.Height();
   V2_text_object->m_fontweight = 400;
@@ -3640,7 +3651,13 @@ ON_2dPoint ON_OBSOLETE_V5_DimAngular::Dim2dPoint( int point_index ) const
 ON_3dPoint ON_OBSOLETE_V5_DimAngular::Dim3dPoint( int point_index ) const
 {
   ON_2dPoint p2 = Dim2dPoint(point_index);
-  return (ON_UNSET_VALUE == p2.x) ? ON_3dPoint::UnsetPoint : m_plane.PointAt(p2.x,p2.y);
+  if (ON_UNSET_VALUE == p2.x)
+    return ON_3dPoint::UnsetPoint;
+
+  ON_3dPoint p = m_plane.PointAt(p2.x, p2.y);
+  return p;
+
+  //return (ON_UNSET_VALUE == p2.x) ? ON_3dPoint::UnsetPoint : m_plane.PointAt(p2.x,p2.y);
 }
 
 
@@ -7007,7 +7024,7 @@ void ON_OBSOLETE_V5_Annotation::SetTextFormula( const wchar_t* text_formula )
 const wchar_t* ON_OBSOLETE_V5_Annotation::TextFormula() const
 {
   const ON_AnnotationTextFormula* tf = ON_AnnotationTextFormula::Get(this);
-  return (0 != tf) ? ((const wchar_t*)tf->m_text_formula) : 0;
+  return (0 != tf) ? ((const wchar_t*)tf->m_text_formula) : TextValue();
 }
 
 bool ON_BinaryArchive::Internal_WriteV2AnnotationObject(

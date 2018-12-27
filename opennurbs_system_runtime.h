@@ -47,8 +47,10 @@
 #define ON_RUNTIME_WIN
 #endif
 
-#elif defined(__ANDROID__)
-
+#elif defined(__ANDROID__) || defined(__EMSCRIPTEN__)
+// __EMSCRIPTEN__ is for a web assembly compile which currently compiles with the
+// same settings as an android build. We will need to add an ON_RUNTIME_WASM once
+// the __EMSCRIPTEN__ compile stabilizes
 #if !defined(ON_RUNTIME_ANDROID)
 #define ON_RUNTIME_ANDROID
 #endif
@@ -74,10 +76,32 @@
 */
 #if defined(ON_RUNTIME_APPLE)
 
-#if (defined(TARGET_OS_IPHONE) || defined(TARGET_IPHONE_SIMULATOR) || defined(__IOS__))
+#if defined(__IOS__)
 #define ON_RUNTIME_APPLE_IOS
-#else
+#endif
+
+#if (!defined(ON_RUNTIME_APPLE_IOS) && defined(TARGET_OS_IPHONE))
+#if (TARGET_OS_IPHONE == 1)
+#define ON_RUNTIME_APPLE_IOS
+#endif
+#endif
+
+#if (!defined(ON_RUNTIME_APPLE_IOS) && defined(TARGET_IPHONE_SIMULATOR))
+#if (TARGET_IPHONE_SIMULATOR == 1)
+#define ON_RUNTIME_APPLE_IOS
+#endif
+#endif
+
+#if !defined(ON_RUNTIME_APPLE_IOS)
 #define ON_RUNTIME_APPLE_MACOS
+
+// Apple:
+//   Defines RHINO_CORE_COMPONENT here.
+//   If we publish an Apple C++ pubic SDK, this will need to be adjusted.
+// Windows:
+//   uses the property sheet RhinoProjectPropertySheets/Rhino.Cpp.common.props
+//   Some build products in Windows are not "core components"
+#define RHINO_CORE_COMPONENT = 1
 #endif
 
 #if (defined(__LP64__) || defined(__ppc64__))

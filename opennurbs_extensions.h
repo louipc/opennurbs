@@ -1021,6 +1021,31 @@ public:
     ) const;
 
   /*
+  Parameters:
+    runtime_serial_number - [in]
+      Value of ON_ModelComponent::RuntimeSerialNumber() to search for.
+  Returns:
+    If there is a model component with the specified runtime serial number,
+    then a reference to that component is returned.
+    Otherwise, ON_ModelComponentReference::Empty is returned.
+  Remarks:
+    ONX_Model::ComponentFromRuntimeSerialNumber() used to get a reference rather than a copy of the model's 
+    primary ON_ModelComponentReference. This is the function that must be used if a caller is going to 
+    use exclusive access funcitons like
+
+      ON_ModelComponent* ON_ModelComponentReference::ExclusiveModelComponent()
+      ON_3dmObjectAttributes* ON_ModelGeometryComponent::ExclusiveAttributes()
+      ON_Geometry* ON_ModelGeometryComponent::ExclusiveGeometry()
+
+    to modify content that is in the ONX_Model. The exclusive access functions 
+    will only return non-nullptr values when there are no external references to
+    the model component.
+  */
+  const ON_ModelComponentReference& ComponentFromRuntimeSerialNumber(
+    ON__UINT64 runtime_serial_number
+  ) const;
+
+  /*
   Description:
     Get an image from its model index.
   Parameters:
@@ -1245,16 +1270,31 @@ public:
     double model_space_text_scale
     );
 
+  /*
+  Description:
+    Find a model geometry component from Id
+  Parameters:
+    model_geometry_component_id - [in]
+  Returns:
+    If there is a model geometry component with the id, it is returned.
+    Otherwise, ON_ModelComponentReference::Empty is returned.
+  */
+  ON_ModelComponentReference ModelGeometryFromId(
+    ON_UUID model_geometry_component_id
+    ) const;
 
-  ON_ModelGeometryComponent ModelGeometryFromIndex(
-    int model_object_index
-    );
-  ON_ModelGeometryComponent ModelGeometryFromUnsignedIndex(
-    unsigned int model_object_index
-    );
-  ON_ModelGeometryComponent ModelGeometryFromId(
-    unsigned int model_object_index
-    );
+  /*
+  Description:
+    Find a model geometry component from Id
+  Parameters:
+    model_geometry_component_id - [in]
+  Returns:
+    If there is a model geometry component with the id, it is returned.
+    Otherwise, ON_ModelGeometryComponent::Unset is returned.
+  */
+  const ON_ModelGeometryComponent& ModelGeometryComponentFromId(
+    ON_UUID model_geometry_component_id
+    ) const;
 
 public:
   ON_SimpleArray<ONX_Model_UserData*> m_userdata_table;
@@ -1542,6 +1582,14 @@ public:
   ON_ModelComponentReference NextComponentReference();
   ON_ModelComponentReference PreviousComponentReference();
 
+  ON_ModelComponentWeakReference FirstComponentWeakReference();
+  ON_ModelComponentWeakReference LastComponentWeakReference();
+  ON_ModelComponentWeakReference NextComponentWeakReference();
+  ON_ModelComponentWeakReference PreviousComponentWeakReference();
+  ON_ModelComponentWeakReference CurrentComponentWeakReference() const;
+
+  // Use these with caution unless it is clear you are the only thread
+  // with references to the model and the iterator.
   const ON_ModelComponent* FirstComponent();
   const ON_ModelComponent* LastComponent();
   const ON_ModelComponent* CurrentComponent() const;
@@ -1560,8 +1608,6 @@ private:
   const class ONX_Model::ONX_ModelComponentList* Internal_List() const;
   void Internal_SetLink(const class ONX_ModelComponentReferenceLink* link) const;
   void Internal_SetLink(ON__UINT64 model_component_sn) const;
-  void Internal_IncrementLink() const;
-  void Internal_DecrementLink() const;
 
   ON_ModelComponent::Type m_component_type = ON_ModelComponent::Type::Unset;
   const class ONX_Model* m_model = nullptr;
@@ -1571,22 +1617,16 @@ private:
   mutable ON__UINT64 m_current_component_sn = 0;
   mutable ON__UINT64 m_next_component_sn = 0;
   mutable ON__UINT64 m_prev_component_sn = 0;
-  mutable ON_ModelComponentReference m_current_component = ON_ModelComponentReference::Empty;
-};
 
-/*
-Description:
-  Tests a string to see if it is valid as a name for a layer,
-  object, material, linetype, instance definition, etc.
-Parameters:
-  name - [in] string to test
-Returns:
-  True if the string is a valid name.
-*/
-ON_DECL
-bool ONX_IsValidName( 
-          const wchar_t* name 
-          );
+  // The current component is a weak ref so that a stand alone iterator cannot
+  // keep the current element alive since iterations often involve deletion.
+  // The iterators next/prev will still work as expected when the current element
+  // is deleted. In particular, an iterator can be used to efficiently delete
+  // portions of a model and have the deletion occur when many people
+  // expect it to occur and not at a later time. This makes debugging 
+  // invalid deletions much easier.
+  mutable ON_ModelComponentWeakReference m_current_component_weak_ref;
+};
 
 class ON_CLASS ONX_ModelTest
 {
@@ -1718,6 +1758,9 @@ public:
     bKeepModels - [in]
       If true, then the ONX_Models created by reading 3dm archives are saved
       so the can be examined after the tests complete.
+    text_log_file_path - [in]
+      If not empty, the string to use for file_path in the output text_log.
+      This is used to create logs on different computers that can be compared.
     text_log - [in]
       If text_log is not nullptr, then a summary of the test is sent to text_log.
   Returns:
@@ -1728,6 +1771,7 @@ public:
     const char* file_path,
     ONX_ModelTest::Type test_type,
     bool bKeepModels,
+    const char* text_log_file_path,
     ON_TextLog* text_log
   );
 
@@ -1742,6 +1786,9 @@ public:
     bKeepModels - [in]
       If true, then the ONX_Models created by reading 3dm archives are saved
       so the can be examined after the tests complete.
+    text_log_file_path - [in]
+      If not empty, the string to use for file_path in the output text_log.
+      This is used to create logs on different computers that can be compared.
     text_log - [in]
       If text_log is not nullptr, then a summary of the test is sent to text_log.
   Returns:
@@ -1752,6 +1799,7 @@ public:
     const wchar_t* file_path,
     ONX_ModelTest::Type test_type,
     bool bKeepModels,
+    const wchar_t* text_log_file_path,
     ON_TextLog* text_log
   );
 
@@ -1766,6 +1814,9 @@ public:
     bKeepModels - [in]
       If true, then the ONX_Models created by reading 3dm archives are saved
       so the can be examined after the tests complete.
+    text_log_file_path - [in]
+      If not empty, the string to use for file_path in the output text_log.
+      This is used to create logs on different computers that can be compared.
     text_log - [in]
       If text_log is not nullptr, then a summary of the test is sent to text_log.
   Returns:
@@ -1776,6 +1827,7 @@ public:
     FILE* fp,
     ONX_ModelTest::Type test_type,
     bool bKeepModels,
+    const wchar_t* text_log_file_path,
     ON_TextLog* text_log
   );
 
@@ -1784,13 +1836,15 @@ public:
   Description:
     ONX_Model::Test() can be used to test reading a specific file.
   Parameters:
-    file_path - [in]
-      file path
+    archive - [in]      
     test_type - [in]
       test to perform.
     bKeepModels - [in]
       If true, then the ONX_Models created by reading 3dm archives are saved
       so the can be examined after the tests complete.
+    text_log_file_path - [in]
+      If not empty, the string to use for file_path in the output text_log.
+      This is used to create logs on different computers that can be compared.
     text_log - [in]
       If text_log is not nullptr, then a summary of the test is sent to text_log.
   Returns:
@@ -1801,6 +1855,7 @@ public:
     ON_BinaryArchive& archive,
     ONX_ModelTest::Type test_type,
     bool bKeepModels,
+    const wchar_t* text_log_file_path,
     ON_TextLog* text_log
   );
 
@@ -1886,6 +1941,7 @@ private:
     ON_BinaryArchive& archive,
     ONX_ModelTest::Type test_type,
     bool bKeepModels,
+    const wchar_t* text_log_file_path,
     ON_TextLog* text_log
   );
 
@@ -1901,6 +1957,12 @@ public:
     The name of the source 3dm file.
   */
   const ON_wString Source3dmFilePath() const;
+
+  /*
+  Returns:
+    The string used in the output log to identify the source 3dm file.
+  */
+  const ON_wString TextLogSource3dmFilePath() const;
 
   /*
   Returns:
@@ -1967,6 +2029,10 @@ public:
    ONX_ModelTest::Type m_test_type = ONX_ModelTest::Type::Unset;
 
    ON_wString m_source_3dm_file_path;
+
+   // if set, used when printing the name of m_source_3dm_file_path in the text
+   // log so results from different computers can be compared.
+   ON_wString m_text_log_3dm_file_path;
 
    unsigned int m_model_3dm_file_version[3];
 

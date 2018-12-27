@@ -26,26 +26,1310 @@
 ////////////////////////////////////////////////////////////////
 */
 
-
-
-bool ON_SubDQuadFaceSubdivisionCounter::BreakpointTest()
+bool ON_SubDFaceRegionBreakpoint(
+  unsigned int level0_face_id,
+  const class ON_SubDComponentRegionIndex& region_index
+)
 {
-  if ( nullptr == m_level0_face )
+#if defined(ON_DEBUG)
+  if (
+    11 != level0_face_id
+    )
+  {
     return false;
-  if ( 11 != m_level0_face->m_id )
-    return false;
-  if ( m_subdivision_count < 1 )
-    return false;
-  if ( 1 != m_corner_index[0])
-    return false;
-  if ( m_subdivision_count == 1 && 1 != m_corner_index[1])
+  }
+
+  const unsigned short region_pattern[] = { 3, 3 };
+  const unsigned short region_pattern_count = (unsigned short)(sizeof(region_pattern) / sizeof(region_pattern[0]));
+
+  if (region_index.m_subdivision_count < region_pattern_count)
     return false;
 
-  bool breakpoint_here = true;  // <- breakpoint here
+  for (unsigned short i = 0; i < region_pattern_count; i++)
+  {
+    if (region_index.m_index[i] != region_pattern[i])
+      return false;
+  }
 
-  return breakpoint_here;
+  return true;// <- breakpoint here (or above)
+#else
+  return false;
+#endif
 }
 
+bool ON_SubDComponentRegionBreakpoint(const ON_SubDComponentRegion* component_region)
+{
+#if defined(ON_DEBUG)
+  if (nullptr != component_region)
+  {
+    switch (component_region->m_level0_component.ComponentType())
+    {
+    case ON_SubDComponentPtr::Type::Face:
+      return ON_SubDFaceRegionBreakpoint(component_region->m_level0_component_id, component_region->m_region_index);
+      break;
+    case ON_SubDComponentPtr::Type::Edge:
+      break;
+    case ON_SubDComponentPtr::Type::Vertex:
+      break;
+    default:
+      break;
+    }
+  }
+#endif
+  return false;
+}
+
+
+bool ON_SubDLimitNurbsFragment::IsEmpty() const
+{
+  return 0 == SetBispanCount();
+}
+
+unsigned int ON_SubDLimitNurbsFragment::MaximumBispanCount() const
+{
+  if (ON_SubDLimitNurbsFragment::Type::BicubicSingle == m_type)
+    return 1;
+  if (ON_SubDLimitNurbsFragment::Type::BicubicQuadrant == m_type)
+    return 4;
+  return 0;
+}
+
+unsigned int ON_SubDLimitNurbsFragment::SetBispanCount() const
+{
+  unsigned int set_bispan_count = 0;
+  const unsigned int imax = MaximumBispanCount();
+  for (unsigned  int i = 0; i < imax; i++)
+  {
+    if (
+      ON_SubDLimitNurbsFragment::BispanType::Exact == m_bispan_type[i]
+      || ON_SubDLimitNurbsFragment::BispanType::Approximate == m_bispan_type[i]
+      )
+    {
+      set_bispan_count++;
+    }
+  }
+
+  return set_bispan_count;
+}
+
+
+unsigned int ON_SubDLimitNurbsFragment::UnsetBispanCount() const
+{
+  return MaximumBispanCount() - SetBispanCount();
+}
+
+static bool Internal_CheckNurbsSurfaceCVs(
+  const ON_NurbsSurface& s
+  )
+{
+  for (int i = 0; i < s.m_cv_count[0]; i++)
+  {
+    for (int j = 0; j < s.m_cv_count[1]; j++)
+    {
+      double * cv = s.CV(i, j);
+      for (unsigned k = 0; k < 3; k++)
+      {
+        if (!ON_IsValid(cv[k]))
+        {
+          return ON_SUBD_RETURN_ERROR(false);
+        }
+      }
+    }
+  }
+  return true;
+}
+
+bool ON_SubDLimitNurbsFragment::IsApproximate() const
+{
+  const unsigned int imax = MaximumBispanCount();
+  for (unsigned  int i = 0; i < imax; i++)
+  {
+    if (ON_SubDLimitNurbsFragment::BispanType::Approximate == m_bispan_type[i])
+      return true;
+  }
+  return false;
+}
+
+ON_NurbsSurface* ON_SubDLimitNurbsFragment::GetSurface(
+  ON_NurbsSurface* destination_surface
+) const
+{
+  const unsigned int bispan_count = SetBispanCount();
+  if (bispan_count != MaximumBispanCount())
+    return nullptr;
+
+  const double knots[7] = { -2,-1,0,1,2,3,4 };
+  ON_NurbsSurface patch_srf;
+  patch_srf.m_dim = 3;
+  patch_srf.m_is_rat = 0;
+  patch_srf.m_order[0] = 4;
+  patch_srf.m_order[1] = 4;
+  patch_srf.m_knot[0] = (double*)knots;
+  patch_srf.m_knot[1] = (double*)knots;
+  patch_srf.m_cv_stride[0] = 5 * 3;
+  patch_srf.m_cv_stride[1] = 3;
+
+  patch_srf.m_cv_count[0] = (1 == bispan_count) ? 4 : 5;
+  patch_srf.m_cv_count[1] = patch_srf.m_cv_count[0];
+  patch_srf.m_cv = (double*)m_patch_cv[0][0];
+  ON_NurbsSurface* surface = nullptr;
+  if (destination_surface)
+  {
+    surface = destination_surface;
+    *surface = patch_srf;
+  }
+  else
+  {
+    surface = new ON_NurbsSurface(patch_srf);
+  }
+
+  Internal_CheckNurbsSurfaceCVs(*surface);
+
+  return surface;
+}
+
+ON_NurbsSurface* ON_SubDLimitNurbsFragment::GetQuadrantSurface(
+  unsigned int quadrant_index,
+  ON_NurbsSurface* destination_surface
+) const
+{
+  if (quadrant_index >= 4)
+    return nullptr;
+
+  if (
+    ON_SubDLimitNurbsFragment::BispanType::Exact != m_bispan_type[quadrant_index]
+    && ON_SubDLimitNurbsFragment::BispanType::Approximate != m_bispan_type[quadrant_index]
+    )
+    return nullptr;
+
+  //const ON_2dex cvdex[4] = { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 } };
+  const ON_2dex cvdex(
+    (1 == quadrant_index || 2 == quadrant_index) ? 1 : 0, 
+    (2 == quadrant_index || 3 == quadrant_index) ? 1 : 0
+  );
+
+  const double knots[7] = {-2,-1,0,1,2,3,4};
+  ON_NurbsSurface patch_srf;
+  patch_srf.m_dim = 3;
+  patch_srf.m_is_rat = 0;
+  patch_srf.m_order[0] = 4;
+  patch_srf.m_order[1] = 4;
+  patch_srf.m_knot[0] = (double*)(knots+cvdex.i);
+  patch_srf.m_knot[1] = (double*)(knots+cvdex.j);
+  patch_srf.m_cv_stride[0] = 5*3;
+  patch_srf.m_cv_stride[1] = 3;
+
+  patch_srf.m_cv_count[0] = 4;
+  patch_srf.m_cv_count[1] = 4;
+  patch_srf.m_cv = (double*)m_patch_cv[cvdex.i][cvdex.j];
+
+  ON_NurbsSurface* surface = nullptr;
+  if (destination_surface)
+  {
+    surface = destination_surface;
+    *surface = patch_srf;
+  }
+  else
+  {
+    surface = new ON_NurbsSurface(patch_srf);
+  }
+
+  Internal_CheckNurbsSurfaceCVs(*surface);
+
+  return surface;
+}
+
+const ON_SubDComponentRegion Internal_CreateSubdivisionEdgeRegion(unsigned short subdivision_count, bool bReversedEdge )
+{
+  return ON_SubDComponentRegion::CreateSubdivisionRegion(ON_SubDComponentPtr::Type::Edge, bReversedEdge, subdivision_count, true);
+}
+
+class Internal_SubQuadTransientComponents
+{
+public:
+  Internal_SubQuadTransientComponents(ON_SubDFaceIterator& fit)
+  {
+    // The edge_transient_vertex_id[] array stores ON_2udex
+    // that are used to record the transient vertex id
+    // for a level 0 edge subdivision point.
+    // ON_2udex.i = level 0 edge id
+    // ON_2udex.j = transient vertex id to use for the edge subdivision vertex
+    //
+    // These are required when an edge is shared by 2 N-gons with N != 4 because
+    // each N-gon must use the same transient vertex id in order for the 
+    // final NURBS surface to be easily and quickly joined into an ON_Brep.
+
+    m_edge_transient_vertex_id_map.Reserve(64);
+    ON_2udex u;
+    u.i = 0;
+    u.j = 0;
+    for (const ON_SubDFace* face = fit.FirstFace(); nullptr != face; face = fit.NextFace())
+    {
+      const unsigned int edge_count = face->EdgeCount();
+      if (edge_count <= 0 || 4 == edge_count)
+        continue;
+      for (unsigned int fei = 0; fei < edge_count; fei++)
+      {
+        const ON_SubDEdge* e = face->Edge(fei);
+        if (nullptr == e)
+          continue;
+        u.i = e->m_id;
+        m_edge_transient_vertex_id_map.Append(u);
+      }
+    }
+
+    const unsigned int count0 = m_edge_transient_vertex_id_map.UnsignedCount();
+    if (count0 <= 0)
+      return;
+
+    m_edge_transient_vertex_id_map.QuickSort(ON_2udex::DictionaryCompare);
+    unsigned int count1 = 0;
+    unsigned int prev_edge_id = 0;
+    ON_2udex* a = m_edge_transient_vertex_id_map.Array();
+    for (unsigned int i = 0; i < count0; i++)
+    {
+      u = a[i];
+      if (u.i <= prev_edge_id)
+        continue; // paired edge
+      prev_edge_id = u.i;
+      u.j = ON_SubDComponentRegion::NewTransientId();
+      a[count1++] = u;
+    }
+    m_edge_transient_vertex_id_map.SetCount(count1);
+  }
+
+  ~Internal_SubQuadTransientComponents() = default;
+
+public:
+  static const Internal_SubQuadTransientComponents Empty;
+
+public:
+  void Initialize(
+    const ON_SubDFace* face
+  )
+  {
+    m_face = nullptr;
+    m_edge_count = 0;
+
+    if (m_edge_transient_vertex_id_map.UnsignedCount() <= 0)
+      return;
+    if (nullptr == face)
+      return;
+    const unsigned short edge_count = face->m_edge_count;
+    if (edge_count < 3 || 4 == edge_count)
+      return;
+
+    // Used to create edge regions for subdivision edges because their is no "real" 
+    // edge to reference.
+    // We need a unique id and region so merging and brep joining work correctly.
+    m_edge_count = edge_count;
+    m_fei = edge_count-1;
+    m_face = face;
+    m_radial_edge_region[2] = ON_SubDComponentRegion::CreateSubdivisionRegion(ON_SubDComponentPtr::Type::Edge, false, 1, true);
+    m_radial_edge_region[1] = m_radial_edge_region[2];
+    m_face_center_vertex_id = ON_SubDComponentRegion::NewTransientId();
+    m_radial_vertex_id[2] = Internal_EdgeTransientVertexId();
+    m_radial_vertex_id[1] = m_radial_vertex_id[2];
+
+  }
+
+  void NextSubQuad()
+  {
+    if (0 == m_edge_count || nullptr == m_face || 0 == m_edge_transient_vertex_id_map.UnsignedCount() )
+      return;
+    m_fei = (m_fei + 1) % m_edge_count;
+    const bool bCreateSubdivisionEdgeRegion = (m_fei + 1 < m_edge_count);
+    m_radial_edge_region[0] = m_radial_edge_region[1];
+    m_radial_edge_region[1] 
+      = bCreateSubdivisionEdgeRegion 
+      ? ON_SubDComponentRegion::CreateSubdivisionRegion(ON_SubDComponentPtr::Type::Edge, false, 1, true)
+      : m_radial_edge_region[2];
+    m_radial_vertex_id[0] = m_radial_vertex_id[1];
+    m_radial_vertex_id[1] 
+      = bCreateSubdivisionEdgeRegion 
+      ? Internal_EdgeTransientVertexId()
+      : m_radial_vertex_id[2];
+  }
+
+public:
+  const ON_SubDFace* m_face = nullptr;
+  ON_SubDComponentRegion m_radial_edge_region[3] = {};
+  unsigned int m_face_center_vertex_id = 0;
+  unsigned int m_radial_vertex_id[3] = {};
+  unsigned short m_edge_count = 0;
+  unsigned short m_fei = 0;
+
+  ON_SimpleArray< ON_2udex > m_edge_transient_vertex_id_map;
+
+private:
+  Internal_SubQuadTransientComponents() = delete;
+  Internal_SubQuadTransientComponents(const Internal_SubQuadTransientComponents&) = delete;
+  Internal_SubQuadTransientComponents& operator= (const Internal_SubQuadTransientComponents&) = delete;
+
+private:
+ unsigned int Internal_EdgeTransientVertexId() const
+  {
+    const ON_SubDEdge* e = (m_edge_count>0) ? m_face->Edge((m_fei+1)%m_edge_count) : nullptr;
+    if (nullptr == e)
+      return 0;
+    const ON_2udex key(e->m_id, 0);
+    int i = m_edge_transient_vertex_id_map.BinarySearch(&key, ON_2udex::CompareFirstIndex);
+    return (i >= 0) ?m_edge_transient_vertex_id_map[i].j : 0;
+  }
+};
+
+
+static void Internal_SetLevel0FaceAndEdgeRegion(
+  const ON_SubDFace* face,
+  unsigned int qi,
+  const Internal_SubQuadTransientComponents& face_transient_components,
+  ON_SubDFaceRegion& face_region
+)
+{
+  face_region = ON_SubDFaceRegion::Empty;
+  const unsigned int N = face->EdgeCount();
+  face_region.m_face_region.SetLevel0Face(face);
+  if ( 4 == N )
+  {
+    for (unsigned int fei = 0; fei < 4; fei++)
+      face_region.m_edge_region[fei].SetLevel0EdgePtr(face->EdgePtr(fei));
+    for (unsigned int fvi = 0; fvi < 4; fvi++)
+    {
+      const ON_SubDVertex* v = face->Vertex(fvi);
+      if (nullptr != v)
+        face_region.m_vertex_id[fvi] = v->m_id;
+    }
+  }
+  else if (N >= 3 && qi < N)
+  {
+    face_region.Push(qi); // original N-gon (N != 4) was subdivided into N quads.
+
+    const ON_SubDVertex* v = face->Vertex((qi+1)%N);
+    if (nullptr != v)
+      face_region.m_vertex_id[2] = v->m_id;
+    face_region.m_vertex_id[0] = face_transient_components.m_face_center_vertex_id;
+    face_region.m_vertex_id[1] = face_transient_components.m_radial_vertex_id[0];
+    face_region.m_vertex_id[3] = face_transient_components.m_radial_vertex_id[1];
+
+    face_region.m_edge_region[0] = face_transient_components.m_radial_edge_region[0];
+    face_region.m_edge_region[1].SetLevel0EdgePtr(face->EdgePtr(qi));
+    face_region.m_edge_region[1].PushAdjusted(1);
+    face_region.m_edge_region[2].SetLevel0EdgePtr(face->EdgePtr((qi+1)%N));
+    face_region.m_edge_region[2].PushAdjusted(0);
+    face_region.m_edge_region[3] = face_transient_components.m_radial_edge_region[1];
+    face_region.m_edge_region[3].m_level0_component = face_region.m_edge_region[3].m_level0_component.SetMark();
+  }
+  else
+  {
+    ON_SUBD_ERROR("Unexpected parameters.");
+  }
+}
+
+
+const ON_SubDComponentRegion ON_SubDComponentRegion::Create(
+    const class ON_SubDFace* level0_face
+)
+{
+  ON_SubDComponentRegion r;
+  r.m_level0_component = ON_SubDComponentPtr::Create(level0_face);
+  r.m_level0_component_id = (nullptr != level0_face ? level0_face->m_id : 0);
+  return r;
+}
+
+const ON_SubDComponentRegion ON_SubDComponentRegion::Create(
+  unsigned int component_id,
+  ON_SubDComponentPtr::Type component_type,
+  bool bComponentMark
+)
+{
+  ON_SubDComponentRegion r;
+  r.m_level0_component = ON_SubDComponentPtr::CreateNull(component_type, bComponentMark);
+  r.m_level0_component_id = component_id;
+  return r;
+}
+
+const ON_SubDComponentRegion ON_SubDComponentRegion::CreateSubdivisionRegion(
+  ON_SubDComponentPtr::Type component_type,
+  bool bComponentMark,
+  unsigned short subdivision_count,
+  bool bAssignTransientId
+)
+{
+  ON_SubDComponentRegion r;
+  r.m_region_index = ON_SubDComponentRegionIndex::Unset;
+  r.m_region_index.m_subdivision_count = subdivision_count;
+  r.m_level0_component = ON_SubDComponentPtr::CreateNull(component_type, bComponentMark);
+
+  if (bAssignTransientId)
+  {
+    r.m_level0_component_id = ON_SubDComponentRegion::NewTransientId();
+  }
+  return r;
+}
+
+////ON_SubDComponentRegion ON_SubDComponentRegion::Reverse() const
+////{
+////  ON_SubDComponentRegion r(*this);
+////   r.m_level0_component = r.m_level0_component.ToggleMark();
+////  if (r.m_subdivision_count > 0)
+////  {
+////    const int c = (int)(sizeof(m_region_index) / sizeof(m_region_index[0]));
+////    int i = (int)(r.m_subdivision_count - 1);
+////    int j = 0;
+////    while (j < c && 0xFFFF == r.m_region_index[j])
+////      j++;
+////    for ( /*empty init*/; j < i && j < c; ++j,--i)
+////    {
+////      if (i < c)
+////      {
+////        unsigned short x = r.m_region_index[i];
+////        r.m_region_index[i] = r.m_region_index[j];
+////        r.m_region_index[j] = x;
+////      }
+////      else
+////      {
+////        r.m_region_index[j] = 0;
+////      }
+////    }
+////  }  
+////  return r;
+////}
+////
+////ON_SubDComponentRegion ON_SubDComponentRegion::ReverseIfMarked() const
+////{
+////  return
+////    0 != m_level0_component.ComponentMark()
+////    ? Reverse()
+////    : *this;
+////}
+
+int ON_SubDComponentRegion::CompareTypeIdMark(
+  const ON_SubDComponentRegion* lhs,
+  const ON_SubDComponentRegion* rhs
+)
+{
+  if (lhs == rhs)
+    return 0;
+  if (nullptr == rhs)
+    return 1;
+  if (nullptr == lhs)
+    return -1;
+
+  int rc = ON_SubDComponentPtr::CompareType(&lhs->m_level0_component, &rhs->m_level0_component);
+  if (0 != rc)
+    return rc;
+
+  if (lhs->m_level0_component_id < rhs->m_level0_component_id)
+    return -1;
+  if (lhs->m_level0_component_id > rhs->m_level0_component_id)
+    return 1;
+
+  rc = (0 != lhs->m_level0_component.ComponentMark() ? (int)1 : (int)0) - (0 != lhs->m_level0_component.ComponentMark() ? (int)1 : (int)0);
+  if (0 != rc)
+    return rc;
+
+  return 0;
+}
+
+int ON_SubDComponentRegionIndex::Compare(
+  const ON_SubDComponentRegionIndex* lhs,
+  const ON_SubDComponentRegionIndex* rhs
+  )
+{
+  if (lhs == rhs)
+    return 0;
+  if (nullptr == rhs)
+    return 1;
+  if (nullptr == lhs)
+    return -1;
+  if (lhs->m_subdivision_count < rhs->m_subdivision_count)
+    return -1;
+  if (lhs->m_subdivision_count > rhs->m_subdivision_count)
+    return 1;
+  return ON_SubDComponentRegionIndex::CompareMinimumSubregion(lhs, rhs);
+}
+
+int ON_SubDComponentRegionIndex::CompareMinimumSubregion(
+  const ON_SubDComponentRegionIndex* lhs,
+  const ON_SubDComponentRegionIndex* rhs
+  )
+{
+  if (lhs == rhs)
+    return 0;
+  if (nullptr == lhs)
+    return 1;
+  if (nullptr == rhs)
+    return -1;
+  unsigned short subdivision_count0 = (lhs->m_subdivision_count < rhs->m_subdivision_count) ? lhs->m_subdivision_count : rhs->m_subdivision_count;
+  if (subdivision_count0 > ON_SubDComponentRegionIndex::IndexCapacity)
+    subdivision_count0 = ON_SubDComponentRegionIndex::IndexCapacity;
+  for (unsigned short i = 0; i < subdivision_count0; i++)
+  {
+    if (lhs->m_index[i] < rhs->m_index[i])
+      return -1;
+    if (lhs->m_index[i] > rhs->m_index[i])
+      return 1;
+  }
+  return 0;
+}
+
+int ON_SubDComponentRegion::CompareTypeIdMarkMinimumSubregion(
+  const ON_SubDComponentRegion* lhs,
+  const ON_SubDComponentRegion* rhs
+)
+{
+  if (lhs == rhs)
+    return 0;
+
+  const int rc = ON_SubDComponentRegion::CompareTypeIdMark(lhs, rhs);
+  if (0 != rc)
+    return rc;
+
+  return ON_SubDComponentRegionIndex::CompareMinimumSubregion( &lhs->m_region_index, &rhs->m_region_index);
+}
+
+int ON_SubDComponentRegion::CompareTypeIdMarkSubregion(
+  const ON_SubDComponentRegion* lhs,
+  const ON_SubDComponentRegion* rhs
+)
+{
+  if (lhs == rhs)
+    return 0;
+
+  int rc = ON_SubDComponentRegion::CompareTypeIdMark(lhs, rhs);
+  if (0 == rc)
+  {
+    rc = ON_SubDComponentRegionIndex::CompareMinimumSubregion(&lhs->m_region_index, &rhs->m_region_index);
+    if (0 == rc)
+    {
+      if (lhs->m_region_index.m_subdivision_count < rhs->m_region_index.m_subdivision_count)
+        rc = -1;
+      else if (lhs->m_region_index.m_subdivision_count > rhs->m_region_index.m_subdivision_count)
+        rc = 1;
+    }
+  }
+
+  return rc;
+}
+
+
+int ON_SubDComponentRegion::Compare(
+  const ON_SubDComponentRegion* lhs,
+  const ON_SubDComponentRegion* rhs
+)
+{
+  if (lhs == rhs)
+    return 0;
+
+  const int rc = ON_SubDComponentRegion::CompareTypeIdMarkSubregion(lhs, rhs);
+  if (0 != rc)
+    return rc;
+
+  if (lhs->m_level0_component.m_ptr < rhs->m_level0_component.m_ptr)
+    return -1;
+  if (lhs->m_level0_component.m_ptr > rhs->m_level0_component.m_ptr)
+    return 1;
+
+  return 0;
+}
+
+
+void ON_SubDComponentRegion::SetLevel0Component(
+  ON_SubDComponentPtr component_ptr
+)
+{
+  const class ON_SubDComponentBase* component_base = component_ptr.ComponentBase();
+  if (nullptr != component_base)
+  {
+    m_level0_component = component_ptr;
+    m_level0_component_id = component_base->m_id;
+  }
+  else
+  {
+    m_level0_component = ON_SubDComponentPtr::Null;
+    m_level0_component_id = 0;
+  }
+  m_region_index = ON_SubDComponentRegionIndex::Zero;
+}
+
+void ON_SubDComponentRegion::SetLevel0Face(
+  const ON_SubDFace* face
+  )
+{
+  SetLevel0Component(ON_SubDComponentPtr::Create(face));
+}
+
+void ON_SubDComponentRegion::SetLevel0EdgePtr(
+  const ON_SubDEdgePtr edge_ptr
+)
+{
+  SetLevel0Component(ON_SubDComponentPtr::Create(edge_ptr));
+}
+
+void ON_SubDComponentRegion::SetLevel0Vertex(
+  const ON_SubDVertex* vertex
+)
+{
+  SetLevel0Component(ON_SubDComponentPtr::Create(vertex));
+}
+
+void ON_SubDComponentRegionIndex::Push(
+  unsigned int region_index
+  )
+{
+  if ( region_index > 0xFFFFU )
+    region_index = 0xFFFFU;
+  if ( m_subdivision_count < ON_SubDComponentRegionIndex::IndexCapacity )
+    m_index[m_subdivision_count] = (unsigned short)region_index;
+  ++m_subdivision_count;
+}
+
+void ON_SubDComponentRegionIndex::Pop()
+{
+  if (m_subdivision_count > 0)
+  {
+    m_subdivision_count--;
+    if ( m_subdivision_count < ON_SubDComponentRegionIndex::IndexCapacity)
+      m_index[m_subdivision_count] = 0;
+  }
+}
+
+
+void ON_SubDComponentRegion::PushAdjusted(
+  unsigned int region_index
+  )
+{
+  if (
+    ON_SubDComponentPtr::Type::Edge == m_level0_component.ComponentType()
+    && 0 != m_level0_component.ComponentMark()
+    && region_index <= 1
+    )
+  {
+    region_index = 1 - region_index;
+  }
+  PushAbsolute(region_index);
+}
+
+void ON_SubDComponentRegion::PushAbsolute(
+  unsigned int region_index
+  )
+{
+  m_region_index.Push(region_index);
+  ON_SubDComponentRegionBreakpoint(this);
+}
+
+void ON_SubDComponentRegion::Pop()
+{
+  m_region_index.Pop();
+}
+
+unsigned short ON_SubDComponentRegion::SubdivisionCount() const
+{
+  return m_region_index.m_subdivision_count;
+}
+
+
+unsigned short ON_SubDComponentRegionIndex::Index(
+  unsigned short i
+) const
+{
+  return
+    (i < m_subdivision_count && i < ON_SubDComponentRegionIndex::IndexCapacity)
+    ? m_index[i]
+    : 0xFFFF;
+}
+
+void ON_SubDFaceRegion::Push(unsigned int quadrant_index)
+{
+  m_face_region.PushAbsolute(quadrant_index);
+
+  if (quadrant_index >= 0 && quadrant_index < 4)
+  {
+    m_edge_region[quadrant_index].PushAdjusted(0); // 1st half of this edge relative to face's orientation (adjusted to edge's orientation)
+    m_edge_region[(quadrant_index + 1) % 4] = ON_SubDComponentRegion::CreateSubdivisionRegion(ON_SubDComponentPtr::Type::Edge, true, m_edge_region[quadrant_index].SubdivisionCount(), false);
+    m_edge_region[(quadrant_index + 2) % 4] = ON_SubDComponentRegion::CreateSubdivisionRegion(ON_SubDComponentPtr::Type::Edge, false, m_edge_region[quadrant_index].SubdivisionCount(), false);
+    m_edge_region[(quadrant_index + 3) % 4].PushAdjusted(1); // 2nd half of this edge relative to face's orientation (adjusted to edge's orientation)
+  }
+
+  const int surviving_vi
+    = ((4 != m_level0_edge_count) && (1 == m_face_region.SubdivisionCount()))
+    ? 2
+    : quadrant_index;
+  m_vertex_id[(surviving_vi+1)%4] = 0;
+  m_vertex_id[(surviving_vi+2)%4] = 0;
+  m_vertex_id[(surviving_vi+3)%4] = 0;
+}
+
+bool ON_SubDComponentRegion::IsEmptyRegion() const
+{
+  return
+    ON_SubDComponentPtr::Type::Unset == m_level0_component.ComponentType()
+    && m_level0_component.IsNull()
+    && 0 == m_level0_component_id
+    && 0 == SubdivisionCount();
+}
+
+bool ON_SubDFaceRegion::IsValid(
+  bool bSilentError
+) const
+{
+  if (m_face_region.IsEmptyRegion())
+  {
+    for (int ei = 0; ei < 4; ei++)
+    {
+      if (false == m_edge_region[ei].IsEmptyRegion())
+      {
+        if (false == bSilentError)
+          ON_SUBD_ERROR("m_face_region is empty and m_edge_region[] is not empty.");
+        return false;
+      }
+    }
+    for (int vi = 0; vi < 4; vi++)
+    {
+      if (0 != m_vertex_id[vi])
+      {
+        if (false == bSilentError)
+          ON_SUBD_ERROR("m_face_region is empty and m_vertex_id[] is not zero.");
+        return false;
+      }
+    }
+    return true;
+  }
+  
+
+
+  const ON_SubDComponentPtr::Type face_type = m_face_region.m_level0_component.ComponentType();
+  if (ON_SubDComponentPtr::Type::Face != face_type)
+  {
+    if (false == bSilentError)
+      ON_SUBD_ERROR("Invalid m_face_region.");
+    return false;
+  }
+
+  if (false == m_face_region.IsPersistentId())
+  {
+    if (false == bSilentError)
+      ON_SUBD_ERROR("m_face_region.IsPersistentId() is false");
+    return false;
+  }
+
+  const ON_SubDFace* face = m_face_region.m_level0_component.Face();
+  if (nullptr == face )
+  {
+    if (false == bSilentError)
+      ON_SUBD_ERROR("m_face_region.m_level0_component.Face() is nullptr.");
+    return false;
+  }
+
+  if (face->m_id != m_face_region.m_level0_component_id)
+  {
+    if (false == bSilentError)
+      ON_SUBD_ERROR("Unexpected value for m_face_region.m_level0_component_id");
+    return false;
+  }
+
+  const unsigned int edge_count = (nullptr != face) ? face->EdgeCount() : 0;
+  const bool bIsQuad = (4 == edge_count);
+  if (false == bIsQuad)
+  {
+    if (0 == m_face_region.SubdivisionCount())
+    {
+      if (false == bSilentError)
+        ON_SUBD_ERROR("m_face_region is not a quad and 0 = m_subdivision_count.");
+      return false;
+    }
+    if (((unsigned int)m_face_region.m_region_index.m_index[0]) >= edge_count)
+    {
+      if (false == bSilentError)
+        ON_SUBD_ERROR("Unexpected value in face_region.m_region_index[0].");
+      return false;
+    }
+  }
+
+  bool bPeristentVertex[4] = { bIsQuad, bIsQuad, true, bIsQuad };
+  bool bPeristentEdge[4] = { bIsQuad, true, true, bIsQuad };
+  for (unsigned short i = bIsQuad?0:1; i < m_face_region.SubdivisionCount() && i < ON_SubDComponentRegionIndex::IndexCapacity; i++)
+  {
+    const unsigned short r = m_face_region.m_region_index.m_index[i];
+    if (r >= 4)
+    {
+      if (false == bSilentError)
+        ON_SUBD_ERROR("Unexpected value in face_region.m_region_index[].");
+      return false;
+    }
+    bPeristentVertex[(r+1)%4] = false;
+    bPeristentVertex[(r+2)%4] = false;
+    bPeristentVertex[(r+3)%4] = false;
+    bPeristentEdge[(r+1)%4] = false;
+    bPeristentEdge[(r+2)%4] = false;
+    if (false == bPeristentVertex[r] && false == bPeristentEdge[r] && false == bPeristentEdge[(r + 3) % 4] )
+      break;
+  }
+   
+  for (int ei = 0; ei < 4; ei++)
+  {
+    const bool bEmptyEdge = m_edge_region[ei].IsEmptyRegion();
+    if (bEmptyEdge)
+    {
+      if ( bPeristentEdge[ei])
+      {
+        if (false == bSilentError)
+          ON_SUBD_ERROR("Unexpected empty edge in m_edge_region[].");
+        return false;
+      }
+      continue;
+    }
+
+    const ON_SubDComponentPtr::Type edge_type = m_edge_region[ei].m_level0_component.ComponentType();
+    if (ON_SubDComponentPtr::Type::Edge != edge_type)
+    {
+      if (false == bSilentError)
+        ON_SUBD_ERROR("Invalid m_face_region.");
+      return false;
+    }
+    if ( m_edge_region[ei].SubdivisionCount() != m_face_region.SubdivisionCount() )
+    {
+      if (false == bSilentError)
+        ON_SUBD_ERROR("m_edge_region[].m_subdivision_count != m_face_region.m_subdivision_count.");
+      return false;
+    }
+
+    if (bPeristentEdge[ei])
+    {
+      if (false == m_edge_region[ei].IsPersistentId())
+      {
+        if (false == bSilentError)
+          ON_SUBD_ERROR("m_edge_region[] missing a persistent edge id.");
+        return false;
+      }
+      const ON_SubDEdge* edge = m_edge_region[ei].m_level0_component.Edge();
+      if (nullptr == edge)
+      {
+        if (false == bSilentError)
+          ON_SUBD_ERROR("Unexpected value for m_edge_region[].m_level0_component.Edge()");
+        return false;
+      }
+      if (edge->m_id != m_edge_region[ei].m_level0_component_id)
+      {
+        if (false == bSilentError)
+          ON_SUBD_ERROR("Unexpected value for m_edge_region[].m_level0_component_id");
+        return false;
+      }
+    }
+    else
+    {
+      if ( false == m_edge_region[ei].IsTransientId() )
+      {
+        if (false == bSilentError)
+          ON_SUBD_ERROR("m_edge_region[] missing a transient edge id.");
+        return false;
+      }
+    }
+  }
+
+   
+  for (int vi = 0; vi < 4; vi++)
+  {
+    if (bPeristentVertex[vi])
+    {
+      if (false == ON_SubDComponentRegion::IsPersistentId(m_vertex_id[vi]))
+      {
+        if (false == bSilentError)
+          ON_SUBD_ERROR("m_vertex_id[] missing a persistent vertex id.");
+        return false;
+      }
+    }
+    else if ( 0 != m_vertex_id[vi] )
+    {
+      if (false == ON_SubDComponentRegion::IsTransientId(m_vertex_id[vi]))
+      {
+        if (false == bSilentError)
+          ON_SUBD_ERROR("m_vertex_id[] missing a transient vertex id.");
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+bool ON_SubDComponentRegion::IsTransientId() const
+{
+  return ON_SubDComponentRegion::IsTransientId(m_level0_component_id);
+}
+
+bool ON_SubDComponentRegion::IsPersistentId() const
+{
+  return ON_SubDComponentRegion::IsPersistentId(m_level0_component_id);
+}
+
+static unsigned int Internal_TransientIdHelper(
+  bool bReset
+)
+{
+  static unsigned int src = 0; // shoule be a "atomic" unsigned - but not critical
+
+  if (bReset)
+  {
+    src = 0;
+    return 0;
+  }
+
+  unsigned int transient_id = ++src;
+  if (0 != (ON_SubDComponentRegion::TransientIdBit & transient_id))
+  {
+    src = 1;
+    transient_id = 1; // because other threads may have modified src.
+  }
+  transient_id |= ON_SubDComponentRegion::TransientIdBit;
+  return transient_id;
+}
+
+void ON_SubDComponentRegion::ResetTransientId()
+{
+  Internal_TransientIdHelper(true);
+}
+
+const unsigned int ON_SubDComponentRegion::NewTransientId()
+{
+  return Internal_TransientIdHelper(false);
+}
+
+bool ON_SubDComponentRegion::IsPersistentId(unsigned int id)
+{
+  return (0 != id) && (0 == (ON_SubDComponentRegion::TransientIdBit & id));
+}
+
+unsigned int ON_SubDComponentRegion::TransientId(unsigned int id)
+{
+  return (0 != (ON_SubDComponentRegion::TransientIdBit & id)) ? ((~ON_SubDComponentRegion::TransientIdBit) & id) : 0;
+}
+
+
+bool ON_SubDComponentRegion::IsTransientId(unsigned int id)
+{
+  return 0 != (ON_SubDComponentRegion::TransientIdBit & id) && 0 != ((~ON_SubDComponentRegion::TransientIdBit) & id);
+}
+
+static wchar_t* Internal_AppendUnsigned(
+  //wchar_t prefix1,
+  //wchar_t prefix2,
+  unsigned int i,
+  wchar_t* s,
+  wchar_t* s1
+  )
+{
+  //if (0 != prefix1 && s < s1)
+  //  *s++ = prefix1;
+  //if (0 != prefix2 && s < s1)
+  //  *s++ = prefix2;
+  const bool bTransientId = (0 != (ON_SubDComponentRegion::TransientIdBit & i) );
+  if (bTransientId)
+  {
+    if (s < s1)
+      *s++ = '<';
+    i &= ~ON_SubDComponentRegion::TransientIdBit;
+  }
+  wchar_t buffer[64];
+  wchar_t* sdigit = buffer;
+  wchar_t* sdigit1 = sdigit + (sizeof(buffer)/sizeof(buffer[0]));
+  for ( *sdigit++ = 0; sdigit < sdigit1; sdigit++ )
+  {
+    *sdigit = (wchar_t)('0' + (i%10));
+    i /= 10;
+    if (0 == i)
+    {
+      while ( s < s1 && 0 != (*s = *sdigit--) )
+        s++;
+      break;
+    }
+  }
+  if (bTransientId)
+  {
+    if (s < s1)
+      *s++ = '>';
+  }
+  if (s <= s1)
+    *s = 0;
+  return s;
+}
+
+wchar_t* ON_SubDComponentPtr::ToString(
+  wchar_t* s,
+  size_t s_capacity
+) const
+{
+  if (s_capacity <= 0 || nullptr == s)
+    return nullptr;
+
+  *s = 0;
+  wchar_t* s1 = s + (s_capacity - 1);
+  *s1 = 0;
+  if (s < s1)
+  {
+    if (0 == m_ptr)
+    {
+      if (s + 7 < s1)
+      {
+        *s++ = 'N';
+        *s++ = 'u';
+        *s++ = 'l';
+        *s++ = 'l';
+        *s++ = 'P';
+        *s++ = 't';
+        *s++ = 'r';
+      }
+    }
+    else
+    {
+      wchar_t c;
+      switch (ComponentType())
+      {
+      case ON_SubDComponentPtr::Type::Vertex:
+        c = 'v';
+        break;
+      case ON_SubDComponentPtr::Type::Edge:
+        if ( s+2 < s1 )
+          *s++ = (ComponentMark()) ? '-' : '+';
+        c = 'e';
+        break;
+      case ON_SubDComponentPtr::Type::Face:
+        c = 'f';
+        break;
+      case ON_SubDComponentPtr::Type::Unset:
+        c = 0;
+        break;
+      default:
+        c = 0;
+        break;
+      }
+
+      if (0 == c)
+      {
+        *s++ = '?';
+      }
+      else
+      {
+        *s++ = c;
+        if (IsNull() && s + 6 < s1)
+        {
+          *s++ = '[';
+          *s++ = 'n';
+          *s++ = 'u';
+          *s++ = 'l';
+          *s++ = 'l';
+          *s++ = ']';
+        }
+      }
+    }
+  }
+  
+  if (nullptr != s && s <= s1)
+    *s = 0;
+  return s;
+};
+
+
+const ON_wString ON_SubDComponentRegionIndex::ToString() const
+{
+  wchar_t buffer[32];
+  if (nullptr != ToString(buffer, sizeof(buffer) / sizeof(buffer[0])))
+    return ON_wString(buffer);
+  return ON_wString::EmptyString;
+}
+
+wchar_t* ON_SubDComponentRegionIndex::ToString(
+  wchar_t* s,
+  size_t s_capacity
+) const
+{
+  if (s_capacity <= 0 || nullptr == s)
+    return nullptr;
+
+  *s = 0;
+  wchar_t* s1 = s + (s_capacity - 1);
+  *s1 = 0;
+
+  if (s < s1)
+  {
+    for (unsigned short i = 0; i < m_subdivision_count && nullptr != s && s < s1; i++)
+    {
+      if (s < s1)
+        *s++ = '.';
+      if (i >= ON_SubDComponentRegionIndex::IndexCapacity)
+      {
+        // more subdivision levels that m_region_index[] can record.
+        if (s < s1)
+          *s++ = '_';
+        break;
+      }
+      if (0xFFFF == m_index[i])
+      {
+        // This is component was added during a subdivision
+        // and did not exist at level i.
+        if (s < s1)
+          *s++ = 'x';
+      }
+      else
+      {
+        // portion of component subdivided at level i
+        s = Internal_AppendUnsigned(m_index[i], s, s1);
+      }
+    }
+  }
+
+  if (nullptr != s && s <= s1)
+    *s = 0;
+
+  return s;
+}
+
+
+const ON_wString ON_SubDComponentPtr::ToString() const
+{
+  wchar_t buffer[32];
+  if (nullptr != ToString(buffer, sizeof(buffer) / sizeof(buffer[0])))
+    return ON_wString(buffer);
+  return ON_wString::EmptyString;
+}
+
+
+wchar_t* ON_SubDComponentRegion::ToString(
+  wchar_t* s,
+  size_t s_capacity
+) const
+{
+  if (s_capacity <= 0 || nullptr == s)
+    return nullptr;
+
+  *s = 0;
+  wchar_t* s1 = s + (s_capacity - 1);
+  *s1 = 0;
+  if (s < s1)
+  {
+    s = m_level0_component.ToString(s, s_capacity);
+    if (nullptr != s && s < s1)
+      s = Internal_AppendUnsigned(m_level0_component_id, s, s1);
+  }
+
+  if (nullptr != s && s < s1)
+    s = m_region_index.ToString(s, 1 + (s1 - s));
+  
+  if (nullptr != s && s <= s1)
+    *s = 0;
+
+  return s;
+}
+
+
+const ON_wString ON_SubDComponentRegion::ToString() const
+{
+  wchar_t buffer[128];
+  if (nullptr != ToString(buffer, sizeof(buffer) / sizeof(buffer[0])))
+    return ON_wString(buffer);
+  return ON_wString::EmptyString;
+}
+
+
+ON__UINT32 ON_SubDComponentRegionIndex::ToCompressedRegionIndex() const
+{
+  return ON_SubDComponentRegionIndex::ToCompressedRegionIndex( m_subdivision_count, m_index);
+}
+
+const ON_SubDComponentRegionIndex ON_SubDComponentRegionIndex::FromCompressedRegionIndex(
+  ON__UINT32 compressed_region_index
+)
+{
+  ON_SubDComponentRegionIndex ri;
+  ON_SubDComponentRegionIndex::FromCompressedRegionIndex(compressed_region_index, &ri.m_subdivision_count, ri.m_index);
+  return ri;
+}
+
+ON__UINT32 ON_SubDComponentRegionIndex::ToCompressedRegionIndex(
+    unsigned short subdivision_count,
+    const unsigned short* region_index
+  )
+{
+  ON__UINT32 rc 
+    = (subdivision_count >= 255)
+    ? 255
+    : (ON__UINT32)subdivision_count;
+  rc <<= 24;
+  if (nullptr != region_index && subdivision_count > 0)
+  {
+    ON__UINT32 idx
+      = (region_index[0] >= 255)
+      ? 255
+      : (ON__UINT32)region_index[0];
+    idx <<= 16;
+    ON__UINT32 shift = 14;
+    for (unsigned short i = 1; i < subdivision_count && i < ON_SubDComponentRegionIndex::IndexCapacity && shift <= 14; i++)
+    {
+      ON__UINT32 bits = (ON__UINT32)region_index[i];
+      if (bits > 3)
+        bits = 3;
+      idx |= (bits << shift);
+      shift -= 2;
+    }
+    rc |= idx;
+  }
+  return rc;
+  //ON__UINT32 shift = 27;
+  //ON__UINT32 rc = (ON__UINT32)subdivision_count;
+  //rc <<= shift;
+  //
+  //const unsigned short count
+  //  = (subdivision_count <= ON_SubDComponentRegion::region_index_capacity)
+  //  ? subdivision_count
+  //  : ON_SubDComponentRegion::region_index_capacity;
+  //for (unsigned short i = 0; i < count; i++)
+  //{
+  //  shift -= 3;
+  //  ON__UINT32 three_bits = (ON__UINT32)(region_index[i] % 0x07);
+  //  if (0 != three_bits)
+  //    rc |= (three_bits << shift);
+  //}
+  //return rc;
+}
+
+void ON_SubDComponentRegionIndex::FromCompressedRegionIndex(
+  ON__UINT32 compressed_region_index,
+  unsigned short* subdivision_count,
+  unsigned short region_index[]
+)
+{
+  const ON__UINT32 count = (compressed_region_index >> 24);
+  if (nullptr != subdivision_count)
+    *subdivision_count = (unsigned short)count;
+  if (nullptr != region_index)
+  {
+    region_index[0] = (unsigned short)((compressed_region_index & 0x00FF0000) >> 16);
+    for (unsigned short i = 1; i < ON_SubDComponentRegionIndex::IndexCapacity; i++)
+    {
+      region_index[i] = (unsigned short)((compressed_region_index & 0x0000C000) >> 14);
+      compressed_region_index <<= 2;
+    }
+  }
+
+  //ON__UINT32 shift = 27;
+  //ON__UINT32 count = (region32 >> shift);
+  //if (nullptr != subdivision_count)
+  //  *subdivision_count = (unsigned short)count;
+  //if (nullptr != region_index)
+  //{
+  //  for (unsigned short i = 0; i < ON_SubDComponentRegion::region_index_capacity; i++)
+  //    region_index[i] = 0;
+  //  unsigned int idx = region32 << (32-shift);
+  //  for (unsigned short i = 0; 0 != idx && i < ON_SubDComponentRegion::region_index_capacity; i++)
+  //  {
+  //    ON__UINT32 three_bits = (idx & 0xE0000000U);
+  //    three_bits >>= 29;
+  //    region_index[i] = (unsigned short)three_bits;
+  //    idx <<= 3;      
+  //  }
+  //}
+
+}
 
 static ON_ProgressStepCounter CreateFragmentProgressStepCounter(
   ON_SubDFaceIterator& fit,
@@ -77,6 +1361,71 @@ static ON_ProgressStepCounter CreateFragmentProgressStepCounter(
 
 }
 
+wchar_t* ON_SubDFaceRegion::ToString(
+  wchar_t* s,
+  size_t s_capacity
+) const
+{
+  if (s_capacity <= 0 || nullptr == s)
+    return nullptr;
+
+  wchar_t* s1 = s + s_capacity-1;
+  *s1 = 0;
+
+  s = m_face_region.ToString(s, s_capacity);
+  if (nullptr != s && s+4 < s1)
+  {
+    for (unsigned int i = 0; i < 4 && nullptr != s && s + 4 < s1; i++)
+    {
+      *s++ = ON_wString::Space;
+      *s++ = (0 == i) ? '(' : ',';
+      if ( ON_SubDComponentPtr::Type::Edge == m_edge_region[i].m_level0_component.ComponentType() )
+      {
+        s = m_edge_region[i].ToString(s, s1 - s);
+      }
+      else
+      {
+        *s++ = 'e';
+        *s++ = '?';
+      }
+    }
+    if (nullptr != s && s < s1)
+      *s++ = ')';
+  }
+
+  if (nullptr != s && s+4 < s1)
+  {
+    for (unsigned int i = 0; i < 4 && nullptr != s && s + 4 < s1; i++)
+    {
+      *s++ = ON_wString::Space;
+      *s++ = (0 == i) ? '(' : ',';
+      if (0 != m_vertex_id[i])
+      {
+        *s++ = 'v';
+        s = Internal_AppendUnsigned(m_vertex_id[i], s, s1);
+      }
+      else
+      {
+        *s++ = '0';
+      }
+    }
+    if (nullptr != s && s < s1)
+      *s++ = ')';
+  }
+
+  if (nullptr != s && s <= s1)
+    *s = 0;
+  return s;
+}
+
+const ON_wString ON_SubDFaceRegion::ToString() const
+{
+  wchar_t buffer[256];
+  if (nullptr != ToString(buffer, sizeof(buffer) / sizeof(buffer[0])))
+    return ON_wString(buffer);
+  return ON_wString::EmptyString;
+}
+
 static unsigned int GetQuadLimitSurfaceMeshFragmentsHelper(
   ON_SubDFaceIterator& fit,
   const ON_SubDDisplayParameters& limit_mesh_parameters,
@@ -101,8 +1450,6 @@ static unsigned int GetQuadLimitSurfaceMeshFragmentsHelper(
   ON_SubDQuadFaceMesher qfm;
   ON_SubDQuadFaceMesher sub_qfm;
   ON_SubDFaceNeighborhood fnbd;
-  ON_SubDQuadFaceSubdivisionCounter quad_face_subdivsion_counter;
-
 
   qfm.m_output = ON_SubDQuadFaceMesher::Output::mesh;
 
@@ -124,6 +1471,8 @@ static unsigned int GetQuadLimitSurfaceMeshFragmentsHelper(
     }
   }
 
+  Internal_SubQuadTransientComponents face_transient_components(fit);
+
   // TODO 
   //
   //   Support multiple threads by adding more fragment, sub_fragment qfm, sub_qfm and fnbd
@@ -133,9 +1482,10 @@ static unsigned int GetQuadLimitSurfaceMeshFragmentsHelper(
   const unsigned short unset_face_edge_index = 0xFFFFU;
   for (const ON_SubDFace* face = fit.FirstFace(); nullptr != face; face = fit.NextFace())
   {
-    quad_face_subdivsion_counter.SetLevel0Face(face);
+    if (face->m_edge_count < 3)
+      continue;
 
-    //const unsigned int initial_subd_level = static_cast<unsigned int>(face->m_level);
+    face_transient_components.Initialize(face);
 
     if (4 == face->m_edge_count)
     {
@@ -167,6 +1517,8 @@ static unsigned int GetQuadLimitSurfaceMeshFragmentsHelper(
         continue;
       quad_faces = fnbd.m_center_vertex1->m_faces;
       quad_face_count = fnbd.m_center_vertex1->m_face_count;
+      if (quad_face_count < 2)
+        continue;
       if (callback_fragment != &sub_fragment)
       {
         if (0 == sub_fragment.m_P_capacity)
@@ -190,20 +1542,21 @@ static unsigned int GetQuadLimitSurfaceMeshFragmentsHelper(
 
     for (unsigned int qi = 0; qi < quad_face_count; qi++)
     {
-      if (quad_face_count > 1)
-      {
-        if ( qi > 0 )
-          quad_face_subdivsion_counter.Pop();
-        quad_face_subdivsion_counter.Push(qi);
-      }
-
+      face_transient_components.NextSubQuad();
+      ON_SubDFaceRegion face_region;
+      Internal_SetLevel0FaceAndEdgeRegion(
+        face,
+        qi, face_transient_components, // qi and subdivsion_edge_region[] are used only when "f" is a level 1 sud quad of "face"
+        face_region
+      );
+      
       const ON_SubDFace* f = quad_faces[qi];
       if (unset_face_edge_index == callback_fragment->m_face_vertex_index[0])
         callback_fragment->m_face_vertex_index[2] = (unsigned short)((qi+1)%quad_face_count);
 
       callback_fragment->m_face_fragment_index = (unsigned short)qi;
 
-      if (false == qfm.GetLimitMesh(quad_face_subdivsion_counter, f))
+      if (false == qfm.GetLimitMesh(face_region, f))
         continue;
       
       fragment_count++;
@@ -230,7 +1583,8 @@ static unsigned int GetQuadLimitSurfacePatchFragmentsHelper(
   ON_SubDFaceIterator& fit,
   const ON_SubDDisplayParameters& limit_mesh_parameters,
   ON__UINT_PTR fragment_callback_context,
-  bool(*patch_fragment_callback_function)(ON__UINT_PTR, const class ON_SubDLimitPatchFragment*)
+  bool(*begin_face_callback_function)(ON__UINT_PTR ,const ON_SubDFaceRegion&),//, const class ON_SubDFace*, const class ON_SubDFace*, unsigned int),
+  bool(*patch_fragment_callback_function)(ON__UINT_PTR, const class ON_SubDLimitNurbsFragment*)
   )
 {
   ON_ProgressStepCounter counter = CreateFragmentProgressStepCounter(fit,limit_mesh_parameters);
@@ -248,7 +1602,8 @@ static unsigned int GetQuadLimitSurfacePatchFragmentsHelper(
   ON_SubDQuadFaceMesher qfm;
   ON_SubDQuadFaceMesher sub_qfm;
   ON_SubDFaceNeighborhood fnbd;
-  ON_SubDQuadFaceSubdivisionCounter quad_face_subdivsion_counter;
+
+  Internal_SubQuadTransientComponents face_transient_components(fit);
 
   const ON_SubDFace** quad_faces = nullptr;
   unsigned int quad_face_count = 0;
@@ -270,17 +1625,14 @@ static unsigned int GetQuadLimitSurfacePatchFragmentsHelper(
 
   patcher.m_fragment_callback_context = fragment_callback_context;
   patcher.m_fragment_callback_function = patch_fragment_callback_function;
-
-  // TODO 
-  //
-  //   Support multiple threads by adding more fragment, sub_fragment qfm, sub_qfm and fnbd
-  //   resources and managing them.  
-  //
   const unsigned int subquad_display_density = (display_density > 1) ? (display_density - 1) : 0;
 
   for (const ON_SubDFace* face = fit.FirstFace(); nullptr != face; face = fit.NextFace())
   {
-    quad_face_subdivsion_counter.SetLevel0Face(face);
+    if (face->m_edge_count < 3)
+      continue;
+
+    face_transient_components.Initialize(face);
 
     if (4 == face->m_edge_count)
     {
@@ -288,7 +1640,6 @@ static unsigned int GetQuadLimitSurfacePatchFragmentsHelper(
       quad_faces = &face;
       quad_face_count = 1;
       patcher.m_display_density = display_density;
-
     }
     else
     {
@@ -299,28 +1650,42 @@ static unsigned int GetQuadLimitSurfacePatchFragmentsHelper(
       quad_faces = fnbd.m_center_vertex1->m_faces;
       quad_face_count = fnbd.m_center_vertex1->m_face_count;
       patcher.m_display_density = subquad_display_density;
+      if (quad_face_count < 2)
+        continue;
     }
 
-    patcher.m_patch_fragment = ON_SubDLimitPatchFragment::Unset;
-    patcher.m_patch_fragment.m_level0_face = face;
-    patcher.m_patch_fragment.m_level0_face_region_count = (unsigned short)quad_face_count;
-
+    patcher.m_patch_fragment = ON_SubDLimitNurbsFragment::Unset;
     qfm.SetDestinationToPatchFragment(patcher);
 
     for (unsigned int qi = 0; qi < quad_face_count; qi++)
     {
+      face_transient_components.NextSubQuad();
+
+      // Internal_SetLevel0FaceAndEdgeRegion() sets face_region and patcher.m_patch_fragment.m_edge_region[]
+      // In the case when face is not a quad and "f" is the level 1 subd quad, 
+      // the regions (face_region and patcher.m_patch_fragment.m_edge_region[])
+      // are "Pushed()" so they indicate what portion of "face" and it's original edges are being used.
+      ON_SubDFaceRegion face_region;
+      Internal_SetLevel0FaceAndEdgeRegion(
+        face, 
+        qi, face_transient_components, // qi and subdivsion_edge_region[] are used only when "f" is a level 1 sud quad of "face"
+        face_region
+      );
+
       const ON_SubDFace* f = quad_faces[qi];
-
-      patcher.m_patch_fragment.m_level0_face_region_index = (unsigned short)qi;
-
-      if (quad_face_count > 1)
+      if (nullptr != begin_face_callback_function)
       {
-        if ( qi > 0 )
-          quad_face_subdivsion_counter.Pop();
-        quad_face_subdivsion_counter.Push(qi);
+        // SubD to NURBS case:
+        //   fragment_callback_context = pointer to Internal_SubDNurbsPatchGetter class
+        //   begin_face_callback_function = Internal_SubDNurbsPatchGetter::BeginFaceCallback()
+        //   Internal_SubDNurbsPatchGetter::BeginFaceCallback() flushes accumulated surface content from previous SUbD face.
+        //   Then it initializes fragment_callback_context for current "face" and, it it exits, sub-quad "f"
+        begin_face_callback_function(fragment_callback_context, face_region);//, face, (f != face) ? f : nullptr, qi);
       }
+      
+      patcher.m_patch_fragment.m_face_region = face_region;
 
-      if (false == qfm.GetLimitPatches(quad_face_subdivsion_counter, f))
+      if (false == qfm.GetLimitPatches(face_region, f))
         continue;
       
       fragment_count++;
@@ -1972,59 +3337,52 @@ bool ON_SubDQuadFaceMesher::EvaluateSurface(
   return true;
 }
 
-bool ON_SubDQuadFacePatcher::SendSinglePatch(
+bool ON_SubDQuadFacePatcher::Send4x4Patch(
   unsigned int display_density,
-  const class ON_SubDQuadFaceSubdivisionCounter& quad_face_subdivision_counter,
-  ON_SubDLimitPatchFragment::PatchType patch_type
+  const class ON_SubDFaceRegion& face_region,
+  ON_SubDLimitNurbsFragment::BispanType bispan_type
   )
 {
-  m_patch_fragment.m_patch_level = (unsigned short)(m_display_density - display_density);
-  m_patch_fragment.m_patch_type[0] = patch_type;
-  m_patch_fragment.m_patch_type[1] = ON_SubDLimitPatchFragment::PatchType::Unset;
-  m_patch_fragment.m_patch_type[2] = ON_SubDLimitPatchFragment::PatchType::Unset;
-  m_patch_fragment.m_patch_type[3] = ON_SubDLimitPatchFragment::PatchType::Unset;
-  m_patch_fragment.m_face_subdivision_count = quad_face_subdivision_counter.m_subdivision_count;
-  unsigned int count 
-    = (sizeof(m_patch_fragment.m_face_region_index) <= sizeof(quad_face_subdivision_counter.m_corner_index))
-    ? (unsigned int)(sizeof(m_patch_fragment.m_face_region_index)/sizeof(m_patch_fragment.m_face_region_index[0]))
-    : (unsigned int)(sizeof(quad_face_subdivision_counter.m_corner_index)/sizeof(quad_face_subdivision_counter.m_corner_index[0]));
-  if ( ((unsigned int)quad_face_subdivision_counter.m_subdivision_count) < count )
-    count = quad_face_subdivision_counter.m_subdivision_count;
-  for (unsigned int i = 0; i < count; i++)
-  {
-    m_patch_fragment.m_face_region_index[i] = quad_face_subdivision_counter.m_corner_index[i];
-  }
-  return m_fragment_callback_function(m_fragment_callback_context,&m_patch_fragment);
+  m_patch_fragment.m_type = ON_SubDLimitNurbsFragment::Type::BicubicSingle;
+  m_patch_fragment.m_bispan_type[0] = bispan_type;
+  m_patch_fragment.m_bispan_type[1] = ON_SubDLimitNurbsFragment::BispanType::None;
+  m_patch_fragment.m_bispan_type[2] = ON_SubDLimitNurbsFragment::BispanType::None;
+  m_patch_fragment.m_bispan_type[3] = ON_SubDLimitNurbsFragment::BispanType::None;
+
+  m_patch_fragment.m_face_region = face_region;
+
+  const bool rc = m_fragment_callback_function(m_fragment_callback_context,&m_patch_fragment);
+
+  // erase any region modifications made by the callback
+  m_patch_fragment.m_face_region = face_region; 
+
+  return rc;
 }
   
-bool ON_SubDQuadFacePatcher::SendMultiPatch(
+bool ON_SubDQuadFacePatcher::Send5x5Patch(
   unsigned int display_density,
-  const class ON_SubDQuadFaceSubdivisionCounter& quad_face_subdivision_counter,
-  const ON_SubDLimitPatchFragment::PatchType patch_type[4]
+  const class ON_SubDFaceRegion& face_region,
+  const ON_SubDLimitNurbsFragment::BispanType bispan_type[4]
   )
 {
-  m_patch_fragment.m_patch_level = (unsigned short)(m_display_density - display_density);
-  m_patch_fragment.m_patch_type[0] = patch_type[0];
-  m_patch_fragment.m_patch_type[1] = patch_type[1];
-  m_patch_fragment.m_patch_type[2] = patch_type[2];
-  m_patch_fragment.m_patch_type[3] = patch_type[3];
-  m_patch_fragment.m_face_subdivision_count = quad_face_subdivision_counter.m_subdivision_count;
-  unsigned int count 
-    = (sizeof(m_patch_fragment.m_face_region_index) <= sizeof(quad_face_subdivision_counter.m_corner_index))
-    ? (unsigned int)(sizeof(m_patch_fragment.m_face_region_index)/sizeof(m_patch_fragment.m_face_region_index[0]))
-    : (unsigned int)(sizeof(quad_face_subdivision_counter.m_corner_index)/sizeof(quad_face_subdivision_counter.m_corner_index[0]));
-  if ( ((unsigned int)quad_face_subdivision_counter.m_subdivision_count) < count )
-    count = quad_face_subdivision_counter.m_subdivision_count;
-  for (unsigned int i = 0; i < count; i++)
-  {
-    m_patch_fragment.m_face_region_index[i] = quad_face_subdivision_counter.m_corner_index[i];
-  }
-  return m_fragment_callback_function(m_fragment_callback_context,&m_patch_fragment);
+  m_patch_fragment.m_type = ON_SubDLimitNurbsFragment::Type::BicubicQuadrant;
+  m_patch_fragment.m_bispan_type[0] = bispan_type[0];
+  m_patch_fragment.m_bispan_type[1] = bispan_type[1];
+  m_patch_fragment.m_bispan_type[2] = bispan_type[2];
+  m_patch_fragment.m_bispan_type[3] = bispan_type[3];
+
+  m_patch_fragment.m_face_region = face_region;
+
+  const bool rc = m_fragment_callback_function(m_fragment_callback_context,&m_patch_fragment);
+
+  // erase any region modifications made by the callback
+  m_patch_fragment.m_face_region = face_region; 
+
+  return rc;
 }
 
-
 bool ON_SubDQuadFaceMesher::GetLimitSubMeshOrPatch(
-  class ON_SubDQuadFaceSubdivisionCounter& quad_face_subdivision_counter,
+  const ON_SubDFaceRegion& face_region,
   ON_SubDQuadNeighborhood* qft,
   unsigned int display_density,
   unsigned int point_i0,
@@ -2055,7 +3413,8 @@ bool ON_SubDQuadFaceMesher::GetLimitSubMeshOrPatch(
     case ON_SubDQuadFaceMesher::Output::patches:
       if (false == qft->GetLimitSurfaceCV(&m_patcher->m_patch_fragment.m_patch_cv[0][0][0], 5U))
         return ON_SUBD_RETURN_ERROR(false);
-      m_patcher->SendSinglePatch(display_density,quad_face_subdivision_counter,ON_SubDLimitPatchFragment::PatchType::Bicubic);
+      //Internal_UpdateFaceRegionCorners(qft, face_region);
+      m_patcher->Send4x4Patch(display_density,face_region,ON_SubDLimitNurbsFragment::BispanType::Exact);
       return true; // even if callback returns false
       break;
     }
@@ -2099,24 +3458,25 @@ bool ON_SubDQuadFaceMesher::GetLimitSubMeshOrPatch(
       // (subdivide_count < 4) means there is at least one.
       // These are delivered as a collection to enable merging them into as
       // large a face/patch/... as possible.
-      ON_SubDLimitPatchFragment::PatchType pt[4] =
+      ON_SubDLimitNurbsFragment::BispanType pt[4] =
       {
-        ON_SubDLimitPatchFragment::PatchType::Unset,
-        ON_SubDLimitPatchFragment::PatchType::Unset,
-        ON_SubDLimitPatchFragment::PatchType::Unset,
-        ON_SubDLimitPatchFragment::PatchType::Unset
+        ON_SubDLimitNurbsFragment::BispanType::None,
+        ON_SubDLimitNurbsFragment::BispanType::None,
+        ON_SubDLimitNurbsFragment::BispanType::None,
+        ON_SubDLimitNurbsFragment::BispanType::None
       };
       // Harvest any exact patches that are available at this subdivision level
       const bool bEnableApproximatePatch = false;
       unsigned int quadrant_count = qft->GetLimitSubSurfaceMultiPatchCV(
-        ON_UNSET_VALUE, 
         bEnableApproximatePatch,
         m_patcher->m_patch_fragment.m_patch_cv,
         pt
         );
       if ( 4 != subdivide_count + quadrant_count )
         return ON_SUBD_RETURN_ERROR(false);
-      bool bCallbackResult = m_patcher->SendMultiPatch( display_density, quad_face_subdivision_counter, pt );
+      m_patcher->m_patch_fragment.m_type = ON_SubDLimitNurbsFragment::Type::BicubicQuadrant;
+      //Internal_UpdateFaceRegionCorners(qft, face_region);
+      bool bCallbackResult = m_patcher->Send5x5Patch( display_density, face_region, pt );
       if ( false == bCallbackResult)
         return true;
     }
@@ -2137,6 +3497,8 @@ bool ON_SubDQuadFaceMesher::GetLimitSubMeshOrPatch(
         ReturnLocalFixedSizeHeap(fsh);
         return ON_SUBD_RETURN_ERROR(false);
       }
+      //if (ON_SubDQuadFaceMesher::Output::patches == m_output)
+      //  Internal_UpdateFaceRegionCorners(qft, face_region);
 
       subdivide_count--;
       if (0 == subdivide_count)
@@ -2152,9 +3514,11 @@ bool ON_SubDQuadFaceMesher::GetLimitSubMeshOrPatch(
 
       unsigned int submesh_point_i0 = point_i0 + ((1==q0fvi || 2==q0fvi) ? count : 0);
       unsigned int submesh_point_j0 = point_j0 + ((2==q0fvi || 3==q0fvi) ? count : 0);
-      quad_face_subdivision_counter.Push(q0fvi);
-      bool rc = GetLimitSubMeshOrPatch(quad_face_subdivision_counter, &qft1, display_density-1, submesh_point_i0, submesh_point_j0 );      
-      quad_face_subdivision_counter.Pop();
+
+      ON_SubDFaceRegion face_corner_region(face_region);
+      face_corner_region.Push(q0fvi);
+      const bool rc = GetLimitSubMeshOrPatch(face_corner_region, &qft1, display_density-1, submesh_point_i0, submesh_point_j0 );      
+
       ReturnLocalFixedSizeHeap(fsh);
       if ( false == rc )
         return ON_SUBD_RETURN_ERROR(false);
@@ -2168,19 +3532,226 @@ bool ON_SubDQuadFaceMesher::GetLimitSubMeshOrPatch(
     // No more subdivison steps are permitted
     if (ON_SubDQuadFaceMesher::Output::patches == m_output)
     {
-      ON_SubDLimitPatchFragment::PatchType pt[4] =
+      ON_SubDLimitNurbsFragment::BispanType pt[4] =
       {
-        ON_SubDLimitPatchFragment::PatchType::Unset,
-        ON_SubDLimitPatchFragment::PatchType::Unset,
-        ON_SubDLimitPatchFragment::PatchType::Unset,
-        ON_SubDLimitPatchFragment::PatchType::Unset
+        ON_SubDLimitNurbsFragment::BispanType::None,
+        ON_SubDLimitNurbsFragment::BispanType::None,
+        ON_SubDLimitNurbsFragment::BispanType::None,
+        ON_SubDLimitNurbsFragment::BispanType::None
       };
+
+      ON_SubDComponentRegionBreakpoint(&face_region.m_face_region);
 
       // Harvest whatever patches are available and allow approximate patches to be returned
       // if an appropriate number of subdivisions have been performed
-      const bool bEnableApproximatePatch = (qft->m_extraordinary_corner_vertex_count <= 1 && quad_face_subdivision_counter.m_subdivision_count >= 2);
+      const bool bEnableApproximatePatch 
+        = qft->m_extraordinary_corner_vertex_count <= 1 
+        && face_region.m_face_region.SubdivisionCount() >= 2;
+
+      while(
+        bEnableApproximatePatch
+        && 1 == qft->m_extraordinary_corner_vertex_count
+        && 1 == qft->m_exact_quadrant_patch_count
+        && nullptr != qft->m_center_edges[0] 
+        && nullptr != qft->m_center_edges[1] 
+        && nullptr != qft->m_center_edges[2] 
+        && nullptr != qft->m_center_edges[3]
+        )
+      {
+        bool bIsDart = false;
+        unsigned int extraordinary_vertex_index = qft->ExtraordinaryCenterVertexIndex(ON_SubD::VertexTag::Crease, 4);
+        if (extraordinary_vertex_index > 3 && ON_SubDQuadFaceMesher::Output::patches == m_output)
+        {
+          // Test for Dart fixes RH-31322
+          extraordinary_vertex_index = qft->ExtraordinaryCenterVertexIndex(ON_SubD::VertexTag::Dart, 4);
+          if ( extraordinary_vertex_index > 3)
+            break;
+          bIsDart = true;
+        }
+        const ON_SubDVertex* extraordinary_vertex = qft->CenterVertex(extraordinary_vertex_index);
+        if (nullptr == extraordinary_vertex)
+          break;
+
+
+        ON_SubD_FixedSizeHeap* fsh = CheckOutLocalFixedSizeHeap();
+        if (nullptr == fsh)
+          break;
+        ON_SubDQuadNeighborhood qft1;
+
+        // claculate limit points on edges needed to get approximate NURBS patches near the singular point.
+        if (qft->Subdivide(extraordinary_vertex_index, *fsh, &qft1))
+        {
+          ON_2dex qft1_vdex[2] = {ON_2dex::Unset,ON_2dex::Unset};
+          unsigned int center_edge_index[2] = { ON_UNSET_UINT_INDEX,ON_UNSET_UINT_INDEX };
+          switch (extraordinary_vertex_index)
+          {
+          case 0:
+            center_edge_index[0] = 3;
+            qft1_vdex[0] = ON_2dex(1, 2);
+            center_edge_index[1] = 0;
+            qft1_vdex[1] = ON_2dex(2, 1);
+            break;
+          case 1:
+            center_edge_index[0] = 0;
+            qft1_vdex[0] = ON_2dex(1, 1);
+            center_edge_index[1] = 1;
+            qft1_vdex[1] = ON_2dex(2, 2);
+            break;
+          case 2:
+            center_edge_index[0] = 1;
+            qft1_vdex[0] = ON_2dex(2, 1);
+            center_edge_index[1] = 2;
+            qft1_vdex[1] = ON_2dex(1, 2);
+            break;
+          case 3:
+            center_edge_index[0] = 2;
+            qft1_vdex[0] = ON_2dex(2, 2);
+            center_edge_index[1] = 3;
+            qft1_vdex[1] = ON_2dex(1, 1);
+            break;
+          default:
+            center_edge_index[0] = ON_UNSET_UINT_INDEX;
+            qft1_vdex[0] = ON_2dex::Unset;
+            center_edge_index[1] = ON_UNSET_UINT_INDEX;
+            qft1_vdex[1] = ON_2dex::Unset;
+            break;
+          }
+          for (int n = 0; n < 2; n++)
+          {
+            if (center_edge_index[n] >= 4)
+              continue;
+            if (qft->m_bCenterEdgeLimitPoint[center_edge_index[n]])
+              continue;
+            const ON_SubDVertex* v = qft1.m_vertex_grid[qft1_vdex[n].i][qft1_vdex[n].j];
+            if (nullptr == v)
+              continue;
+            qft->m_bCenterEdgeLimitPoint[center_edge_index[n]] = v->GetLimitPoint(ON_SubD::SubDType::QuadCatmullClark, qft1.m_face_grid[1][1], true, qft->m_center_edge_limit_point[center_edge_index[n]]);
+          }
+        }
+
+        const ON_2dex srf_cv1_side_midpoint_dex[4] = { ON_2dex(2,0), ON_2dex(4,2), ON_2dex(2,4), ON_2dex(0,2) };
+        const ON_2dex srf_cv1_ccw_dex[4] = { ON_2dex(1,0), ON_2dex(0,1), ON_2dex(-1,0), ON_2dex(0,-1) };
+        if (ON_SubD::EdgeTag::Crease == qft->m_center_edges[extraordinary_vertex_index]->m_edge_tag)
+        {
+          const ON_2dex delta(srf_cv1_ccw_dex[extraordinary_vertex_index]);
+          const ON_2dex dex0 = srf_cv1_side_midpoint_dex[extraordinary_vertex_index];
+          const ON_2dex dex1(dex0.i + delta.i, dex0.j + delta.j);
+          const ON_2dex dex2(dex1.i + delta.i, dex1.j + delta.j);
+          double *P[3] = { &qft->m_srf_cv1[dex0.i][dex0.j][0], &qft->m_srf_cv1[dex1.i][dex1.j][0], &qft->m_srf_cv1[dex2.i][dex2.j][0] };
+          while (ON_UNSET_VALUE == P[0][0] && ON_UNSET_VALUE == P[1][0] && ON_UNSET_VALUE == P[2][0])
+          {
+            // calculate 3 additional subd points needed to get patch 3
+            ON_SubDQuadNeighborhood::Clear(&qft1, false);
+            if (false == qft->Subdivide((extraordinary_vertex_index + 1) % 4, *fsh, &qft1))
+              break;
+            if (1 != qft1.m_boundary_crease_count)
+              break;
+            for (int n = 0; n < 4; n++)
+            {
+              if (
+                qft1.m_bBoundaryCrease[n]
+                && nullptr != qft1.m_center_edges[n]
+                && ON_SubD::EdgeTag::Crease == qft1.m_center_edges[n]->m_edge_tag
+                )
+              {
+                ON_2dex crease_dex[3];
+                crease_dex[0] = ON_SubDQuadNeighborhood::CenterVertexDex(n);
+                crease_dex[1] = ON_SubDQuadNeighborhood::CenterVertexDex((n+1)%4);
+                ON_2dex d(crease_dex[1].i - crease_dex[0].i, crease_dex[1].j - crease_dex[0].j);
+                crease_dex[2] = ON_2dex(crease_dex[1].i + d.i, crease_dex[1].j + d.j);
+                int tmp = d.j; d.j = d.i; d.i = -tmp;
+                const ON_2dex smooth_dex[3] = {
+                  ON_2dex(crease_dex[0].i + d.i, crease_dex[0].j + d.j),
+                  ON_2dex(crease_dex[1].i + d.i, crease_dex[1].j + d.j),
+                  ON_2dex(crease_dex[2].i + d.i, crease_dex[2].j + d.j)
+                };
+                for (int k = 0; k < 3; k++)
+                {
+                  const ON_SubDVertex* crease_vertex = qft1.m_vertex_grid[crease_dex[k].i][crease_dex[k].j];
+                  if (nullptr == crease_vertex)
+                    continue;
+                  if ( ON_SubD::VertexTag::Crease != crease_vertex->m_vertex_tag)
+                    continue;
+                  const ON_SubDVertex* smooth_vertex = qft1.m_vertex_grid[smooth_dex[k].i][smooth_dex[k].j];
+                  if (nullptr == smooth_vertex)
+                    continue;
+                  if ( ON_SubD::VertexTag::Smooth != smooth_vertex->m_vertex_tag)
+                    continue;
+                  P[k][0] = 2.0*crease_vertex->m_P[0] - smooth_vertex->m_P[0];
+                  P[k][1] = 2.0*crease_vertex->m_P[1] - smooth_vertex->m_P[1];
+                  P[k][2] = 2.0*crease_vertex->m_P[2] - smooth_vertex->m_P[2];
+                }
+                break;
+              }
+            }
+            break;
+          }
+        }
+
+        if (ON_SubD::EdgeTag::Crease == qft->m_center_edges[(extraordinary_vertex_index+3)%4]->m_edge_tag)
+        {
+          const ON_2dex delta(srf_cv1_ccw_dex[(extraordinary_vertex_index+1)%4]); // +1 to go reverse direction
+          const ON_2dex dex0(srf_cv1_side_midpoint_dex[(extraordinary_vertex_index + 3)%4]);
+          const ON_2dex dex1(dex0.i + delta.i, dex0.j + delta.j);
+          const ON_2dex dex2(dex1.i + delta.i, dex1.j + delta.j);
+          double *P[3] = { &qft->m_srf_cv1[dex0.i][dex0.j][0], &qft->m_srf_cv1[dex1.i][dex1.j][0], &qft->m_srf_cv1[dex2.i][dex2.j][0] };
+          if (ON_UNSET_VALUE == P[0][0] && ON_UNSET_VALUE == P[1][0] && ON_UNSET_VALUE == P[2][0])
+          {
+            // calculate 3 additional subd points needed to get patch 1
+
+            ON_SubDQuadNeighborhood::Clear(&qft1, false);
+            if (false == qft->Subdivide((extraordinary_vertex_index + 3) % 4, *fsh, &qft1))
+              break;
+            if (1 != qft1.m_boundary_crease_count)
+              break;
+            for (int n = 0; n < 4; n++)
+            {
+              if (
+                qft1.m_bBoundaryCrease[n]
+                && nullptr != qft1.m_center_edges[n]
+                && ON_SubD::EdgeTag::Crease == qft1.m_center_edges[n]->m_edge_tag
+                )
+              {
+                ON_2dex crease_dex[3];
+                crease_dex[1] = ON_SubDQuadNeighborhood::CenterVertexDex(n);
+                crease_dex[0] = ON_SubDQuadNeighborhood::CenterVertexDex((n+1)%4);
+                ON_2dex d(crease_dex[1].i - crease_dex[0].i, crease_dex[1].j - crease_dex[0].j);
+                crease_dex[2] = ON_2dex(crease_dex[1].i + d.i, crease_dex[1].j + d.j);
+                int tmp = d.i; d.i = d.j; d.j = -tmp;
+                const ON_2dex smooth_dex[3] = {
+                  ON_2dex(crease_dex[0].i + d.i, crease_dex[0].j + d.j),
+                  ON_2dex(crease_dex[1].i + d.i, crease_dex[1].j + d.j),
+                  ON_2dex(crease_dex[2].i + d.i, crease_dex[2].j + d.j)
+                };
+                for (int k = 0; k < 3; k++)
+                {
+                  const ON_SubDVertex* crease_vertex = qft1.m_vertex_grid[crease_dex[k].i][crease_dex[k].j];
+                  if (nullptr == crease_vertex)
+                    continue;
+                  if ( ON_SubD::VertexTag::Crease != crease_vertex->m_vertex_tag)
+                    continue;
+                  const ON_SubDVertex* smooth_vertex = qft1.m_vertex_grid[smooth_dex[k].i][smooth_dex[k].j];
+                  if (nullptr == smooth_vertex)
+                    continue;
+                  if ( ON_SubD::VertexTag::Smooth != smooth_vertex->m_vertex_tag)
+                    continue;
+                  P[k][0] = 2.0*crease_vertex->m_P[0] - smooth_vertex->m_P[0];
+                  P[k][1] = 2.0*crease_vertex->m_P[1] - smooth_vertex->m_P[1];
+                  P[k][2] = 2.0*crease_vertex->m_P[2] - smooth_vertex->m_P[2];
+                }
+                break;
+              }
+            }
+          }
+        }
+
+        if (nullptr != fsh)
+          ReturnLocalFixedSizeHeap(fsh);
+        break;
+      }
+
+
       unsigned int quadrant_count = qft->GetLimitSubSurfaceMultiPatchCV(
-        ON_UNSET_VALUE,
         bEnableApproximatePatch,
         m_patcher->m_patch_fragment.m_patch_cv,
         pt
@@ -2188,7 +3759,8 @@ bool ON_SubDQuadFaceMesher::GetLimitSubMeshOrPatch(
 
       if (quadrant_count > 0)
       {
-        bool bCallbackResult = m_patcher->SendMultiPatch(display_density, quad_face_subdivision_counter, pt);
+        m_patcher->m_patch_fragment.m_type = ON_SubDLimitNurbsFragment::Type::BicubicQuadrant;
+        bool bCallbackResult = m_patcher->Send5x5Patch(display_density, face_region, pt);
 
         if (false == bCallbackResult)
           return true;
@@ -2232,7 +3804,7 @@ bool ON_SubDQuadFaceMesher::GetLimitSubMeshOrPatch(
 }
 
 bool ON_SubDQuadFaceMesher::GetLimitMesh(
-  class ON_SubDQuadFaceSubdivisionCounter& quad_face_subdivision_counter,
+  const ON_SubDFaceRegion& face_region,
   const ON_SubDFace* face
   )
 {
@@ -2269,12 +3841,12 @@ bool ON_SubDQuadFaceMesher::GetLimitMesh(
   m_count = count;
   UnsetMeshPoints();
 
-  return GetLimitSubMeshOrPatch(quad_face_subdivision_counter,&qft,m_display_density,0,0);
+  return GetLimitSubMeshOrPatch(face_region,&qft,m_display_density,0,0);
 }
 
 
 bool ON_SubDQuadFaceMesher::GetLimitPatches(
-  class ON_SubDQuadFaceSubdivisionCounter& quad_face_subdivision_counter,
+  const ON_SubDFaceRegion& face_region,  
   const ON_SubDFace* face
   )
 {
@@ -2301,7 +3873,7 @@ bool ON_SubDQuadFaceMesher::GetLimitPatches(
     return ON_SUBD_RETURN_ERROR(false);
 
   // GetLimitSubMesh is recursive.
-  return GetLimitSubMeshOrPatch(quad_face_subdivision_counter,&qft,m_display_density,0,0);
+  return GetLimitSubMeshOrPatch(face_region,&qft,m_display_density,0,0);
 }
 
 
@@ -2358,10 +3930,11 @@ unsigned int ON_SubD::GetLimitSurfaceMeshInFragments(
   return ON_SUBD_RETURN_ERROR(0);
 }  
 
-unsigned int ON_SubD::GetLimitSurfaceInPatches(
+unsigned int ON_SubD::GetLimitSurfaceNurbsFragments(
   const class ON_SubDDisplayParameters& limit_mesh_parameters,
   ON__UINT_PTR fragment_callback_context,
-  bool(*fragment_callback_function)(ON__UINT_PTR, const class ON_SubDLimitPatchFragment*)
+  bool(*begin_face_callback_function)(ON__UINT_PTR ,const ON_SubDFaceRegion&),//, const class ON_SubDFace*, const class ON_SubDFace*, unsigned int),
+  bool(*fragment_callback_function)(ON__UINT_PTR, const class ON_SubDLimitNurbsFragment*)
   ) const
 {
   ON_SubDDisplayParameters local_limit_mesh_parameters = limit_mesh_parameters;
@@ -2374,6 +3947,7 @@ unsigned int ON_SubD::GetLimitSurfaceInPatches(
     fit,
     local_limit_mesh_parameters,
     fragment_callback_context,
+    begin_face_callback_function,
     fragment_callback_function
     );
 
@@ -2491,46 +4065,551 @@ void ON_SubD::ClearEvaluationCache() const
 
 ////////////////////////////////////////////////////////////////////////////
 
-
-class CPatchGetter
+class ON_SUBD_CLASS ON_SubDLimitSurfaceFragment
 {
 public:
-  CPatchGetter(
+  ON_SubDLimitSurfaceFragment() = default;
+  ~ON_SubDLimitSurfaceFragment() = default;
+  ON_SubDLimitSurfaceFragment(const ON_SubDLimitSurfaceFragment&) = default;
+  ON_SubDLimitSurfaceFragment& operator=(const ON_SubDLimitSurfaceFragment&) = default;
+
+public:
+  static const ON_SubDLimitSurfaceFragment Empty;
+
+public:
+  // m_face_region identifies what part of the SubD level0 face is or will be modeled by m_surface.
+  ON_SubDFaceRegion m_face_region;
+
+  // knot vector is uniform and not clamped. 
+  ON_NurbsSurface* m_surface = nullptr;
+
+  ON_SubDLimitSurfaceFragment* Quadrant(unsigned int quadrant_index, bool bAllocateIfMissing);
+  ON_SubDLimitSurfaceFragment* Parent();
+
+  static ON_SubDLimitSurfaceFragment* AllocateSurfaceFragment();
+  static void ReturnSurfaceFragment(ON_SubDLimitSurfaceFragment*);
+
+  bool SetSurface(ON_NurbsSurface* surface);
+
+  bool SetSurfaceFromQuadrants(
+    ON_SubD::NurbsSurfaceType nurbs_surface_type
+    );
+
+  bool SetQuadrantSurface(ON_NurbsSurface* quadrant_surface,unsigned int quadrant_index);
+
+private:
+  // Parent fragment for this 
+  ON_SubDLimitSurfaceFragment* m_parent = nullptr;
+
+  // The 4 quadrants of this region
+  ON_SubDLimitSurfaceFragment* m_quadrants[4] = {};
+
+  static ON_FixedSizePool m_fsp;
+};
+
+ON_FixedSizePool ON_SubDLimitSurfaceFragment::m_fsp;
+
+ON_SubDLimitSurfaceFragment* ON_SubDLimitSurfaceFragment::AllocateSurfaceFragment()
+{
+  ON_MemoryAllocationTracking disable_tracking(false); 
+  if (0 == ON_SubDLimitSurfaceFragment::m_fsp.SizeofElement())
+  {
+    ON_SubDLimitSurfaceFragment::m_fsp.Create(sizeof(ON_SubDLimitSurfaceFragment), 64, 64);
+  }
+  ON_SubDLimitSurfaceFragment* f = (ON_SubDLimitSurfaceFragment*)ON_SubDLimitSurfaceFragment::m_fsp.AllocateElement();
+  if (nullptr == f)
+  {
+    ON_SUBD_ERROR("Allocation failed");
+  }
+  return f;
+}
+
+void ON_SubDLimitSurfaceFragment::ReturnSurfaceFragment(ON_SubDLimitSurfaceFragment* f )
+{
+  if (nullptr != f)
+    ON_SubDLimitSurfaceFragment::m_fsp.ReturnElement(f);
+}
+
+bool ON_SubDLimitSurfaceFragment::SetSurface(ON_NurbsSurface* surface)
+{
+  if (nullptr == surface)
+    return false;
+  if (nullptr != m_surface)
+  {
+    ON_SUBD_ERROR("Surface exists.");
+    return false;
+  }
+  if (
+    nullptr != m_quadrants[0]
+    || nullptr != m_quadrants[1]
+    || nullptr != m_quadrants[2]
+    || nullptr != m_quadrants[3]
+    )
+  {
+    ON_SUBD_ERROR("Setting surface when quadrants exist.");
+  }
+  m_surface = surface;
+  return true;
+}
+
+bool ON_SubDLimitSurfaceFragment::SetQuadrantSurface(ON_NurbsSurface* quadrant_surface, unsigned int quadrant_index)
+{
+  if (nullptr == quadrant_surface)
+    return false;
+  ON_SubDLimitSurfaceFragment* q = Quadrant(quadrant_index, true);
+  if (nullptr == q)
+    return false;
+  return q->SetSurface(quadrant_surface);
+}
+
+static bool Internal_EqualKnots(
+  double knot_tol,
+  int dir,
+  const ON_NurbsSurface* lhs,
+  const ON_NurbsSurface* rhs
+)
+{
+  // all orders are 4
+  const int knot_count = lhs->KnotCount(dir);
+  if (knot_count != rhs->KnotCount(dir))
+    return false;
+  const double* lhs_knot = lhs->m_knot[dir];
+  const double* rhs_knot = rhs->m_knot[dir];
+  for (int i = 0; i < knot_count; i++)
+  {
+    if ( !(fabs(lhs_knot[i] - rhs_knot[i]) <= knot_tol) )
+      return false;
+  }
+  return true;
+}
+
+
+static bool Internal_OverlapingKnots(
+  double knot_tol,
+  int dir,
+  const ON_NurbsSurface* lhs,
+  const ON_NurbsSurface* rhs
+)
+{
+  // all orders are 4
+  const double* lhs_knot = lhs->m_knot[dir];
+  const double* rhs_knot = rhs->m_knot[dir];
+  if (!(rhs_knot[0] < rhs_knot[1] && rhs_knot[1] < rhs_knot[2] && rhs_knot[2] < rhs_knot[3]))
+    return false;
+  const unsigned int lhs_knot_count = lhs->KnotCount(dir);
+  lhs_knot += (lhs_knot_count - 5);
+  for (unsigned int i = 0; i < 5; i++)
+  {
+    if (!(fabs(lhs_knot[i] - rhs_knot[i]) <= knot_tol))
+      return false;
+  }
+  return true;
+}
+
+static ON_NurbsSurface* Internal_MergeC2Neighbors(
+  ON_SubD::NurbsSurfaceType nurbs_surface_type,
+  int dir,
+  ON_NurbsSurface* lhs,
+  ON_NurbsSurface* rhs
+)
+{
+  // Context:
+  //   lhs and rhs are cubic non-rational NURBS and are known to meed C2 at the shared edge.
+  //
+  // dir = 0: join East side of lhs to West side of rhs
+  // dir = 1: join North side of lhs to South side of rhs
+  // Remaining comments are for dir = 0:
+
+  if (
+    dir < 0 || dir > 1
+    || nullptr == lhs || nullptr == rhs
+    || 4 != lhs->m_order[0] || 4 != lhs->m_order[1]
+    || 4 != rhs->m_order[0] || 4 != rhs->m_order[1]
+    || 0 != lhs->m_is_rat || 0 != rhs->m_is_rat
+    || 3 != lhs->m_dim || 3 != rhs->m_dim
+    )
+  {
+    ON_SUBD_ERROR("Invalid input.");
+    return nullptr;
+  }
+
+  const int dir1 = 1 - dir;
+
+  if (!(lhs->Domain(dir).m_t[1] == rhs->Domain(dir)[0]))
+  {
+    ON_SUBD_ERROR("Invalid dir or input domains.");
+    return nullptr;
+  }
+
+  if (!(lhs->Domain(dir1) == rhs->Domain(dir1)))
+  {
+    ON_SUBD_ERROR("Invalid dir or input domains.");
+    return nullptr;
+  }
+
+  const double knot_tol = 1e-8;
+
+  // merged->m_knots[dir][...] begins with lhs->m_knot[dir][...] and ends with rhs->m_knot[dir][...]
+  const bool bOverlapMerge = Internal_OverlapingKnots(knot_tol, dir, lhs, rhs);
+  if (false == bOverlapMerge)
+  {
+    if (ON_SubD::NurbsSurfaceType::Large != nurbs_surface_type)
+      return nullptr; // not permitted to modify knots.
+    lhs->ClampEnd(dir, 2);
+    rhs->ClampEnd(dir, 2);
+  }
+
+  // We need lhs->m_knot[dir1][...] = rhs->m_knot[dir1][...]
+  // and merged->m_knots[dir1][...] = lhs->m_knot[dir1][...] 
+  if (false == Internal_EqualKnots(knot_tol, dir1, lhs, rhs))
+  {
+    if (ON_SubD::NurbsSurfaceType::Large != nurbs_surface_type)
+      return nullptr; // not permitted to modify knots.
+
+    lhs->ClampEnd(dir1, 2);
+    rhs->ClampEnd(dir1, 2);
+    if (false == Internal_EqualKnots(knot_tol, dir1, lhs, rhs))
+    {
+      // Insert knots to make lhs->m_knot[dir1][...] = rhs->m_knot[dir1][...] equal
+      double lhs_k = lhs->m_knot[dir1][2];
+      double rhs_k = rhs->m_knot[dir1][2];
+      int lhs_i = 3;
+      int rhs_i= 3;
+      while (lhs_i < lhs->m_cv_count[dir1] && rhs_i < rhs->m_cv_count[dir1])
+      {
+        double lhs_k0 = lhs_k;
+        double rhs_k0 = rhs_k;
+        lhs_k = lhs->m_knot[dir1][lhs_i];
+        rhs_k = rhs->m_knot[dir1][rhs_i];
+        if (!(lhs_k0+knot_tol < lhs_k))
+        {
+          ON_SUBD_ERROR("Invalid lhs knots or a bug.");
+          return nullptr;
+        }
+        if (!(rhs_k0+knot_tol < rhs_k))
+        {
+          ON_SUBD_ERROR("Invalid rhs knots or a bug.");
+          return nullptr;
+        }
+
+        if (lhs_k + knot_tol < rhs_k)
+        {
+          // insert knot in rhs at lhs_k
+          if (false == rhs->InsertKnot(dir1, lhs_k, 1))
+          {
+            ON_SUBD_ERROR("rhs knot insertion failed.");
+            return nullptr;
+          }
+          rhs_k = rhs->m_knot[dir1][rhs_i];
+        }
+
+        if (rhs_k + knot_tol < lhs_k)
+        {
+          // insert knot in lhs at rhs_k
+          if ( false == lhs->InsertKnot(dir1, rhs_k, 1) )
+          {
+            ON_SUBD_ERROR("lhs knot insertion failed.");
+            return nullptr;
+          }
+          lhs_k = lhs->m_knot[dir1][lhs_i];
+        }
+        if (!(fabs(lhs_k - rhs_k) <= knot_tol))
+        {
+          ON_SUBD_ERROR("Unexpected knot insertion failure.");
+          return nullptr;
+        }
+        lhs_i++;
+        rhs_i++;
+      }
+      if (false == Internal_EqualKnots(knot_tol, dir1, lhs, rhs))
+      {
+        ON_SUBD_ERROR("Unexpected different knot vectors.8");
+        return nullptr;
+      }
+    }
+  }
+
+  //// DEBUGGING
+  //if (false == lhs->IsValid())
+  //{
+  //  ON_SUBD_ERROR("lhs is not valid.");
+  //  return nullptr;
+  //}
+
+  //  // DEBUGGING
+  //if (false == rhs->IsValid())
+  //{
+  //  ON_SUBD_ERROR("rhs is not valid.");
+  //  return nullptr;
+  //}
+
+  // Fill in merged surface
+  const int lhs_cv_count0 = lhs->m_cv_count[0];
+  const int lhs_cv_count1 = lhs->m_cv_count[1];
+  const int rhs_cv_count0 = rhs->m_cv_count[0];
+  const int rhs_cv_count1 = rhs->m_cv_count[1];
+  int cv_count0 = lhs_cv_count0;
+  int cv_count1 = lhs_cv_count1;
+  int rhs_cv_dex0 = 0;
+  int rhs_cv_dex1 = 0;
+  if (0 == dir)
+  {
+    if (lhs_cv_count1 != rhs_cv_count1)
+    {
+      ON_SUBD_ERROR("Bug in dir=0 merging.");
+      return nullptr;
+    }
+    rhs_cv_dex0 = (bOverlapMerge) ? 3 : 1;
+    cv_count0 += (rhs_cv_count0 - rhs_cv_dex0);
+  }
+  else
+  {
+    if (lhs_cv_count0 != rhs_cv_count0)
+    {
+      ON_SUBD_ERROR("Bug in dir=1 merging.");
+      return nullptr;
+    }
+    rhs_cv_dex1 = (bOverlapMerge) ? 3 : 1;
+    cv_count1 += (rhs_cv_count1 - rhs_cv_dex1);
+  }
+  ON_NurbsSurface* merged_srf = new ON_NurbsSurface(3, 0, 4, 4, cv_count0, cv_count1);
+
+  const double* src;
+  double* dst;
+  for (int i = 0; i < lhs_cv_count0; i++)
+  {
+    for (int j = 0; j < lhs_cv_count1; j++)
+    {
+      src = lhs->CV(i, j);
+      dst = merged_srf->CV(i, j);
+      dst[0] = src[0];
+      dst[1] = src[1];
+      dst[2] = src[2];
+    }
+  }
+
+  if (0 == dir)
+  {
+    int dst_i = lhs_cv_count0;
+    for (int i = rhs_cv_dex0; i < rhs_cv_count0; i++, dst_i++)
+    {
+      for (int j = 0; j < rhs_cv_count1; j++)
+      {
+        src = rhs->CV(i, j);
+        dst = merged_srf->CV(dst_i, j);
+        dst[0] = src[0];
+        dst[1] = src[1];
+        dst[2] = src[2];
+      }
+    }
+  }
+  else
+  {
+    int dst_j = lhs_cv_count1;
+    for (int j = rhs_cv_dex1; j < rhs_cv_count1; j++, dst_j++)
+    {
+      for (int i = 0; i < rhs_cv_count0; i++)
+      {
+        src = rhs->CV(i, j);
+        dst = merged_srf->CV(i, dst_j);
+        dst[0] = src[0];
+        dst[1] = src[1];
+        dst[2] = src[2];
+      }
+    }
+  }
+
+  const int lhs_knot_count0 = lhs->KnotCount(0);
+  const int lhs_knot_count1 = lhs->KnotCount(1);
+  for (int i = 0; i < lhs_knot_count0; i++)
+    merged_srf->m_knot[0][i] = lhs->m_knot[0][i];
+  for (int i = 0; i < lhs_knot_count1; i++)
+    merged_srf->m_knot[1][i] = lhs->m_knot[1][i];
+
+  if (0 == dir)
+  {
+    const int rhs_knot_count0 = rhs->KnotCount(0);
+    dst = &merged_srf->m_knot[0][lhs_knot_count0];
+    for (int i = 2 + rhs_cv_dex0; i < rhs_knot_count0; i++)
+      *dst++ = rhs->m_knot[0][i];
+  }
+  else
+  {
+    const int rhs_knot_count1 = rhs->KnotCount(1);
+    dst = &merged_srf->m_knot[1][lhs_knot_count1];
+    for (int i = 2 + rhs_cv_dex1; i < rhs_knot_count1; i++)
+      *dst++ = rhs->m_knot[1][i];
+  }
+
+
+  //// DEBUGGING
+  //if (false == merged_srf->IsValid())
+  //{
+  //  ON_SUBD_ERROR("merged_srf is not valid.");
+  //  delete merged_srf;
+  //  merged_srf = nullptr;
+  //}
+
+  return merged_srf;
+}
+
+bool ON_SubDLimitSurfaceFragment::SetSurfaceFromQuadrants(
+  ON_SubD::NurbsSurfaceType nurbs_surface_type
+  )
+{
+  if (nullptr != m_surface)
+    return true;
+
+  ON_NurbsSurface* s[4] = { 0 };
+  for (unsigned int quadrant_index = 0; quadrant_index < 4; quadrant_index++)
+  {
+    if (nullptr == m_quadrants[quadrant_index])
+      return false;
+
+    if (nullptr == m_quadrants[quadrant_index]->m_surface)
+      return false;
+    s[quadrant_index] = m_quadrants[quadrant_index]->m_surface;
+    if (ON_SubD::NurbsSurfaceType::Large != nurbs_surface_type)
+    {
+      // not permitted to add knots
+      if (
+        s[0]->m_cv_count[0] != s[quadrant_index]->m_cv_count[0]
+        || s[0]->m_cv_count[1] != s[quadrant_index]->m_cv_count[1]
+        )
+      {
+        return false;
+      }
+    }
+  }
+
+  s[0]->SetDomain(0, 0.0, 0.5);
+  s[1]->SetDomain(0, 0.5, 1.0);
+  s[2]->SetDomain(0, 0.5, 1.0);
+  s[3]->SetDomain(0, 0.0, 0.5);
+
+  s[0]->SetDomain(1, 0.0, 0.5);
+  s[1]->SetDomain(1, 0.0, 0.5);
+  s[2]->SetDomain(1, 0.5, 1.0);
+  s[3]->SetDomain(1, 0.5, 1.0);
+
+  ON_NurbsSurface* bottom = Internal_MergeC2Neighbors(nurbs_surface_type, 0, s[0], s[1]);
+  if (nullptr == bottom)
+    return false;
+  ON_NurbsSurface* top = Internal_MergeC2Neighbors(nurbs_surface_type, 0, s[3], s[2]);
+  if (nullptr == top)
+  {
+    delete bottom;
+    return false;
+  }
+   
+  m_surface = Internal_MergeC2Neighbors(nurbs_surface_type, 1, bottom, top);
+  delete bottom;
+  delete top;
+  if (nullptr == m_surface)
+    return false;
+
+  for (unsigned int quadrant_index = 0; quadrant_index < 4; quadrant_index++)
+  {
+    delete m_quadrants[quadrant_index]->m_surface;
+    m_quadrants[quadrant_index]->m_surface = nullptr;
+    m_quadrants[quadrant_index]->m_parent = nullptr;
+    ON_SubDLimitSurfaceFragment::ReturnSurfaceFragment(m_quadrants[quadrant_index]);
+    m_quadrants[quadrant_index] = nullptr;
+  }
+
+  return true;
+}
+
+const ON_SubDLimitSurfaceFragment ON_SubDLimitSurfaceFragment::Empty ON_CLANG_CONSTRUCTOR_BUG_INIT(ON_SubDLimitSurfaceFragment);
+
+class Internal_SubDNurbsPatchGetter
+{
+public:
+  Internal_SubDNurbsPatchGetter(
     const ON_SubD& subd,
     unsigned int patch_density,
-    bool bClampPatchKnots,
-    const wchar_t* sUserStringPatchIdKey,
-    ON_SimpleArray<ON_NurbsSurface*>& patches
+    ON_SubD::NurbsSurfaceType nurbs_surface_type,
+    ON__UINT_PTR nurbs_callback_context,
+    bool(*nurbs_callback_function)(ON__UINT_PTR, const ON_SubDFaceRegion&, class ON_NurbsSurface*)
     )
-      : m_subd(subd)
-      , m_patch_density(patch_density)
-      , m_bClampPatchKnots(bClampPatchKnots)
-      , m_sUserStringPatchIdKey((nullptr != sUserStringPatchIdKey && sUserStringPatchIdKey[0] > ON_wString::Space) ? sUserStringPatchIdKey : nullptr)
-      , m_patches(patches)
+    : m_subd(subd)
+    , m_patch_density(patch_density)
+    , m_nurbs_surface_type(ON_SubD::NurbsSurfaceType::Unset == nurbs_surface_type ? ON_SubD::NurbsSurfaceType::Medium : nurbs_surface_type)
+    , m_nurbs_callback_context(nurbs_callback_context)
+    , m_nurbs_callback_function(nurbs_callback_function)
     {}
 
   const ON_SubD& m_subd;
 
   const unsigned int m_patch_density = 2;
-  const bool m_bClampPatchKnots = false;
-  const wchar_t* m_sUserStringPatchIdKey = nullptr;
+  const ON_SubD::NurbsSurfaceType m_nurbs_surface_type = ON_SubD::NurbsSurfaceType::Unset;
 
-  ON_SimpleArray<ON_NurbsSurface*>& m_patches;
-  
-  unsigned int m_x_count = 0;
-  unsigned int m_s_count = 0;
+  // m_current_face_region identifies the current region being accumulated in m_fragment_tree
+  // and is set in Internal_SubDNurbsPatchGetter::BeginFaceCallback().
+  // If the level 0 face is a quad, then m_fragments_face_region.m_subdivision_count = 0;
+  // If the level 0 face is an N-gon (N != 4), then m_fragments_face_region.m_subdivision_count = 1.
+  ON_SubDFaceRegion m_current_face_region;
 
-  bool AddPatch(
-    const ON_SubDLimitPatchFragment* patch_fragment
+  enum : unsigned int
+  {
+    fragments_acculator_capacity = 5
+  };
+  ON_SubDLimitSurfaceFragment* m_fragment_tree = nullptr;
+  ON_SubDLimitSurfaceFragment* FragmentLeaf(
+    const ON_SubDFaceRegion& face_region
+  );
+
+
+  void AddOutputSurface(
+    const ON_SubDFaceRegion& face_region,
+    ON_NurbsSurface* output_surface
+  );
+
+  ON__UINT_PTR m_nurbs_callback_context = 0;
+  bool(*m_nurbs_callback_function)(ON__UINT_PTR, const ON_SubDFaceRegion&, class ON_NurbsSurface*) = nullptr;
+
+  unsigned int m_bicubic_span_count = 0;
+
+  void AddPatch(
+    const ON_SubDLimitNurbsFragment* patch_fragment
     );
+
+  void ConvertFragmentsToSurfaces();
+
+  void ConvertPatchToSurfaces(
+    const ON_SubDLimitNurbsFragment& patch_fragment
+    );
+
+  static bool BeginFaceCallback(
+    ON__UINT_PTR  context, // contest = Internal_SubDNurbsPatchGetter*
+    const ON_SubDFaceRegion& face_region
+    //,
+    //const class ON_SubDFace* level0_face_OBSOLETE, 
+    //const class ON_SubDFace* level1_face_OBSOLETE, 
+    //unsigned int level1_face_region_index_OBSOLETE
+  );
+
 
   static bool GetLimitSurfaceInPatchesCallback(
-    ON__UINT_PTR  context, // contest = CPatchGetter*
-    const ON_SubDLimitPatchFragment* patch_fragment
+    ON__UINT_PTR  context, // contest = Internal_SubDNurbsPatchGetter*
+    const ON_SubDLimitNurbsFragment* patch_fragment
     );
 
+  static bool AddToSurfaceArrayCallback1(
+    ON__UINT_PTR context, // ON_SimpleArray<ON_NurbsSurface*>*
+    const ON_SubDFaceRegion& face_region,
+    class ON_NurbsSurface* nurbs_surface
+  );
+
+  static bool AddToSurfaceArrayCallback2(
+    ON__UINT_PTR context, // ON_SimpleArray<ON_SubDFaceRegionAndNurbs>*
+    const ON_SubDFaceRegion& face_region,
+    class ON_NurbsSurface* nurbs_surface
+  );
+
 private:
-  static bool CheckCVs(const ON_NurbsSurface& s);
+  unsigned int m_new_subdivision_edge_id = 0;
+
   wchar_t* AppendUnsigned(
     wchar_t prefix,
     unsigned int i,
@@ -2538,20 +4617,37 @@ private:
     wchar_t* send
     );
 private:
-  CPatchGetter() = delete;
-  CPatchGetter(const CPatchGetter&) = delete;
-  CPatchGetter& operator=(const CPatchGetter&) = delete;
+  Internal_SubDNurbsPatchGetter() = delete;
+  Internal_SubDNurbsPatchGetter(const Internal_SubDNurbsPatchGetter&) = delete;
+  Internal_SubDNurbsPatchGetter& operator=(const Internal_SubDNurbsPatchGetter&) = delete;
 };
 
-bool CPatchGetter::GetLimitSurfaceInPatchesCallback(
-  ON__UINT_PTR context,
-  const ON_SubDLimitPatchFragment* patch_fragment
-  )
+bool Internal_SubDNurbsPatchGetter::BeginFaceCallback(
+  ON__UINT_PTR  context, // contest = Internal_SubDNurbsPatchGetter*
+  const ON_SubDFaceRegion& face_region
+)
 {
-  return ((CPatchGetter*)context)->AddPatch(patch_fragment);
+  Internal_SubDNurbsPatchGetter* p = (Internal_SubDNurbsPatchGetter*)context;
+  if (nullptr == p)
+    return true;
+
+  // Flush accumulated fragments from previous face
+  p->ConvertFragmentsToSurfaces(); 
+
+  p->m_current_face_region = face_region;
+  return true;
 }
 
-wchar_t* CPatchGetter::AppendUnsigned(
+bool Internal_SubDNurbsPatchGetter::GetLimitSurfaceInPatchesCallback(
+  ON__UINT_PTR context,
+  const ON_SubDLimitNurbsFragment* patch_fragment
+  )
+{
+  ((Internal_SubDNurbsPatchGetter*)context)->AddPatch(patch_fragment);
+  return true;
+}
+
+wchar_t* Internal_SubDNurbsPatchGetter::AppendUnsigned(
   wchar_t prefix,
   unsigned int i,
   wchar_t* s,
@@ -2577,235 +4673,815 @@ wchar_t* CPatchGetter::AppendUnsigned(
   return s;
 }
 
-bool CPatchGetter::CheckCVs(
-  const ON_NurbsSurface& s
-  )
+ON_SubDLimitSurfaceFragment* ON_SubDLimitSurfaceFragment::Parent()
 {
-  for (int i = 0; i < s.m_cv_count[0]; i++)
-  {
-    for (int j = 0; j < s.m_cv_count[1]; j++)
-    {
-      double * cv = s.CV(i, j);
-      for (unsigned k = 0; k < 3; k++)
-      {
-        if (!ON_IsValid(cv[k]))
-        {
-          return ON_SUBD_RETURN_ERROR(false);
-        }
-      }
-    }
-  }
-  return true;
+  return m_parent;
 }
 
-bool CPatchGetter::AddPatch(
-  const ON_SubDLimitPatchFragment* patch_fragment
-  )
+ON_SubDLimitSurfaceFragment* ON_SubDLimitSurfaceFragment::Quadrant(unsigned int quadrant_index, bool bAllocateIfMissing)
 {
-  unsigned int exact_bispan_count = 0;
-  unsigned int approximate_bispan_count = 0;
-  unsigned int fvi;
-  for (fvi = 0; fvi < 4; fvi++)
+  if (quadrant_index >= 4)
   {
-    switch (patch_fragment->m_patch_type[fvi])
+    ON_SUBD_ERROR("Invalid quadrant_index value.");
+    return nullptr;
+  }
+  if (nullptr == m_quadrants[quadrant_index] && bAllocateIfMissing)
+  {
+    m_quadrants[quadrant_index] = ON_SubDLimitSurfaceFragment::AllocateSurfaceFragment();
+    if (nullptr != m_quadrants[quadrant_index])
     {
-    case ON_SubDLimitPatchFragment::PatchType::None:
-      break;
-
-    case ON_SubDLimitPatchFragment::PatchType::Bicubic:
-    case ON_SubDLimitPatchFragment::PatchType::BicubicQuadrant:
-      // The NURBS bispan exactly matches the Catmull-Clark SubD surface.
-      exact_bispan_count++;
-      break;
-
-    case ON_SubDLimitPatchFragment::PatchType::ApproximateBicubic:
-    case ON_SubDLimitPatchFragment::PatchType::ApproximateBicubicQuadrant:
-      // The NURBS bispan approximates the Catmull-Clark SubD surface.
-      // Typically a limit point interpolation calculation was required 
-      // to set a surface cv.
-      approximate_bispan_count++;
-      break;
-
-    case ON_SubDLimitPatchFragment::PatchType::Unset:
-      break;
-    default:
-      //ON_ERROR("Invalid patch_fragment->m_patch_type[] value.");
-      ON_SubDIncrementErrorCount();
-      break;
+      m_quadrants[quadrant_index]->m_parent = this;
+      m_quadrants[quadrant_index]->m_face_region = m_face_region;
+      m_quadrants[quadrant_index]->m_face_region.Push(quadrant_index);
     }
   }
-
-  const unsigned int bispan_count = exact_bispan_count + approximate_bispan_count;
-  
-  const unsigned int max_bispan_count 
-    = (   0 == patch_fragment->m_face_subdivision_count 
-       && 1 == bispan_count 
-       && ON_SubDLimitPatchFragment::PatchType::Bicubic == patch_fragment->m_patch_type[0]
-       )
-    ? 1
-    : 4;
-
-  if (patch_fragment->m_face_subdivision_count > 0)
-  {
-    if ( m_x_count > 0 )
-      m_x_count--;
-  }
-
-  m_x_count += max_bispan_count - bispan_count;
-  if ( bispan_count <= 0 )
-    return true;
-
-
-  // attribute name setup
-  const bool bSetPatchId = (nullptr != m_sUserStringPatchIdKey);
-  const wchar_t* sOrdinary = L"Ordinary";
-  const wchar_t* sExtraordinary = L"Extraordinary";
-
-  wchar_t sFaceRegion[64];
-  wchar_t* s = sFaceRegion;
-  wchar_t* send = s + (sizeof(sFaceRegion)/sizeof(sFaceRegion[0]) - 1);
-  *send = 0;
-
-  if (nullptr != m_sUserStringPatchIdKey)
-  {
-    s = AppendUnsigned('f', patch_fragment->m_level0_face->m_id, s, send);
-    for (unsigned short i = 0; i < patch_fragment->m_face_subdivision_count; i++)
-      s = AppendUnsigned('.', patch_fragment->m_face_region_index[i], s, send);
-  }
-
-  const double knots[7] = {-2,-1,0,1,2,3,4};
-  ON_NurbsSurface patch_srf;
-  patch_srf.m_dim = 3;
-  patch_srf.m_is_rat = 0;
-  patch_srf.m_order[0] = 4;
-  patch_srf.m_order[1] = 4;
-  patch_srf.m_knot[0] = (double*)knots;
-  patch_srf.m_knot[1] = (double*)knots;
-  patch_srf.m_cv_stride[0] = 5*3;
-  patch_srf.m_cv_stride[1] = 3;
-  
-  ON_wString patch_name;
-
-  if (4 == bispan_count)
-  {
-    patch_srf.m_cv_count[0] = 5;
-    patch_srf.m_cv_count[1] = 5;
-    patch_srf.m_cv = (double*)patch_fragment->m_patch_cv[0][0];
-    ON_NurbsSurface* surface = new ON_NurbsSurface(patch_srf);
-    CheckCVs(*surface);
-    if (m_bClampPatchKnots)
-    {
-      surface->ClampEnd(0, 2);
-      surface->ClampEnd(1, 2);
-      CheckCVs(*surface);
-    }
-
-    if (bSetPatchId)
-    {
-      patch_name.Format(
-        L"%ls %ls",
-        ((approximate_bispan_count > 0) ? sExtraordinary : sOrdinary),
-        sFaceRegion
-        );
-      surface->SetUserString( m_sUserStringPatchIdKey, static_cast<const wchar_t*>(patch_name));
-    }
-
-    m_patches.Append(surface);
-    m_s_count += 4;
-  }
-  else
-  {
-    const ON_2dex cvdex[4] = { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 } };
-    for (fvi = 0; fvi < 4; fvi++)
-    {
-      if (ON_SubDLimitPatchFragment::PatchType::Unset == patch_fragment->m_patch_type[fvi])
-        continue;
-      if (ON_SubDLimitPatchFragment::PatchType::None == patch_fragment->m_patch_type[fvi])
-        continue;
-
-      patch_srf.m_cv_count[0] = 4;
-      patch_srf.m_cv_count[1] = 4;
-      patch_srf.m_cv = (double*)patch_fragment->m_patch_cv[cvdex[fvi].i][cvdex[fvi].j];
-      ON_NurbsSurface* surface = new ON_NurbsSurface(patch_srf);
-      CheckCVs(*surface);
-      if (m_bClampPatchKnots)
-      {
-        surface->ClampEnd(0, 2);
-        surface->ClampEnd(1, 2);
-        CheckCVs(*surface);
-      }
-
-      if (bSetPatchId)
-      {
-        if (max_bispan_count > 1)
-        {
-          *s = 0;
-          AppendUnsigned('.', fvi, s, send);
-        }
-
-        const wchar_t* sPatchType;
-
-        switch (patch_fragment->m_patch_type[fvi])
-        {
-        case ON_SubDLimitPatchFragment::PatchType::Unset:
-          sPatchType = L"Unset";
-          break;
-
-        case ON_SubDLimitPatchFragment::PatchType::Bicubic:
-        case ON_SubDLimitPatchFragment::PatchType::BicubicQuadrant:
-          sPatchType = sOrdinary;
-          break;
-
-        case ON_SubDLimitPatchFragment::PatchType::ApproximateBicubic:
-        case ON_SubDLimitPatchFragment::PatchType::ApproximateBicubicQuadrant:
-          sPatchType = sExtraordinary;
-          break;
-
-        default:
-          sPatchType = L"?";
-          break;
-        }
-
-        patch_name.Format(
-          L"%s %s",
-          sPatchType,
-          sFaceRegion
-          );
-        surface->SetUserString( this->m_sUserStringPatchIdKey, static_cast<const wchar_t*>(patch_name));
-      }
-
-      m_patches.Append(surface);
-      m_s_count++;
-    }
-  }
-
-  patch_srf.m_knot[0] = nullptr;
-  patch_srf.m_knot[1] = nullptr;
-  patch_srf.m_cv = nullptr;
-
-  return true;
+  return m_quadrants[quadrant_index];
 }
 
-unsigned int ON_SubD::GetLimitSurfacePatches(
+
+ON_SubDLimitSurfaceFragment* Internal_SubDNurbsPatchGetter::FragmentLeaf(
+  const ON_SubDFaceRegion& patch_face_region
+) 
+{
+  const ON_SubDComponentRegion& fragment_fr = m_current_face_region.m_face_region;
+  if (fragment_fr.m_level0_component_id == 0)
+  {
+    ON_SUBD_ERROR("m_fragments_face_region.m_level0_component_id not set.");
+    return nullptr;
+  }
+
+  const ON_SubDComponentRegion& patch_fr = patch_face_region.m_face_region;
+  if (fragment_fr.m_level0_component_id != patch_fr.m_level0_component_id)
+  {
+    ON_SUBD_ERROR("m_fragments_face_region.m_level0_component_id != patch_face_region.m_level0_component_id");
+    return nullptr;
+  }
+  if (patch_fr.SubdivisionCount() < fragment_fr.SubdivisionCount())
+  {
+    ON_SUBD_ERROR("patch_face_region.SubdivisionCount() < m_fragments_face_region.SubdivisionCount()");
+    return nullptr;
+  }
+
+  if (patch_fr.SubdivisionCount() > ON_SubDComponentRegionIndex::IndexCapacity)
+  {
+    // unreasonable number of subdivisions
+    ON_SUBD_ERROR("patch_face_region.SubdivisionCount() > ON_SubDComponentRegionIndex::IndexCapacity");
+    return nullptr;
+  }
+
+  for ( unsigned short i = 0; i < fragment_fr.SubdivisionCount(); i++ )
+  {
+    if (fragment_fr.m_region_index.m_index[i] != patch_fr.m_region_index.m_index[i])
+    {
+      ON_SUBD_ERROR("m_fragments_face_region.m_region_index[] differs from patch_face_region");
+      return nullptr;
+    }
+  }
+
+  if (nullptr == m_fragment_tree)
+  {
+    m_fragment_tree = ON_SubDLimitSurfaceFragment::AllocateSurfaceFragment();
+    m_fragment_tree->m_face_region = m_current_face_region;
+  }
+
+  ON_SubDLimitSurfaceFragment* fragment_leaf = m_fragment_tree;
+  ON_SubDComponentRegion r = fragment_fr;
+  while (r.SubdivisionCount() < patch_fr.SubdivisionCount())
+  {
+    unsigned short quadrant_dex = patch_fr.m_region_index.Index(r.SubdivisionCount());
+    if (quadrant_dex >= 4)
+    {
+      ON_SUBD_ERROR("patch_face_region.m_region_index[] value >= 4.");
+      return nullptr;
+    }
+    r.PushAbsolute(quadrant_dex); // increments r.m_subdivision_count
+    fragment_leaf = fragment_leaf->Quadrant(quadrant_dex, true);
+    if (nullptr == fragment_leaf)
+    {
+      ON_SUBD_ERROR("fragment tree allocation error.");
+      return nullptr;
+    }
+    if (0 != ON_SubDComponentRegion::CompareTypeIdMarkSubregion(&r, &fragment_leaf->m_face_region.m_face_region))
+    {
+      ON_SUBD_ERROR("corrupt fragment tree.");
+      return nullptr;
+    }
+  }
+
+  return fragment_leaf;
+}
+
+
+void Internal_SubDNurbsPatchGetter::AddPatch(
+  const ON_SubDLimitNurbsFragment* patch_fragment
+)
+{
+  if (nullptr == patch_fragment)
+    return;
+
+  // face_region identifies what part of the SubD region is represented by patch_fragment
+  const ON_SubDFaceRegion face_region = patch_fragment->m_face_region;
+
+  ON_SubDLimitNurbsFragment local_patch_fragment(*patch_fragment);
+  patch_fragment = &local_patch_fragment;
+
+
+  bool rc = false;
+  for (;;)
+  {
+    if (m_current_face_region.m_face_region.m_level0_component_id == 0)
+    {
+      ON_SUBD_ERROR("m_fragments_face_region.m_level0_component_id == 0");
+      break;
+    }
+
+    if (patch_fragment->m_face_region.m_face_region.m_level0_component_id == 0)
+    {
+      ON_SUBD_ERROR("patch_fragment->m_face_region.m_level0_component_id == 0");
+      break;
+    }
+
+    const unsigned int max_bispan_count = patch_fragment->MaximumBispanCount();
+    const unsigned int bispan_count = patch_fragment->SetBispanCount();
+    if (0 == bispan_count || 0 == max_bispan_count)
+    {
+      ON_SUBD_ERROR("No bispans in patch_fragment.");
+      break;
+    }
+
+    if ( 
+      ON_SubD::NurbsSurfaceType::Small == m_nurbs_surface_type 
+      || ON_SubD::NurbsSurfaceType::Unprocessed == m_nurbs_surface_type 
+      )
+    {
+      // happens when debugging
+      rc = true;
+      break;
+    }
+
+    ON_SubDLimitSurfaceFragment* fragment_leaf = FragmentLeaf(patch_fragment->m_face_region);
+    if (nullptr == fragment_leaf)
+    {
+      ON_SUBD_ERROR("Unable to get surface holder for patch_fragment->m_face_region.");
+break;
+    }
+
+    if (nullptr != fragment_leaf->m_surface)
+    {
+      ON_SUBD_ERROR("fragment_leaf->m_surface is already set.");
+      break;
+    }
+
+    // patch_fragment is part of the face we are currently patching
+    if (bispan_count == max_bispan_count)
+    {
+      if (false == fragment_leaf->SetSurface(patch_fragment->GetSurface(nullptr)))
+      {
+        ON_SUBD_ERROR("Failed to set surface.");
+        break;
+      }
+      local_patch_fragment = ON_SubDLimitNurbsFragment::Empty;
+    }
+    else
+    {
+      for (unsigned int quadrant_index = 0; quadrant_index < max_bispan_count; quadrant_index++)
+      {
+        if (ON_SubDLimitNurbsFragment::BispanType::None == patch_fragment->m_bispan_type[quadrant_index])
+          continue;
+        if (false == fragment_leaf->SetQuadrantSurface(patch_fragment->GetQuadrantSurface(quadrant_index, nullptr), quadrant_index))
+        {
+          ON_SUBD_ERROR("Failed to set quadrant surface.");
+          continue;
+        }
+        local_patch_fragment.m_bispan_type[quadrant_index] = ON_SubDLimitNurbsFragment::BispanType::None;
+      }
+    }
+
+    if (0 == local_patch_fragment.SetBispanCount())
+      rc = true;
+
+    while (nullptr != fragment_leaf && fragment_leaf->SetSurfaceFromQuadrants(m_nurbs_surface_type))
+    {
+      fragment_leaf = fragment_leaf->Parent();
+    }
+
+    break;
+  }
+
+  if (false == rc)
+    ConvertFragmentsToSurfaces();
+
+  // Convert this patch. Patches should all set to none if we are merging patches.)
+  // Restore face and edge region information
+  local_patch_fragment.m_face_region = face_region;
+
+  ConvertPatchToSurfaces(*patch_fragment);
+
+  return;
+}
+
+void Internal_SubDNurbsPatchGetter::ConvertFragmentsToSurfaces()
+{
+  if (nullptr == m_fragment_tree)
+    return;
+  ON_SimpleArray<ON_SubDLimitSurfaceFragment*> a(64);
+  a.Append(m_fragment_tree);
+  m_fragment_tree = nullptr;
+  unsigned int a_count = a.UnsignedCount();
+  while ( a_count > 0 )
+  {
+    for (unsigned int i = 0; i < a_count; i++)
+    {
+      ON_SubDLimitSurfaceFragment* f = a[i];
+      if (nullptr == f)
+        continue;
+      a[i] = 0;
+      if (f->m_surface)
+      {
+        AddOutputSurface(f->m_face_region, f->m_surface);
+        f->m_surface = nullptr; // receiver must manage f->m_surface.
+      }      
+      for (unsigned int j = 0; j < 4; j++)
+      {
+        ON_SubDLimitSurfaceFragment* q = f->Quadrant(j, false);
+        if (q)
+          a.Append(q);
+      }
+      ON_SubDLimitSurfaceFragment::ReturnSurfaceFragment(f);
+    }
+    unsigned int k = a_count;
+    const unsigned int kmax = a.UnsignedCount();
+    a_count = 0;
+    while (k < kmax)
+      a[a_count++] = a[k++];
+    a.SetCount(a_count);
+  }
+  m_current_face_region = ON_SubDFaceRegion::Empty;
+}
+
+
+void Internal_SubDNurbsPatchGetter::AddOutputSurface(
+  const ON_SubDFaceRegion& face_region,
+  ON_NurbsSurface* output_surface
+)
+{
+  if (nullptr == output_surface)
+    return;
+
+  if ( ON_SubD::NurbsSurfaceType::Unprocessed != m_nurbs_surface_type )
+  {
+    output_surface->ClampEnd(0, 2);
+    output_surface->ClampEnd(1, 2);
+    Internal_CheckNurbsSurfaceCVs(*output_surface);
+  }
+
+  m_nurbs_callback_function(m_nurbs_callback_context, face_region, output_surface);
+}
+
+void Internal_SubDNurbsPatchGetter::ConvertPatchToSurfaces(
+  const ON_SubDLimitNurbsFragment& patch_fragment
+  )
+{
+  // Exports patches as is with no merging.
+  unsigned int bispan_count = patch_fragment.SetBispanCount();
+  if (bispan_count <= 0)
+    return;
+
+  unsigned int maximum_bispan_count = patch_fragment.MaximumBispanCount();
+  ON_SubDComponentRegion central_edge_regions[4] = {};
+  ON_SubDFaceRegion local_face_region = patch_fragment.m_face_region;
+  for (unsigned int quadrant_index = 0; quadrant_index < maximum_bispan_count; quadrant_index++)
+  {
+    if (ON_SubDLimitNurbsFragment::BispanType::None == patch_fragment.m_bispan_type[quadrant_index])
+      continue;
+    ON_NurbsSurface* output_surface = patch_fragment.GetQuadrantSurface(quadrant_index, nullptr);
+    if (nullptr == output_surface)
+      continue;
+    if (maximum_bispan_count > 1)
+    {
+      // region information must be subdivided
+      local_face_region.Push(quadrant_index);      
+      const unsigned short central_edge_region_subdivision_count = local_face_region.m_face_region.SubdivisionCount();
+
+      if (0 == central_edge_regions[quadrant_index].m_level0_component_id)
+        central_edge_regions[quadrant_index] = Internal_CreateSubdivisionEdgeRegion(central_edge_region_subdivision_count,false);
+      local_face_region.m_edge_region[(quadrant_index + 1) % 4] = central_edge_regions[quadrant_index];
+      local_face_region.m_edge_region[(quadrant_index + 1) % 4].m_level0_component = central_edge_regions[quadrant_index].m_level0_component.ToggleMark();
+
+      const unsigned int cdex3 = (quadrant_index + 3) % 4;
+      if (0 == central_edge_regions[cdex3].m_level0_component_id)
+        central_edge_regions[cdex3] = Internal_CreateSubdivisionEdgeRegion(central_edge_region_subdivision_count,false);
+      local_face_region.m_edge_region[(quadrant_index+2)%4] = central_edge_regions[cdex3];
+    }
+
+    AddOutputSurface(local_face_region, output_surface);
+
+    if (maximum_bispan_count > 1)
+      local_face_region = patch_fragment.m_face_region;
+  }
+}
+
+
+unsigned int ON_SubD::GetLimitSurfaceNurbs(
   const class ON_SubDDisplayParameters& display_parameters,
-  bool bClampPatchKnots,
-  const wchar_t* sUserStringPatchKey,
+  ON_SubD::NurbsSurfaceType nurbs_surface_type,
+  ON__UINT_PTR callback_context,
+  bool(*nurbs_callback_function)(ON__UINT_PTR, const ON_SubDFaceRegion&, class ON_NurbsSurface*)
+) const
+{
+  // TODO: Restructure the code to support this callback function.
+  Internal_SubDNurbsPatchGetter patch_getter(
+    *this,
+    display_parameters.m_display_density,
+    nurbs_surface_type,
+    callback_context,
+    nurbs_callback_function
+    );
+
+  GetLimitSurfaceNurbsFragments(
+    display_parameters,
+    (ON__UINT_PTR)&patch_getter,
+    Internal_SubDNurbsPatchGetter::BeginFaceCallback,
+    Internal_SubDNurbsPatchGetter::GetLimitSurfaceInPatchesCallback
+    );
+
+  // Flush the final batch of patches.
+  patch_getter.ConvertFragmentsToSurfaces();
+
+  return patch_getter.m_bicubic_span_count;
+}
+
+bool Internal_SubDNurbsPatchGetter::AddToSurfaceArrayCallback1(
+  ON__UINT_PTR context, // ON_SimpleArray<ON_NurbsSurface*>*
+  const ON_SubDFaceRegion& face_region,
+  class ON_NurbsSurface* nurbs_surface
+)
+{
+  if (nullptr != nurbs_surface && 0 != context)
+  {
+    ON_wString region_id = face_region.ToString();
+    nurbs_surface->SetUserString(L"SubDRegionId", region_id);
+    ((ON_SimpleArray< ON_NurbsSurface* >*)context)->Append(nurbs_surface);
+  }
+  return true;
+}
+
+bool Internal_SubDNurbsPatchGetter::AddToSurfaceArrayCallback2(
+  ON__UINT_PTR context, // ON_SimpleArray<ON_SubDFaceRegionAndNurbs>*
+  const ON_SubDFaceRegion& face_region,
+  class ON_NurbsSurface* nurbs_surface
+)
+{
+  if (nullptr != nurbs_surface && 0 != context)
+  {
+    ON_SubDFaceRegionAndNurbs& e = ((ON_SimpleArray< ON_SubDFaceRegionAndNurbs >*)context)->AppendNew();
+    e.m_face_region = face_region;
+    e.m_nurbs_surface = nurbs_surface;
+  }
+  return true;
+}
+
+unsigned int ON_SubD::GetLimitSurfaceNurbs(
+  const class ON_SubDDisplayParameters& display_parameters,
+  ON_SubD::NurbsSurfaceType nurbs_surface_type,
   ON_SimpleArray< ON_NurbsSurface* >& patches
   ) const
 {
-  CPatchGetter patch_getter(
-    *this,
-    display_parameters.m_display_density,
-    bClampPatchKnots,
-    sUserStringPatchKey,
-    patches
-    );
+  return GetLimitSurfaceNurbs(display_parameters, nurbs_surface_type, (ON__UINT_PTR)&patches, Internal_SubDNurbsPatchGetter::AddToSurfaceArrayCallback1);
+}
 
-  GetLimitSurfaceInPatches(
-    display_parameters,
-    (ON__UINT_PTR)&patch_getter,
-    CPatchGetter::GetLimitSurfaceInPatchesCallback
-    );
+unsigned int ON_SubD::GetLimitSurfaceNurbs(
+  const class ON_SubDDisplayParameters& display_parameters,
+  ON_SubD::NurbsSurfaceType nurbs_surface_type,
+  ON_SimpleArray< ON_SubDFaceRegionAndNurbs >& patches
+  ) const
+{
+  return GetLimitSurfaceNurbs(display_parameters, nurbs_surface_type, (ON__UINT_PTR)&patches, Internal_SubDNurbsPatchGetter::AddToSurfaceArrayCallback2);
+}
 
-  return patch_getter.m_s_count;
+
+static bool Internal_ToBrep(
+  ON_SimpleArray< ON_SubDFaceRegionAndNurbs >& patches,
+  ON_Brep& brep
+);
+
+ON_Brep* ON_SubD::GetLimitSurfaceNurbs(
+  const class ON_SubDDisplayParameters& display_parameters,
+  ON_Brep* destination_brep  
+  ) const
+{
+  if (nullptr != destination_brep)
+    destination_brep->Destroy();
+  ON_SimpleArray< ON_SubDFaceRegionAndNurbs > patches;
+  GetLimitSurfaceNurbs(display_parameters, ON_SubD::NurbsSurfaceType::Large, (ON__UINT_PTR)&patches, Internal_SubDNurbsPatchGetter::AddToSurfaceArrayCallback2);
+  const unsigned int face_count = patches.UnsignedCount();
+  if (face_count <= 0)
+    return nullptr;
+
+  ON_Brep* brep
+    = (nullptr != destination_brep)
+    ? destination_brep
+    : ON_Brep::New();
+  if (false == Internal_ToBrep(patches, *brep))
+  {
+    if (brep != destination_brep)
+      delete brep;
+    brep = nullptr;
+  }
+  return brep;
+}
+
+static bool Internal_ToBrep(
+  ON_SimpleArray< ON_SubDFaceRegionAndNurbs >& patches,
+  ON_Brep& brep
+)
+{
+  const unsigned int face_count = patches.UnsignedCount();
+  if (face_count <= 0)
+    return false;
+
+  const unsigned int split_edge_mark = 0xFFFFFFFF;
+  const unsigned int bad_edge_mark = 0xFFFFFFFE;
+  const unsigned int bad_vertex_mark = 0xFFFFFFFD;
+
+
+  ON_SimpleArray<ON_2udex> vertex_map(3 * face_count + 32);
+  ON_SimpleArray<ON_3udex> edge_map(4 * face_count + 32);
+  ON_2udex vm(0, 0);
+  ON_3udex em(0, 0, 0);
+
+  // Begin working on building vertex_map[] and edge_map[]
+  for (unsigned int fi = 0; fi < face_count; fi++)
+  {
+    const ON_SubDFaceRegionAndNurbs& r = patches[fi];
+    ON_NurbsSurface* nurbs_surface = r.m_nurbs_surface;
+    if (nullptr == nurbs_surface)
+      continue;
+
+    for (int i = 0; i < 4; i++)
+    {
+      vm.i = r.m_face_region.m_vertex_id[i];
+      vm.j = fi;
+      if ( 0 != vm.i)
+        vertex_map.Append(vm);
+      
+      em.i = r.m_face_region.m_edge_region[i].m_level0_component_id;
+      if (0 != em.i)
+      {
+        em.j = r.m_face_region.m_edge_region[i].m_region_index.ToCompressedRegionIndex();
+        em.k = fi;
+        edge_map.Append(em);
+      }
+    }
+  }
+
+  // Remove duplicates from vertex_map[]
+  vertex_map.QuickSort(ON_2udex::DictionaryCompare);
+  unsigned int count0 = vertex_map.UnsignedCount();
+  unsigned int prev_id = 0;
+  unsigned int brep_vertex_count = 0;
+  for (unsigned int i = 0; i < count0; i++)
+  {
+    vm = vertex_map[i];
+    if (vm.i <= prev_id)
+      continue;
+    prev_id = vm.i;
+    vertex_map[brep_vertex_count++] = vm;
+  }
+  vertex_map.SetCount(brep_vertex_count);
+
+  // Create brep vertices and set vertex_map[].j  to brep index values so we
+  // can use vertex_map[] to go from a subd vertex id to a brep vertex index.
+  brep.m_V.Reserve(brep_vertex_count);
+  for (unsigned int i = 0; i < brep_vertex_count; i++)
+  {
+    ON_3dPoint P(ON_3dPoint::NanPoint);
+    vm = vertex_map[i];
+    const unsigned fi = vm.j;
+    vertex_map[i].j = bad_vertex_mark; // will be updated below if everything works right
+    vm.j = bad_vertex_mark;
+    const ON_SubDFaceRegionAndNurbs& r = patches[fi];
+    if (nullptr != r.m_nurbs_surface)
+    {
+      for (int j = 0; j < 4; j++)
+      {
+        if (vm.i == r.m_face_region.m_vertex_id[j])
+        {
+          const double s = r.m_nurbs_surface->Domain(0)[(1==j||2==j) ? 1 : 0];
+          const double t = r.m_nurbs_surface->Domain(1)[(j > 1) ? 1 : 0];
+          P = r.m_nurbs_surface->PointAt(s, t);
+          break;
+        }
+      }
+    }
+    if (false == P.IsValid())
+    {
+      ON_SUBD_ERROR("Unable to calculate vertex location.");
+    }
+    vm.j = brep.m_V.UnsignedCount();
+    vertex_map[i].j = vm.j;
+    brep.NewVertex(P, 0.0);
+  }
+
+  // Remove duplicates from edge_map[]
+
+  edge_map.QuickSort(ON_3udex::DictionaryCompare);
+  count0 = edge_map.UnsignedCount();
+  unsigned int edge_map_count = 0;
+  ON_3udex prev_em(0, 0, 0);
+  for (unsigned int i = 0; i < count0; i++)
+  {
+    em = edge_map[i];
+    if (prev_em.i == em.i && prev_em.j == em.j)
+      continue;
+    prev_em = em;
+    edge_map[edge_map_count++] = em;
+  }
+  // NOTE: final brep edge count <= edge_map_count.
+  edge_map.SetCount(edge_map_count);
+
+  // create the edges
+  brep.m_C3.Reserve(edge_map_count);
+  brep.m_E.Reserve(edge_map_count);
+  unsigned int brep_edge_count = 0;
+  for (unsigned int i = 0; i < edge_map_count; i++)
+  {
+    em = edge_map[i];
+    const unsigned int fi = em.k;
+    em.k = bad_edge_mark;
+    edge_map[i].k = bad_edge_mark; // will be update below if we find all the parts.
+
+    if (0 == em.j && i + 2 < edge_map_count && em.i == edge_map[i + 1].i && em.i == edge_map[i + 2].i)
+    {
+      // This edge is shared between a subd quad face and N-gon with N != 4.
+      // The N-gon had to be subdivided one time to create quads and the
+      // edge will be split on the quad face side.
+      edge_map[i].k = split_edge_mark; // marker on the quad face edge for this situation
+      continue;
+    }
+
+    ON_Curve* edge_curve = nullptr;
+    const ON_SubDFaceRegionAndNurbs& r = patches[fi];
+    const ON_NurbsSurface* nurbs_surface = r.m_nurbs_surface;
+    unsigned vertex_id[2] = {};
+    int brep_vi[2] = { -1,-1 };
+    if (nullptr != nurbs_surface)
+    {
+      for (int j = 0; j < 4; j++)
+      {
+        if (em.i == r.m_face_region.m_edge_region[j].m_level0_component_id)
+        {
+          const bool bRevEdge = (0 != r.m_face_region.m_edge_region[j].m_level0_component.ComponentMark());
+          vertex_id[bRevEdge?1:0] = r.m_face_region.m_vertex_id[j];
+          vertex_id[bRevEdge?0:1] = r.m_face_region.m_vertex_id[(j+1)%4];
+
+          for (int k = 0; k < 2; k++)
+          {
+            vm.i = vertex_id[k];
+            vm.j = 0;
+            int mapdex = vertex_map.BinarySearch(&vm, ON_2udex::CompareFirstIndex);
+            if (mapdex >= 0)
+            {
+              vm = vertex_map[mapdex];
+              brep_vi[k] = (int)vm.j;
+            }
+          }
+          const int iso_dir = j % 2;
+          const double c = nurbs_surface->Domain(1 - iso_dir)[(1==j || 2==j) ? 1 : 0];
+          edge_curve = nurbs_surface->IsoCurve(iso_dir, c);
+          bool bReverseCurve = (j >= 2);
+          if (bRevEdge)
+            bReverseCurve = !bReverseCurve;
+          if (bReverseCurve && nullptr != edge_curve)
+            edge_curve->Reverse();
+          break;
+        }
+      }
+    }
+
+    if (nullptr != edge_curve)
+    {
+      for (int k = 0; k < 2; k++)
+      {
+        if (brep_vi[k] >= 0)
+          continue;
+        ON_SUBD_ERROR("brep edge vertex creation error.");
+        ON_3dPoint P(ON_3dPoint::NanPoint);
+        if (nullptr != edge_curve)
+          P = (0 == k) ? edge_curve->PointAtStart() : edge_curve->PointAtEnd();
+        brep_vi[k] = brep.m_V.Count();
+        brep.NewVertex(P, 0.0);
+      }
+      int c3i = -1;
+      if (nullptr != edge_curve)
+      {
+        c3i = brep.m_C3.Count();
+        brep.m_C3.Append(edge_curve);
+      }
+      em.k = brep.m_E.UnsignedCount();
+      edge_map[i].k = em.k;
+      brep.NewEdge(brep.m_V[brep_vi[0]], brep.m_V[brep_vi[1]], c3i, nullptr, 0.0);
+      brep_edge_count++;
+    }
+    else
+    {
+      ON_SUBD_ERROR("brep edge creation error.");
+    }
+  }
+   
+  // Now build faces
+  ON_NurbsCurve trim_curve;
+  ON_2dPoint trim_curve_cvs[2];
+  double trim_curve_knots[2] = { 0.0,1.0 };
+  trim_curve.m_dim = 2;
+  trim_curve.m_is_rat = 0;
+  trim_curve.m_order = 2;
+  trim_curve.m_cv_count = 2;
+  trim_curve.m_cv_stride = 2;
+  trim_curve.m_cv = &trim_curve_cvs[0].x;
+  trim_curve.m_knot = trim_curve_knots;
+  
+  for (unsigned int fi = 0; fi < face_count; fi++)
+  {
+    const ON_SubDFaceRegionAndNurbs& r = patches[fi];
+    if (nullptr == r.m_nurbs_surface)
+      continue;
+
+    const ON_Interval srf_domain[2] = { r.m_nurbs_surface->Domain(0),r.m_nurbs_surface->Domain(1) };
+    const ON_2dPoint srf_uv[4] =
+    {
+      ON_2dPoint(srf_domain[0][0], srf_domain[1][0]),
+      ON_2dPoint(srf_domain[0][1], srf_domain[1][0]),
+      ON_2dPoint(srf_domain[0][1], srf_domain[1][1]),
+      ON_2dPoint(srf_domain[0][0], srf_domain[1][1])
+    };
+
+    ON_3udex brep_em[8] = {};
+    bool trimRev3d[8] = {};
+    ON_2udex brep_vm[8] = {};
+
+    // Fallback if we fail to get complete information
+    bool bFail = false;
+    int fail_vid[4] = { -1,-1,-1,-1 };
+    int fail_eid[4] = { -1,-1,-1,-1 };
+    bool fail_bRev3d[4] = { false,false,false,false };
+
+    for (int i = 0; i < 4; i++)
+    {
+      brep_vm[2 * i] = ON_2udex::Zero;
+      brep_vm[2 * i + 1] = ON_2udex::Zero;
+      brep_em[2 * i] = ON_3udex::Zero;
+      brep_em[2 * i + 1] = ON_3udex::Zero;
+
+      vm.i = r.m_face_region.m_vertex_id[i];
+      vm.j = 0;
+      int k = vertex_map.BinarySearch(&vm, ON_2udex::CompareFirstIndex);
+      if (k < 0)
+      {
+        bFail = true;
+      }
+      else
+      {
+        vm = vertex_map[k];
+        if (vm.j < bad_vertex_mark)
+        {
+          brep_vm[2 * i] = vm;
+          fail_vid[i] = vm.j;
+        }
+        else
+          bFail = true;
+      }
+
+      const bool bRev3d = (0 != r.m_face_region.m_edge_region[i].m_level0_component.ComponentMark()) ? true : false;
+      trimRev3d[2 * i] = bRev3d;
+      em.i = r.m_face_region.m_edge_region[i].m_level0_component_id;
+      em.j = r.m_face_region.m_edge_region[i].m_region_index.ToCompressedRegionIndex();
+      em.k = 0;
+      k = edge_map.BinarySearch(&em, ON_3udex::CompareFirstAndSecondIndex);
+      if (k < 0)
+      {
+        bFail = true;
+      }
+      else
+      {
+        em = edge_map[k];
+        if (split_edge_mark == em.k)
+        {
+          if (0 != em.j || (unsigned)(k + 2) >= edge_map_count || em.i != edge_map[k+1].i || em.i != edge_map[k+2].i )
+            bFail = true;
+          else
+          {
+            trimRev3d[2 * i+1] = bRev3d;
+            if (bRev3d)
+            {
+              brep_em[2 * i] = edge_map[k + 2];
+              brep_em[2 * i + 1] = edge_map[k + 1];
+            }
+            else
+            {
+              brep_em[2 * i] = edge_map[k + 1];
+              brep_em[2 * i + 1] = edge_map[k + 2];
+            }
+          }
+        }
+        else if ( em.k < bad_edge_mark )
+        {
+          brep_em[2 * i] = em;
+          fail_eid[i] = em.k;
+          fail_bRev3d[i] = bRev3d;
+        }
+        else
+        {
+          bFail = true;
+        }
+      }
+    }
+
+    if (bFail)
+    {
+      // Use simple face maker and end up with interior naked edges
+      brep.NewFace(
+       r.m_nurbs_surface,
+       fail_vid,
+       fail_eid,
+       fail_bRev3d
+       );
+    }
+    else
+    {
+      const int si = brep.m_S.Count();
+      brep.m_S.Append(r.m_nurbs_surface);
+      ON_BrepFace& brep_face = brep.NewFace(si);
+      ON_BrepLoop& brep_loop = brep.NewLoop(ON_BrepLoop::TYPE::outer, brep_face);
+      for (int i = 0; i < 4; i++)
+      {
+        trim_curve_cvs[0] = srf_uv[i];
+        trim_curve_cvs[1] = srf_uv[(i+1)%4];
+
+        if (
+          0 == brep_em[2 * i].i
+          || brep_em[2 * i].k >= brep_edge_count
+          )
+        {
+          ON_SUBD_ERROR("Bog in SubD to joined brep code.");
+          continue;
+        }
+          
+        ON_NurbsCurve* curve2d[2] = {};
+        if (
+          0 != brep_em[2 * i].j
+          && brep_em[2 * i].i == brep_em[2 * i + 1].i 
+          && 0 != brep_em[2 * i + 1].j
+          && brep_em[2 * i + 1].k < brep_edge_count
+          )
+        {
+          // This face/edge corresponds to a subd quad face and edge that
+          // is shared by subd N-gon with N != 4.
+          // This side of the brep face needs 2 brep edges so 
+          // and will join to 2 brep faces coming from level 1 subdivision
+          // quads in the original subd.
+          const ON_2dPoint Q(
+            (trim_curve_cvs[0].x == trim_curve_cvs[1].x) ? trim_curve_cvs[0].x : 0.5*(trim_curve_cvs[0].x + trim_curve_cvs[1].x),
+            (trim_curve_cvs[0].y == trim_curve_cvs[1].y) ? trim_curve_cvs[0].y : 0.5*(trim_curve_cvs[0].y + trim_curve_cvs[1].y)
+          );
+          trim_curve_cvs[1] = Q;
+          curve2d[0] = trim_curve.Duplicate();
+          trim_curve_cvs[0] = Q;
+          trim_curve_cvs[1] = srf_uv[(i+1)%4];
+          curve2d[1] = trim_curve.Duplicate();
+        }
+        else
+        {
+          curve2d[0] = trim_curve.Duplicate();
+          curve2d[1] = nullptr;
+        }
+        for ( int k = 0; k < 2; k++)
+        {
+          ON_NurbsCurve* c2 = curve2d[k];
+          if (nullptr == c2)
+            continue;
+          em = brep_em[2 * i + k];
+          const bool bRev3d = trimRev3d[2 * i + k];
+          ON_BrepEdge& brep_edge = brep.m_E[em.k];
+          ON_Interval trim_domain = brep_edge.Domain();
+          if (bRev3d)
+            trim_domain.Reverse();
+          c2->SetDomain(trim_domain[0],trim_domain[1]);
+          int c2i = brep.m_C2.Count();
+          brep.m_C2.Append(c2);
+          ON_BrepTrim& brep_trim = brep.NewTrim(brep_edge, bRev3d, brep_loop, c2i);
+          brep_trim.m_tolerance[0] = 0.0;
+          brep_trim.m_tolerance[1] = 0.0;
+        }
+      }
+
+      //Internal_DebugLocations(brep_face);
+    }
+  }
+
+  trim_curve.m_cv = nullptr;
+  trim_curve.m_knot = nullptr;
+
+
+  return true;
 }

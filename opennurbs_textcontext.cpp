@@ -121,7 +121,44 @@ const ON_wString ON_TextContext::FormatRtfString(
     return string_out;
   if (nullptr == dimstyle)
     dimstyle = &ON_DimStyle::Default;
-  const wchar_t* style_facename = dimstyle->Font().FontFaceName();
+  const ON_wString rtf_font_name = ON_Font::RichTextFontName(&dimstyle->Font(),true);
+
+  ON_wString rtf_wstring(rtf_string);
+  int rtf = rtf_wstring.Find("rtf1");
+  if (-1 == rtf)  // Input is plain text string
+  {
+    ON_wString font_table_str;
+    ON_wString rtf_text_str;
+    ON_wString fmts;
+    // Keep dimstyle font as f0 in the font table even if we don't need itg here 
+    if (set_facename && !rtf_font_name.EqualOrdinal(override_facename, true))
+    {
+      font_table_str.Format(L"{\\fonttbl{\\f0 %ls;}{\\f1 %ls;}}", rtf_font_name.Array(), override_facename);
+      fmts = L"\\f1";
+    }
+    else  // Use style facename
+    {
+      font_table_str.Format(L"{\\fonttbl{\\f0 %ls;}}", rtf_font_name.Array());
+      fmts = L"\\f0";
+    }
+    if (set_bold)
+      fmts += L"\\b";
+    if (set_italic)
+      fmts += L"\\i";
+    if (set_underline)
+      fmts += "L\\ul";
+
+    rtf_wstring.Replace(L"\\", L"\\\\");
+    rtf_text_str.Format(L"{%ls %ls}", fmts.Array(), rtf_wstring.Array());
+    ON_wString par;
+    par.Format(L"}{\\par}{%ls ", fmts.Array());
+    rtf_text_str.Replace(L"\n", par.Array());
+
+    rtf_wstring.Format(L"{\\rtf1\\deff0%ls%ls}", font_table_str.Array(), rtf_text_str.Array());
+    return rtf_wstring;
+  }
+
+  // else Input is RTF string
 
   ON_RtfStringBuilder builder(dimstyle, 1.0, ON_UNSET_COLOR);
   builder.SetSkipColorTbl(true);
@@ -135,30 +172,18 @@ const ON_wString ON_TextContext::FormatRtfString(
   builder.SetMakeUnderline(set_underline);
   builder.SetMakeFacename(set_facename);
   builder.SetOverrideFacename(override_facename);
-  builder.SetDefaultFacename(style_facename);
+  builder.SetDefaultFacename(rtf_font_name);
 
-  ON_wString rtf_wstring(rtf_string);
-  int rtf = rtf_wstring.Find("rtf1");
-  if (-1 == rtf)
+  if (builder.SettingFacename())
   {
-    if (builder.SettingFacename())
-      rtf_wstring.Format(L"{\\rtf1\\deff0{\\fonttbl{\\f0 %s;}{\\f1 %s;}}{\\f1 %s}}", style_facename, override_facename, rtf_string);
-    else
-      rtf_wstring.Format(L"{\\rtf1\\deff0{\\fonttbl{\\f0 %s;}}{\\f0 %s}}", style_facename, rtf_string);
-  }
-  else
-  {
-    if (builder.SettingFacename())
+    int ftbl = rtf_wstring.Find(L"fonttbl");
+    if (-1 == ftbl)
     {
-      int ftbl = rtf_wstring.Find(L"fonttbl");
-      if (-1 == ftbl)
-      {
-        ON_wString temp;
-        len = rtf_wstring.Length();
-        ON_wString str = rtf_wstring.Right(((int)len) - 7);
-        temp.Format(L"{\\rtf1{\\fonttbl}%s", str.Array());
-        rtf_wstring = temp;
-      }
+      ON_wString temp;
+      len = rtf_wstring.Length();
+      ON_wString str = rtf_wstring.Right(((int)len) - 7);
+      temp.Format(L"{\\rtf1{\\fonttbl}%ls", str.Array());
+      rtf_wstring = temp;
     }
   }
   len = rtf_wstring.Length();
@@ -205,6 +230,23 @@ bool ON_TextContext::RtfFirstCharProperties(const wchar_t* rtf_string,
       facename = builder.FaceNameFromMap(fi);
   }
   return rc;
+}
+
+const ON_Font* ON_TextContent::FirstCharFont() const
+{
+  ON_TextRunArray* runs = TextRuns(true);
+  if (nullptr != runs)
+  {
+    for (int i = 0; i < runs->Count(); i++)
+    {
+      if (ON_TextRun::RunType::kText == (*runs)[i]->Type() ||
+        ON_TextRun::RunType::kField == (*runs)[i]->Type())
+      {
+        return (*runs)[i]->Font();
+      }
+    }
+  }
+  return &ON_Font::Default;
 }
 
 //--------------------------------------------------------------------
